@@ -16,15 +16,38 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework import permissions
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
+schema_view = get_schema_view(
+    openapi.Info(
+        title="API de Panadería Linfa y Olape S.A.",
+        default_version='v1',
+        description="Documentación interactiva de la API del sistema de pedidos, productos y ofertas.",
+        terms_of_service="https://www.google.com/policies/terms/",
+        contact=openapi.Contact(email="soporte@linfaolape.com"),
+        license=openapi.License(name="BSD License"),
+    ),
+    public=True,
+    permission_classes=(permissions.AllowAny,),
+)
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('core.urls')),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+        # Auth básica (dj-rest-auth)
+    path('api/auth/', include('dj_rest_auth.urls')),
+
+    # Registro y social login (Google)
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    path('accounts/', include('allauth.urls')),
 ]
 
