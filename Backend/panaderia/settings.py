@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'drf_yasg',
     'rest_framework.authtoken', 
     'rest_framework_simplejwt',
+    'corsheaders',
 
     # --- Autenticación social ---
     'allauth',
@@ -71,6 +72,7 @@ REST_FRAMEWORK = {
 }
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -166,3 +168,11 @@ AUTH_USER_MODEL = 'core.Usuario'
 
 SITE_ID = 1
 
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = False  # Recomendado False para control
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Puerto del frontend (Vite)
+    "http://127.0.0.1:5173",
+]
+
+CORS_ALLOW_CREDENTIALS = True
