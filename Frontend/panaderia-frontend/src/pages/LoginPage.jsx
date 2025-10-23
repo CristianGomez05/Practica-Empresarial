@@ -1,92 +1,105 @@
-import React, { useState } from "react";
-import { FaGoogle } from "react-icons/fa";
-import { useSnackbar } from "notistack";
+import React, { useState, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../components/auth/AuthContext";
+import api from "../services/api";
+import GoogleLoginButton from "../components/auth/GoogleLoginButton";
 
 export default function LoginPage() {
-  const { enqueueSnackbar } = useSnackbar();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const navigate = useNavigate();
+  const { setUser } = useContext(AuthContext);
+
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-  const handleGoogleLogin = () => {
-    window.location.href = `${API_URL}/accounts/google/login/`;
-  };
-
+  // --- Manejar login con usuario y contraseña ---
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username || !password) {
-      enqueueSnackbar("Por favor complete todos los campos", {
-        variant: "warning",
-      });
-      return;
-    }
-
+    setError("");
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/auth/login/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-      if (response.ok) {
-        enqueueSnackbar("Inicio de sesión exitoso", { variant: "success" });
-      } else {
-        enqueueSnackbar("Credenciales incorrectas", { variant: "error" });
-      }
-    } catch (error) {
-      enqueueSnackbar("Error de conexión al servidor", { variant: "error" });
+      const res = await api.post("/api/auth/login/", form);
+      const { access, refresh, user } = res.data;
+
+      // Guardar tokens
+      localStorage.setItem("access", access);
+      localStorage.setItem("refresh", refresh);
+
+      // Guardar usuario en contexto
+      setUser(user);
+
+      // Redirigir al dashboard
+      navigate("/dashboard");
+    } catch (err) {
+      console.error(err);
+      setError("Credenciales incorrectas o error de conexión.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-[#fff8f0] to-[#f1d7b2] p-4">
-      <div className="bg-white shadow-xl rounded-2xl p-8 w-full max-w-md text-center border border-[#deb887]">
-        <h2 className="text-3xl font-bold text-[#5c3b1e] mb-6">Bienvenido</h2>
+    <div className="min-h-screen flex flex-col justify-center items-center bg-[#fffaf0] px-4">
+      <div className="bg-white shadow-lg rounded-2xl w-full max-w-md p-8 space-y-6 border border-[#f2d7b6]">
+        <h2 className="text-2xl font-bold text-center text-[#5C4033]">
+          Bienvenido a Panadería Dulce Aroma
+        </h2>
 
-        {/* --- Botón Google --- */}
-        <button
-          onClick={handleGoogleLogin}
-          className="flex items-center justify-center gap-3 bg-[#D2691E] text-white px-5 py-3 rounded-full w-full font-medium shadow-md hover:bg-[#8B4513] transition-all duration-300 hover:scale-105 mb-6"
-        >
-          <FaGoogle className="text-lg" />
-          Iniciar con Google
-        </button>
-
-        {/* --- Separador --- */}
-        <div className="flex items-center my-4">
-          <hr className="flex-grow border-[#deb887]" />
-          <span className="px-2 text-[#8b5a2b] text-sm">O</span>
-          <hr className="flex-grow border-[#deb887]" />
-        </div>
-
-        {/* --- Formulario tradicional --- */}
+        {/* Opción 1: Login con usuario/contraseña */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            type="text"
-            placeholder="Usuario"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full border border-[#deb887] rounded-md px-4 py-2 focus:ring-2 focus:ring-[#D2691E] outline-none"
-          />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-[#deb887] rounded-md px-4 py-2 focus:ring-2 focus:ring-[#D2691E] outline-none"
-          />
+          <div>
+            <label className="block text-sm font-medium text-[#5C4033] mb-1">
+              Correo o usuario
+            </label>
+            <input
+              type="text"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-600"
+              placeholder="ejemplo@correo.com"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[#5C4033] mb-1">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-600"
+              placeholder="********"
+              required
+            />
+          </div>
+
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+
           <button
             type="submit"
             disabled={loading}
-            className="bg-[#8B4513] text-white font-semibold py-2 w-full rounded-md hover:bg-[#5C3317] transition-all duration-300"
+            className="w-full bg-amber-700 text-white font-medium py-2 rounded hover:bg-amber-800 transition"
           >
-            {loading ? "Cargando..." : "Iniciar sesión"}
+            {loading ? "Iniciando sesión..." : "Ingresar"}
           </button>
         </form>
+
+        {/* Separador */}
+        <div className="flex items-center my-4">
+          <div className="flex-grow border-t border-gray-300"></div>
+          <span className="mx-3 text-gray-500 text-sm">O continúa con</span>
+          <div className="flex-grow border-t border-gray-300"></div>
+        </div>
+
+        {/* Opción 2: Login con Google */}
+        <div className="flex justify-center">
+          <GoogleLoginButton />
+        </div>
+
+        <p className="text-center text-sm text-gray-600 mt-4">
+          ¿No tienes cuenta? <span className="text-amber-700 cursor-pointer hover:underline">Regístrate aquí</span>
+        </p>
       </div>
     </div>
   );
