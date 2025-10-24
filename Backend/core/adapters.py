@@ -1,4 +1,4 @@
-# core/adapters.py
+# Backend/core/adapters.py
 from allauth.account.adapter import DefaultAccountAdapter
 from rest_framework_simplejwt.tokens import RefreshToken
 from urllib.parse import urlencode
@@ -23,5 +23,10 @@ class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
             "refresh": refresh_str,
         })
 
+        # IMPORTANTE: Usar la URL correcta del frontend
         frontend_url = "http://localhost:5173/dashboard"
-        return f"{frontend_url}#{fragment}"
+        redirect_url = f"{frontend_url}#{fragment}"
+        
+        print(f"🔗 Redirigiendo a: {redirect_url}")  # Debug
+        
+        return redirect_url
