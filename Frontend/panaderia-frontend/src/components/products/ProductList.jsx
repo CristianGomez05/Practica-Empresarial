@@ -10,7 +10,7 @@ export default function ProductList() {
   useEffect(() => {
     async function fetchProducts() {
       try {
-        const res = await api.get("/api/productos/");
+        const res = await api.get("/productos/");  // ← Cambiar aquí
         setProducts(res.data);
       } catch (err) {
         console.error("Error al cargar productos:", err);

@@ -11,7 +11,7 @@ export default function DashboardOrders() {
   useEffect(() => {
     async function fetchOrders() {
       try {
-        const res = await api.get("/api/pedidos/");
+        const res = await api.get("/pedidos/");
         const data = res.data.results || res.data;
         // Ordenar por fecha más reciente
         const sorted = data.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));

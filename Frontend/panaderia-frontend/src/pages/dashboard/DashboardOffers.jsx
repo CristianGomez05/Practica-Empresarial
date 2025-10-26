@@ -15,7 +15,7 @@ export default function DashboardOffers() {
   useEffect(() => {
     async function fetchOffers() {
       try {
-        const res = await api.get("/api/ofertas/");
+        const res = await api.get("/ofertas/");
         const data = res.data.results || res.data;
         
         // Filtrar ofertas activas

@@ -16,9 +16,9 @@ export default function DashboardHome() {
     async function fetchStats() {
       try {
         const [productsRes, offersRes, ordersRes] = await Promise.all([
-          api.get("/api/productos/"),
-          api.get("/api/ofertas/"),
-          api.get("/api/pedidos/"),
+          api.get("/productos/"),
+          api.get("/ofertas/"),
+          api.get("/pedidos/"),
         ]);
         
         setStats({
@@ -70,12 +70,12 @@ export default function DashboardHome() {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-8 shadow-sm border border-amber-100"
+        className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 rounded-2xl p-8 shadow-xl border border-amber-300 text-white"
       >
-        <h1 className="text-3xl font-bold text-[#5D4037] mb-2">
+        <h1 className="text-3xl font-bold mb-2">
           ¡Bienvenido de nuevo, {user?.username || user?.first_name || "Cliente"}! 🥐
         </h1>
-        <p className="text-[#8D6E63]">
+        <p className="text-amber-50">
           Explora nuestros productos frescos y ofertas especiales del día.
         </p>
       </motion.div>

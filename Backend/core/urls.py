@@ -1,4 +1,4 @@
-# core/urls.py
+# Backend/core/urls.py
 from django.urls import path, include
 from rest_framework import routers
 from rest_framework_simplejwt.views import (
@@ -7,11 +7,16 @@ from rest_framework_simplejwt.views import (
 )
 from . import views
 
-# Si luego tienes viewsets, puedes registrarlos aquí
+# Crear el router y registrar los ViewSets
 router = routers.DefaultRouter()
-# router.register(r'usuarios', views.UsuarioViewSet)
+router.register(r'usuarios', views.UsuarioViewSet)
+router.register(r'productos', views.ProductoViewSet)
+router.register(r'ofertas', views.OfertaViewSet)
+router.register(r'pedidos', views.PedidoViewSet, basename='pedido')
+router.register(r'detalles-pedido', views.DetallePedidoViewSet)
 
 urlpatterns = [
+    # Router con todos los endpoints REST
     path('', include(router.urls)),
 
     # --- Autenticación REST (dj-rest-auth) ---

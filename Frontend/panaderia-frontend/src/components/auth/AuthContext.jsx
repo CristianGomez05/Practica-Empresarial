@@ -67,6 +67,12 @@ export const AuthProvider = ({ children }) => {
     console.log("🚪 Cerrando sesión...");
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
+    
+    // Limpiar el carrito del usuario actual
+    if (user) {
+      localStorage.removeItem(`cart_items_${user.user_id || user.id}`);
+    }
+    
     setAccessToken(null);
     setRefreshToken(null);
     setUser(null);

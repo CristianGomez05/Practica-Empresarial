@@ -42,7 +42,7 @@ export default function DashboardCart() {
         total,
       };
 
-      const res = await api.post("/api/pedidos/", orderData);
+      const res = await api.post("/pedidos/", orderData);
       
       enqueueSnackbar("¡Pedido creado exitosamente!", {
         variant: "success",

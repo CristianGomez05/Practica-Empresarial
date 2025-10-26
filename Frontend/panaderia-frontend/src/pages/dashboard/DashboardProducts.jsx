@@ -17,7 +17,7 @@ export default function DashboardProducts() {
   useEffect(() => {
     async function fetchProducts() {
       try {
-        const res = await api.get("/api/productos/");
+        const res = await api.get("/productos/");
         const data = res.data.results || res.data;
         setProducts(data);
         setFilteredProducts(data);
