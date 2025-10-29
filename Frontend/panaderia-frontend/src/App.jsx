@@ -13,6 +13,10 @@ import DashboardOffers from "./pages/dashboard/DashboardOffers";
 import DashboardCart from "./pages/dashboard/DashboardCart";
 import DashboardOrders from "./pages/dashboard/DashboardOrders";
 import DashboardProfile from "./pages/dashboard/DashboardProfile";
+import OrderConfirmation from "./pages/OrderConfirmation";
+import AdminOffersPanel from "./pages/admin/AdminOffersPanel";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import AdminRoute from "./components/auth/AdminRoute";
 import "./App.css";
 
 function App() {
@@ -23,6 +27,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Rutas Públicas */}
         <Route path="/" element={<Landing />} />
         <Route path="/catalogo" element={<Catalog />} />
         <Route path="/login" element={<LoginPage />} />
@@ -31,14 +36,28 @@ function App() {
         {/* Dashboard principal (punto de entrada OAuth) */}
         <Route path="/dashboard" element={<Dashboard />} />
         
-        {/* Dashboard con layout y subrutas */}
-        <Route path="/dashboard" element={<DashboardLayout />}>
+        {/* Dashboard con layout y subrutas protegidas */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }>
           <Route path="inicio" element={<DashboardHome />} />
           <Route path="productos" element={<DashboardProducts />} />
           <Route path="ofertas" element={<DashboardOffers />} />
           <Route path="carrito" element={<DashboardCart />} />
           <Route path="pedidos" element={<DashboardOrders />} />
           <Route path="perfil" element={<DashboardProfile />} />
+          
+          {/* Nueva ruta de confirmación de pedido */}
+          <Route path="pedido-confirmado/:id" element={<OrderConfirmation />} />
+          
+          {/* Rutas de administrador */}
+          <Route path="admin/ofertas" element={
+            <AdminRoute>
+              <AdminOffersPanel />
+            </AdminRoute>
+          } />
         </Route>
       </Routes>
     </BrowserRouter>

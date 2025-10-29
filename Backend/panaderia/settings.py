@@ -109,7 +109,7 @@ ACCOUNT_ADAPTER = "core.adapters.FrontendRedirectAccountAdapter"
 SOCIALACCOUNT_LOGIN_ON_GET = True
 
 LOGIN_REDIRECT_URL = "http://localhost:5173/dashboard"
-LOGOUT_REDIRECT_URL = "http://localhost:5173/"
+LOGOUT_REDIRECT_URL = "http://localhost:5173"
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -118,3 +118,30 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ==========================================
+# CONFIGURACIÓN DE EMAIL
+# ==========================================
+
+# Para desarrollo: usar console backend (imprime en consola)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Para producción: usar SMTP real (Gmail, SendGrid, etc.)
+# Descomenta y configura cuando vayas a producción:
+
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'tu-email@gmail.com'
+# EMAIL_HOST_PASSWORD = 'tu-contraseña-de-aplicación'
+# DEFAULT_FROM_EMAIL = 'Panadería Artesanal <tu-email@gmail.com>'
+
+# Para desarrollo (mientras tanto)
+DEFAULT_FROM_EMAIL = 'panaderia@localhost'
+
+# Nota: Para usar Gmail en producción necesitas:
+# 1. Activar verificación en 2 pasos en tu cuenta de Gmail
+# 2. Generar una "contraseña de aplicación" específica
+# 3. Usar esa contraseña de aplicación en EMAIL_HOST_PASSWORD
+# Más info: https://support.google.com/accounts/answer/185833

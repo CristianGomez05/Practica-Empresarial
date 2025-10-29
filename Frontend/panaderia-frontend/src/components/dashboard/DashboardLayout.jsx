@@ -3,13 +3,13 @@ import React, { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useCart } from "../../hooks/useCart";
-import { 
-  FaHome, 
-  FaBox, 
-  FaTag, 
-  FaShoppingCart, 
-  FaClipboardList, 
-  FaUser, 
+import {
+  FaHome,
+  FaBox,
+  FaTag,
+  FaShoppingCart,
+  FaClipboardList,
+  FaUser,
   FaSignOutAlt,
   FaBars,
   FaTimes
@@ -42,6 +42,16 @@ export default function DashboardLayout() {
     { to: "/dashboard/carrito", icon: FaShoppingCart, label: "Carrito", badge: cartItemCount },
     { to: "/dashboard/pedidos", icon: FaClipboardList, label: "Mis Pedidos" },
     { to: "/dashboard/perfil", icon: FaUser, label: "Mi Perfil" },
+
+    // Menú de administrador (solo visible si es admin)
+    ...(user?.rol === 'administrador' ? [
+      {
+        to: "/dashboard/admin/ofertas",
+        icon: FaTag,
+        label: "⚡ Admin Ofertas",
+        isAdmin: true
+      }
+    ] : [])
   ];
 
   return (
@@ -68,11 +78,10 @@ export default function DashboardLayout() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                  isActive
-                    ? "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 font-semibold shadow-sm"
-                    : "text-[#6D4C41] hover:bg-[#FFF8F0] hover:text-amber-700"
-                }`
+                `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${isActive
+                  ? "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 font-semibold shadow-sm"
+                  : "text-[#6D4C41] hover:bg-[#FFF8F0] hover:text-amber-700"
+                } ${item.isAdmin ? 'border-l-4 border-orange-500' : ''}`
               }
             >
               <item.icon className="text-lg" />
@@ -163,10 +172,9 @@ export default function DashboardLayout() {
                     to={item.to}
                     onClick={() => setSidebarOpen(false)}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                        isActive
-                          ? "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 font-semibold"
-                          : "text-[#6D4C41] hover:bg-[#FFF8F0]"
+                      `flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
+                        ? "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 font-semibold"
+                        : "text-[#6D4C41] hover:bg-[#FFF8F0]"
                       }`
                     }
                   >
