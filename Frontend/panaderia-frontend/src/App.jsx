@@ -14,7 +14,14 @@ import DashboardCart from "./pages/dashboard/DashboardCart";
 import DashboardOrders from "./pages/dashboard/DashboardOrders";
 import DashboardProfile from "./pages/dashboard/DashboardProfile";
 import OrderConfirmation from "./pages/OrderConfirmation";
+
+// Importar componentes de administrador
+import AdminLayout from "./components/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminProducts from "./pages/admin/AdminProducts";
 import AdminOffersPanel from "./pages/admin/AdminOffersPanel";
+import AdminOrders from "./pages/admin/AdminOrders";
+
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import AdminRoute from "./components/auth/AdminRoute";
 import "./App.css";
@@ -27,7 +34,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rutas Públicas */}
+        {/* ==================== RUTAS PÚBLICAS ==================== */}
         <Route path="/" element={<Landing />} />
         <Route path="/catalogo" element={<Catalog />} />
         <Route path="/login" element={<LoginPage />} />
@@ -36,7 +43,7 @@ function App() {
         {/* Dashboard principal (punto de entrada OAuth) */}
         <Route path="/dashboard" element={<Dashboard />} />
         
-        {/* Dashboard con layout y subrutas protegidas */}
+        {/* ==================== DASHBOARD CLIENTE (Protegido) ==================== */}
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <DashboardLayout />
@@ -48,16 +55,26 @@ function App() {
           <Route path="carrito" element={<DashboardCart />} />
           <Route path="pedidos" element={<DashboardOrders />} />
           <Route path="perfil" element={<DashboardProfile />} />
-          
-          {/* Nueva ruta de confirmación de pedido */}
           <Route path="pedido-confirmado/:id" element={<OrderConfirmation />} />
           
-          {/* Rutas de administrador */}
+          {/* Ruta de admin dentro del dashboard cliente (para compatibilidad) */}
           <Route path="admin/ofertas" element={
             <AdminRoute>
               <AdminOffersPanel />
             </AdminRoute>
           } />
+        </Route>
+
+        {/* ==================== PANEL DE ADMINISTRADOR (Solo Admin) ==================== */}
+        <Route path="/admin" element={
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
+        }>
+          <Route index element={<AdminDashboard />} />
+          <Route path="productos" element={<AdminProducts />} />
+          <Route path="ofertas" element={<AdminOffersPanel />} />
+          <Route path="pedidos" element={<AdminOrders />} />
         </Route>
       </Routes>
     </BrowserRouter>

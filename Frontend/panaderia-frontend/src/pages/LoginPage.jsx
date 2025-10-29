@@ -16,20 +16,22 @@ export default function LoginPage() {
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-  // Manejar login con usuario y contraseña usando JWT
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     
     try {
-      // Usar el endpoint JWT correcto
+      console.log("🔐 Intentando login con:", form.username);
+      
       const res = await axios.post(`${API_BASE}/core/token/`, {
         username: form.username,
         password: form.password
       });
 
-      const { access, refresh } = res.data;
+      console.log("✅ Respuesta del servidor:", res.data);
+
+      const { access, refresh, user: userData } = res.data;
 
       // Guardar tokens en localStorage
       localStorage.setItem("access", access);
@@ -41,16 +43,30 @@ export default function LoginPage() {
 
       // Decodificar y guardar usuario
       const decoded = jwtDecode(access);
-      setUser(decoded);
-
-      console.log("✅ Login exitoso:", decoded);
-
-      // Redirigir al dashboard
-      navigate("/dashboard/inicio");
-    } catch (err) {
-      console.error("Error en login:", err);
+      console.log("🔍 Token decodificado:", decoded);
+      console.log("🔍 userData de respuesta:", userData);
+      console.log("🔍 Rol en token decodificado:", decoded.rol);
+      console.log("🔍 Rol en userData:", userData?.rol);
       
-      // Mostrar mensaje de error apropiado
+      // Usar userData si está disponible, sino usar decoded
+      const userInfo = userData || decoded;
+      setUser(userInfo);
+
+      console.log("✅ Usuario guardado en contexto:", userInfo);
+      console.log("✅ Rol final del usuario:", userInfo.rol);
+
+      // Redirigir según rol
+      if (userInfo.rol === 'administrador') {
+        console.log("👑 Administrador detectado, redirigiendo a /admin");
+        navigate("/admin");
+      } else {
+        console.log("👤 Cliente detectado, redirigiendo a /dashboard/inicio");
+        navigate("/dashboard/inicio");
+      }
+    } catch (err) {
+      console.error("❌ Error en login:", err);
+      console.error("❌ Respuesta de error:", err.response?.data);
+      
       if (err.response?.status === 401) {
         setError("Usuario o contraseña incorrectos");
       } else if (err.response?.status === 400) {

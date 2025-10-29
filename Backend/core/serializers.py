@@ -1,5 +1,6 @@
 # Backend/core/serializers.py
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
 from django.utils import timezone
 
@@ -287,3 +288,40 @@ class PedidoCreateSerializer(serializers.Serializer):
         pedido.save()
         
         return pedido
+
+
+# ============================================================================
+# CUSTOM JWT SERIALIZER - DEBE IR AL FINAL
+# ============================================================================
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Serializer personalizado para incluir información adicional en el token JWT
+    """
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        
+        # Agregar campos personalizados al payload del token
+        token['username'] = user.username
+        token['email'] = user.email
+        token['rol'] = user.rol
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
+        
+        return token
+    
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        
+        # Agregar información adicional a la respuesta
+        data['user'] = {
+            'id': self.user.id,
+            'username': self.user.username,
+            'email': self.user.email,
+            'rol': self.user.rol,
+            'first_name': self.user.first_name,
+            'last_name': self.user.last_name,
+        }
+        
+        return data

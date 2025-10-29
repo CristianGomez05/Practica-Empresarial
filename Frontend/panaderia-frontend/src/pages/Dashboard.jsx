@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 
 export default function Dashboard() {
-  const { user, setUser, setAccessToken, setRefreshToken, logout, accessToken } = useAuth();
+  const { user, setUser, setAccessToken, setRefreshToken, accessToken } = useAuth();
   const navigate = useNavigate();
   const [processing, setProcessing] = useState(true);
 
@@ -35,6 +35,9 @@ export default function Dashboard() {
           // Decodificar y setear usuario inmediatamente
           try {
             const decoded = jwtDecode(access);
+            console.log("🔍 Token decodificado completo:", decoded);
+            console.log("🔍 Rol del usuario:", decoded.rol);
+            console.log("🔍 Todas las propiedades:", Object.keys(decoded));
             setUser(decoded);
             console.log("✅ Usuario autenticado:", decoded);
           } catch (error) {
@@ -69,15 +72,22 @@ export default function Dashboard() {
     processTokens();
   }, [setUser, setAccessToken, setRefreshToken, navigate]);
 
-  // Verificar autenticación después de procesar
+  // Verificar autenticación y redirigir según rol
   useEffect(() => {
     if (!processing && !accessToken && !window.location.hash.includes("access=")) {
       console.log("⚠️ No autenticado después de procesar, redirigiendo...");
       navigate("/login", { replace: true });
     } else if (!processing && accessToken && user) {
-      // Si ya está autenticado, redirigir al dashboard interno
-      console.log("✅ Autenticado, redirigiendo a dashboard/inicio");
-      navigate("/dashboard/inicio", { replace: true });
+      // ✨ NUEVA LÓGICA: Redirigir según rol
+      console.log("✅ Autenticado, verificando rol:", user.rol);
+      
+      if (user.rol === 'administrador') {
+        console.log("👑 Usuario administrador detectado, redirigiendo a panel admin");
+        navigate("/admin", { replace: true });
+      } else {
+        console.log("👤 Usuario cliente, redirigiendo a dashboard cliente");
+        navigate("/dashboard/inicio", { replace: true });
+      }
     }
   }, [processing, accessToken, user, navigate]);
 
@@ -110,30 +120,12 @@ export default function Dashboard() {
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
           <h1 className="text-3xl font-bold text-[#5D4037] mb-2">
-            Bienvenido, {user?.username || user?.first_name || "Cliente"} 🥐
+            Redirigiendo... 🥐
           </h1>
           <p className="text-[#6D4C41]">
-            Has iniciado sesión correctamente mediante Google.
+            Por favor espera un momento...
           </p>
         </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <h2 className="text-xl font-semibold text-[#5D4037] mb-4">
-            Información de tu cuenta
-          </h2>
-          <div className="space-y-2 text-[#6D4C41]">
-            <p><strong>Usuario:</strong> {user?.username || "N/A"}</p>
-            <p><strong>Email:</strong> {user?.email || "N/A"}</p>
-            <p><strong>Rol:</strong> {user?.rol || "cliente"}</p>
-          </div>
-        </div>
-
-        <button
-          onClick={logout}
-          className="mt-6 bg-[#D84315] text-white px-6 py-3 rounded-lg hover:bg-[#BF360C] transition-colors font-semibold"
-        >
-          Cerrar sesión
-        </button>
       </div>
     </div>
   );

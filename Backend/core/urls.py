@@ -1,12 +1,15 @@
 # Backend/core/urls.py
 from django.urls import path, include
 from rest_framework import routers
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
+from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
-from .views_auth import LoginView  # Importar la vista custom
+from .views_auth import LoginView
+from .serializers import CustomTokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+# Vista personalizada que usa nuestro serializer
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
 
 # Crear el router y registrar los ViewSets
 router = routers.DefaultRouter()
@@ -23,8 +26,8 @@ urlpatterns = [
     # --- Login personalizado (NUEVO) ---
     path('auth/login/', LoginView.as_view(), name='custom_login'),
 
-    # --- JWT endpoints (alternativa) ---
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # --- JWT endpoints con serializer custom ---
+    path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # --- dj-rest-auth (para Google OAuth) ---
