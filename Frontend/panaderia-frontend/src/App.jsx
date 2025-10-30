@@ -21,6 +21,8 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminOffersPanel from "./pages/admin/AdminOffersPanel";
 import AdminOrders from "./pages/admin/AdminOrders";
+import AdminReports from "./pages/admin/AdminReports";
+import AdminUsers from "./pages/admin/AdminUsers";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import AdminRoute from "./components/auth/AdminRoute";
@@ -75,6 +77,8 @@ function App() {
           <Route path="productos" element={<AdminProducts />} />
           <Route path="ofertas" element={<AdminOffersPanel />} />
           <Route path="pedidos" element={<AdminOrders />} />
+          <Route path="usuarios" element={<AdminUsers />} />
+          <Route path="reportes" element={<AdminReports />} />
         </Route>
       </Routes>
     </BrowserRouter>

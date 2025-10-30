@@ -146,6 +146,7 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
             'id', 'pedido', 'producto', 'producto_id', 
             'producto_nombre', 'cantidad', 'precio_unitario', 'precio_total'
         ]
+        read_only_fields = ['id', 'pedido']
     
     def get_precio_total(self, obj):
         """
@@ -156,14 +157,12 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
 
 class PedidoSerializer(serializers.ModelSerializer):
     """
-    Serializer para pedidos con detalles completos
+    Serializer para pedidos con detalles completos (SOLO LECTURA)
     """
     detalles = DetallePedidoSerializer(many=True, read_only=True)
     usuario = UsuarioSerializer(read_only=True)
     usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
-    total = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
-    items = serializers.ListField(write_only=True, required=False)
     cantidad_items = serializers.SerializerMethodField()
     tiempo_transcurrido = serializers.SerializerMethodField()
 
@@ -171,10 +170,10 @@ class PedidoSerializer(serializers.ModelSerializer):
         model = Pedido
         fields = [
             'id', 'usuario', 'usuario_nombre', 'fecha', 'estado', 
-            'estado_display', 'detalles', 'total', 'items', 
+            'estado_display', 'detalles', 'total', 
             'cantidad_items', 'tiempo_transcurrido'
         ]
-        read_only_fields = ['fecha', 'usuario']
+        read_only_fields = ['id', 'fecha', 'usuario', 'total']
     
     def get_cantidad_items(self, obj):
         """
@@ -186,6 +185,7 @@ class PedidoSerializer(serializers.ModelSerializer):
         """
         Calcula el tiempo transcurrido desde que se hizo el pedido
         """
+        from django.utils import timezone
         ahora = timezone.now()
         delta = ahora - obj.fecha
         
@@ -199,25 +199,35 @@ class PedidoSerializer(serializers.ModelSerializer):
             return f"Hace {minutos} minuto{'s' if minutos > 1 else ''}"
         else:
             return "Hace un momento"
+
+
+class PedidoCreateSerializer(serializers.Serializer):
+    """
+    Serializer específico para crear pedidos desde el frontend
+    """
+    items = serializers.ListField(
+        child=serializers.DictField(),
+        allow_empty=False,
+        write_only=True
+    )
     
     def validate_items(self, items):
         """
-        Valida que los items del pedido sean válidos
+        Valida la estructura de los items
         """
         if not items:
             raise serializers.ValidationError("Debe incluir al menos un producto")
-        
+            
         for item in items:
-            if 'producto' not in item or 'cantidad' not in item:
-                raise serializers.ValidationError(
-                    "Cada item debe tener 'producto' y 'cantidad'"
-                )
+            if 'producto' not in item:
+                raise serializers.ValidationError("Cada item debe tener 'producto'")
+            if 'cantidad' not in item:
+                raise serializers.ValidationError("Cada item debe tener 'cantidad'")
             
-            if item['cantidad'] < 1:
-                raise serializers.ValidationError(
-                    "La cantidad debe ser mayor a 0"
-                )
+            if not isinstance(item['cantidad'], int) or item['cantidad'] < 1:
+                raise serializers.ValidationError("La cantidad debe ser un entero mayor a 0")
             
+            # Validar que el producto existe y está disponible
             try:
                 producto = Producto.objects.get(id=item['producto'])
                 if not producto.disponible:
@@ -228,31 +238,6 @@ class PedidoSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f"El producto con ID {item['producto']} no existe"
                 )
-        
-        return items
-
-
-class PedidoCreateSerializer(serializers.Serializer):
-    """
-    Serializer específico para crear pedidos desde el frontend
-    """
-    items = serializers.ListField(
-        child=serializers.DictField(),
-        allow_empty=False
-    )
-    
-    def validate_items(self, items):
-        """
-        Valida la estructura de los items
-        """
-        for item in items:
-            if 'producto' not in item:
-                raise serializers.ValidationError("Cada item debe tener 'producto'")
-            if 'cantidad' not in item:
-                raise serializers.ValidationError("Cada item debe tener 'cantidad'")
-            
-            if not isinstance(item['cantidad'], int) or item['cantidad'] < 1:
-                raise serializers.ValidationError("La cantidad debe ser un entero mayor a 0")
         
         return items
     
@@ -266,7 +251,8 @@ class PedidoCreateSerializer(serializers.Serializer):
         # Crear pedido
         pedido = Pedido.objects.create(
             usuario=usuario,
-            estado='recibido'
+            estado='recibido',
+            total=0  # Se calculará después
         )
         
         # Crear detalles y calcular total
@@ -283,13 +269,19 @@ class PedidoCreateSerializer(serializers.Serializer):
             
             total += producto.precio * cantidad
         
-        # Guardar total
+        # Actualizar total
         pedido.total = total
         pedido.save()
         
         return pedido
-
-
+    
+    def to_representation(self, instance):
+        """
+        Retorna la representación completa del pedido creado
+        """
+        return PedidoSerializer(instance, context=self.context).data
+    
+    
 # ============================================================================
 # CUSTOM JWT SERIALIZER - DEBE IR AL FINAL
 # ============================================================================
