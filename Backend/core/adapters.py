@@ -22,7 +22,6 @@ class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
         refresh['rol'] = user.rol
         refresh['first_name'] = user.first_name
         refresh['last_name'] = user.last_name
-        refresh['avatar'] = user.avatar  # ⭐ Agregar avatar
         
         access = str(refresh.access_token)
         refresh_str = str(refresh)

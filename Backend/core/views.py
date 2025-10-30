@@ -25,7 +25,7 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
         """
-        Endpoint para obtener y actualizar información del usuario actual
+        Endpoint para obtener/actualizar información del usuario actual
         GET /core/usuarios/me/
         PATCH /core/usuarios/me/
         """
@@ -35,14 +35,14 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         
         elif request.method == 'PATCH':
             # Permitir actualizar solo ciertos campos
-            allowed_fields = ['first_name', 'last_name', 'avatar']
+            allowed_fields = ['first_name', 'last_name']
             data = {k: v for k, v in request.data.items() if k in allowed_fields}
             
             serializer = self.get_serializer(request.user, data=data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            
+            return Response(serializer.data)
 
 
 class ProductoViewSet(viewsets.ModelViewSet):

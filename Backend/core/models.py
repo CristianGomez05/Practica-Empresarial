@@ -9,7 +9,7 @@ class Usuario(AbstractUser):
         ('administrador', 'Administrador'),
     ]
     rol = models.CharField(max_length=20, choices=ROLES, default='cliente')
-    avatar = models.URLField(blank=True, null=True)
+    #avatar = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.username} ({self.rol})"
