@@ -13,7 +13,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
         model = Usuario
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 
-            'rol', 'is_active', 'date_joined'
+            'rol', 'is_active', 'date_joined', 'avatar' 
         ]
         read_only_fields = ['date_joined', 'is_active']
 
@@ -300,6 +300,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['rol'] = user.rol
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
+        token['avatar'] = user.avatar  # ⭐ Agregar avatar
         
         return token
     
@@ -314,6 +315,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'rol': self.user.rol,
             'first_name': self.user.first_name,
             'last_name': self.user.last_name,
+            'avatar': self.user.avatar,  # ⭐ Agregar avatar
         }
         
         return data

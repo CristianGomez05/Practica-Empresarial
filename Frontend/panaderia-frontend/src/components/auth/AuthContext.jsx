@@ -19,8 +19,13 @@ export const AuthProvider = ({ children }) => {
     try {
       const decoded = jwtDecode(token);
       console.log("🔍 Usuario decodificado:", decoded);
-      setUser(decoded);
-      return decoded;
+      // Asegurar que el avatar se incluya si existe
+      const userWithAvatar = {
+        ...decoded,
+        avatar: decoded.avatar || null
+      };
+      setUser(userWithAvatar);
+      return userWithAvatar;
     } catch (error) {
       console.error("❌ Error al decodificar token:", error);
       setUser(null);
@@ -44,7 +49,7 @@ export const AuthProvider = ({ children }) => {
       console.log("⚠️ No hay refresh token, haciendo logout");
       return logout();
     }
-    
+
     try {
       console.log("🔄 Intentando refrescar token...");
       const response = await axios.post(`${API_BASE}/api/token/refresh/`, {
@@ -67,12 +72,12 @@ export const AuthProvider = ({ children }) => {
     console.log("🚪 Cerrando sesión...");
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
-    
+
     // Limpiar el carrito del usuario actual
     if (user) {
       localStorage.removeItem(`cart_items_${user.user_id || user.id}`);
     }
-    
+
     setAccessToken(null);
     setRefreshToken(null);
     setUser(null);
@@ -83,7 +88,7 @@ export const AuthProvider = ({ children }) => {
     const verifyTokens = async () => {
       // Si no hay token en localStorage, no hacer nada
       const storedAccess = localStorage.getItem("access");
-      
+
       if (!storedAccess) {
         console.log("ℹ️ No hay token almacenado");
         setLoading(false);
@@ -99,7 +104,7 @@ export const AuthProvider = ({ children }) => {
         console.log("✅ Token válido");
         decodeUser(storedAccess);
       }
-      
+
       setLoading(false);
     };
 

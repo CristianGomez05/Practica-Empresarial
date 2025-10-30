@@ -18,22 +18,31 @@ from .permissions import EsAdministrador, EsClienteOAdmin
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gestión de usuarios
-    Solo administradores pueden ver y modificar usuarios
-    """
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
     permission_classes = [EsAdministrador]
     
-    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
         """
-        Endpoint para obtener información del usuario actual
+        Endpoint para obtener y actualizar información del usuario actual
         GET /core/usuarios/me/
+        PATCH /core/usuarios/me/
         """
-        serializer = self.get_serializer(request.user)
-        return Response(serializer.data)
+        if request.method == 'GET':
+            serializer = self.get_serializer(request.user)
+            return Response(serializer.data)
+        
+        elif request.method == 'PATCH':
+            # Permitir actualizar solo ciertos campos
+            allowed_fields = ['first_name', 'last_name', 'avatar']
+            data = {k: v for k, v in request.data.items() if k in allowed_fields}
+            
+            serializer = self.get_serializer(request.user, data=data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProductoViewSet(viewsets.ModelViewSet):
