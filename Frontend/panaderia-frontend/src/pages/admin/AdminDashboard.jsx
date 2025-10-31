@@ -136,7 +136,7 @@ export default function AdminDashboard() {
               Panel de Administración 🥐
             </h1>
             <p className="text-gray-300">
-              Bienvenido al sistema de gestión de Panadería Artesanal
+              Bienvenido al sistema de gestión de Panadería Santa Clara
             </p>
           </div>
           <div className="text-right">

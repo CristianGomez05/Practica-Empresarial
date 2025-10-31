@@ -1,3 +1,4 @@
+// src/components/Navbar.jsx
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import LoginButton from "../components/auth/LoginButton";
@@ -37,13 +38,9 @@ const Navbar = () => {
           className="flex items-center gap-2 cursor-pointer"
           onClick={() => scrollToSection("inicio")}
         >
-          <img
-            src="/logo.png"
-            alt="Panadería Artesanal"
-            className="w-8 h-8"
-          />
+          <span className="text-white font-bold text-lg">🥐</span>
           <span className="text-lg font-semibold text-[#3E2723]">
-            Panadería Artesanal
+            Panadería Santa Clara
           </span>
         </div>
 

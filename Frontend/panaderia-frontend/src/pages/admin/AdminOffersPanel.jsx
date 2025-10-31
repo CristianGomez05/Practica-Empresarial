@@ -16,8 +16,8 @@ export default function AdminOffersPanel() {
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
-    productos_ids: [], // Array de IDs de productos
-    precio_oferta: '', // Precio único para toda la oferta
+    productos_ids: [],
+    precio_oferta: '',
     fecha_inicio: '',
     fecha_fin: ''
   });
@@ -43,15 +43,24 @@ export default function AdminOffersPanel() {
     }
   };
 
+  // Función auxiliar para formatear fecha YYYY-MM-DD sin conversión de zona horaria
+  const formatDateForInput = (dateString) => {
+    if (!dateString) return '';
+    // Asegurarse de que la fecha se mantenga en formato local
+    const date = new Date(dateString + 'T00:00:00');
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const handleOpenModal = (offer = null) => {
     if (offer) {
       setEditingOffer(offer);
-      // Asegurarse de cargar los productos_ids correctamente
       let productosIds = [];
       if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
         productosIds = offer.productos_ids;
       } else if (offer.producto?.id) {
-        // Fallback para ofertas antiguas con un solo producto
         productosIds = [offer.producto.id];
       }
       
@@ -60,8 +69,8 @@ export default function AdminOffersPanel() {
         descripcion: offer.descripcion,
         productos_ids: productosIds,
         precio_oferta: offer.precio_oferta || offer.producto?.precio || '',
-        fecha_inicio: offer.fecha_inicio,
-        fecha_fin: offer.fecha_fin
+        fecha_inicio: formatDateForInput(offer.fecha_inicio),
+        fecha_fin: formatDateForInput(offer.fecha_fin)
       });
     } else {
       setEditingOffer(null);
@@ -117,13 +126,13 @@ export default function AdminOffersPanel() {
     }
     
     try {
-      // Payload con soporte para múltiples productos
+      // Payload con fechas en formato correcto (sin conversión de zona horaria)
       const payload = {
         titulo: formData.titulo,
         descripcion: formData.descripcion,
-        productos_ids: formData.productos_ids.map(id => parseInt(id)), // Array de IDs
-        fecha_inicio: formData.fecha_inicio,
-        fecha_fin: formData.fecha_fin,
+        productos_ids: formData.productos_ids.map(id => parseInt(id)),
+        fecha_inicio: formData.fecha_inicio, // Ya está en formato YYYY-MM-DD
+        fecha_fin: formData.fecha_fin,       // Ya está en formato YYYY-MM-DD
         precio_oferta: parseFloat(formData.precio_oferta)
       };
 
@@ -191,14 +200,12 @@ export default function AdminOffersPanel() {
     }
   };
 
-  // Función auxiliar para obtener productos de una oferta
   const getOfferProducts = (offer) => {
     if (offer.productos_ids && Array.isArray(offer.productos_ids) && offer.productos_ids.length > 0) {
       return offer.productos_ids
         .map(prodId => products.find(p => p.id === prodId))
-        .filter(Boolean); // Eliminar nulls
+        .filter(Boolean);
     } else if (offer.producto) {
-      // Fallback para ofertas antiguas
       return [offer.producto];
     }
     return [];
@@ -265,12 +272,10 @@ export default function AdminOffersPanel() {
                     </div>
                   )}
                   
-                  {/* Estado Badge */}
                   <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg`}>
                     {estado.text}
                   </div>
 
-                  {/* Badge de múltiples productos */}
                   {offerProducts.length > 1 && (
                     <div className="absolute top-3 left-3 bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
                       {offerProducts.length} productos
@@ -323,8 +328,8 @@ export default function AdminOffersPanel() {
 
                   {/* Dates */}
                   <div className="text-sm text-[#8D6E63] mb-4 space-y-1">
-                    <p>Inicio: {new Date(offer.fecha_inicio).toLocaleDateString('es-ES')}</p>
-                    <p>Fin: {new Date(offer.fecha_fin).toLocaleDateString('es-ES')}</p>
+                    <p>Inicio: {new Date(offer.fecha_inicio + 'T00:00:00').toLocaleDateString('es-ES')}</p>
+                    <p>Fin: {new Date(offer.fecha_fin + 'T00:00:00').toLocaleDateString('es-ES')}</p>
                     {offer.dias_restantes > 0 && (
                       <p className="font-semibold text-orange-600">
                         {offer.dias_restantes} días restantes

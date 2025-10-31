@@ -14,7 +14,7 @@ export default function AdminLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/"); // Redirige a la Landing Page
   };
 
   const menuItems = [
@@ -38,7 +38,7 @@ export default function AdminLayout() {
             </div>
             <div>
               <h2 className="font-bold text-white text-lg">Admin Panel</h2>
-              <p className="text-xs text-gray-400">Panadería Artesanal</p>
+              <p className="text-xs text-gray-400">Panadería Santa Clara</p>
             </div>
           </div>
         </div>
@@ -109,10 +109,10 @@ export default function AdminLayout() {
             onClick={() => setSidebarOpen(false)}
           >
             <aside
-              className="w-64 h-full bg-gradient-to-b from-gray-900 to-gray-800 shadow-2xl"
+              className="w-64 h-full bg-gradient-to-b from-gray-900 to-gray-800 shadow-2xl flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Same content as desktop sidebar */}
+              {/* Logo Mobile */}
               <div className="p-6 border-b border-gray-700">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center">
@@ -120,12 +120,13 @@ export default function AdminLayout() {
                   </div>
                   <div>
                     <h2 className="font-bold text-white text-lg">Admin Panel</h2>
-                    <p className="text-xs text-gray-400">Panadería</p>
+                    <p className="text-xs text-gray-400">Panadería Santa Clara</p>
                   </div>
                 </div>
               </div>
 
-              <nav className="p-4 space-y-1">
+              {/* Navigation Mobile */}
+              <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                 {menuItems.map((item) => (
                   <NavLink
                     key={item.to}
@@ -145,6 +146,28 @@ export default function AdminLayout() {
                   </NavLink>
                 ))}
               </nav>
+
+              {/* Mobile User Info & Logout */}
+              <div className="p-4 border-t border-gray-700">
+                <div className="flex items-center gap-3 mb-3 px-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold">
+                    {user?.username?.[0]?.toUpperCase() || "A"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">
+                      {user?.username || "Admin"}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">Administrador</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
+                >
+                  <FaSignOutAlt />
+                  <span>Cerrar sesión</span>
+                </button>
+              </div>
             </aside>
           </div>
         )}

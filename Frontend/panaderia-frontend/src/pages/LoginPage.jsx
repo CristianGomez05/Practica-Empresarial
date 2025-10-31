@@ -90,7 +90,7 @@ export default function LoginPage() {
           <h2 className="text-3xl font-bold text-[#5C4033] mb-2">
             Bienvenido
           </h2>
-          <p className="text-[#8D6E63]">Panadería Artesanal</p>
+          <p className="text-[#8D6E63]">Panadería Santa Clara</p>
         </div>
 
         {/* Login Form */}

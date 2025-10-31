@@ -190,12 +190,14 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         decimal_places=2
     )
     precio_total = serializers.SerializerMethodField()
+    es_oferta = serializers.SerializerMethodField()  # NUEVO
 
     class Meta:
         model = DetallePedido
         fields = [
             'id', 'pedido', 'producto', 'producto_id', 
-            'producto_nombre', 'cantidad', 'precio_unitario', 'precio_total'
+            'producto_nombre', 'cantidad', 'precio_unitario', 'precio_total',
+            'es_oferta'  # NUEVO
         ]
         read_only_fields = ['id', 'pedido']
     
@@ -204,6 +206,16 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         Calcula el precio total del detalle
         """
         return obj.producto.precio * obj.cantidad
+    
+    def get_es_oferta(self, obj):
+        """
+        Verifica si el producto tiene una oferta activa
+        """
+        hoy = timezone.now().date()
+        return obj.producto.ofertas.filter(
+            fecha_inicio__lte=hoy,
+            fecha_fin__gte=hoy
+        ).exists()
 
 
 class PedidoSerializer(serializers.ModelSerializer):
@@ -216,13 +228,14 @@ class PedidoSerializer(serializers.ModelSerializer):
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     cantidad_items = serializers.SerializerMethodField()
     tiempo_transcurrido = serializers.SerializerMethodField()
+    es_oferta = serializers.SerializerMethodField()  # NUEVO
 
     class Meta:
         model = Pedido
         fields = [
             'id', 'usuario', 'usuario_nombre', 'fecha', 'estado', 
             'estado_display', 'detalles', 'total', 
-            'cantidad_items', 'tiempo_transcurrido'
+            'cantidad_items', 'tiempo_transcurrido', 'es_oferta'  # NUEVO
         ]
         read_only_fields = ['id', 'fecha', 'usuario', 'total']
     
@@ -249,6 +262,19 @@ class PedidoSerializer(serializers.ModelSerializer):
             return f"Hace {minutos} minuto{'s' if minutos > 1 else ''}"
         else:
             return "Hace un momento"
+    
+    def get_es_oferta(self, obj):
+        """
+        Verifica si el pedido contiene al menos un producto de oferta
+        """
+        hoy = timezone.now().date()
+        for detalle in obj.detalles.all():
+            if detalle.producto.ofertas.filter(
+                fecha_inicio__lte=hoy,
+                fecha_fin__gte=hoy
+            ).exists():
+                return True
+        return False
 
 
 class PedidoCreateSerializer(serializers.Serializer):

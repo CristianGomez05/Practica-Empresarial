@@ -30,7 +30,7 @@ export default function DashboardLayout() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/"); // Redirige a la Landing Page
   };
 
   const cartItemCount = items.reduce((sum, item) => sum + (item.qty || 1), 0);
@@ -66,7 +66,7 @@ export default function DashboardLayout() {
             </div>
             <div>
               <h2 className="font-bold text-amber-900 text-lg">Panadería</h2>
-              <p className="text-xs text-amber-700">Dulce Aroma</p>
+              <p className="text-xs text-amber-700">Santa Clara</p>
             </div>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function DashboardLayout() {
             >
               {sidebarOpen ? <FaTimes /> : <FaBars />}
             </button>
-            <h1 className="font-bold text-[#5D4037]">Panadería 🥐</h1>
+            <h1 className="font-bold text-[#5D4037]">Panadería Santa Clara 🥐</h1>
           </div>
           <div className="flex items-center gap-3">
             <NavLink
@@ -160,7 +160,7 @@ export default function DashboardLayout() {
                   </div>
                   <div>
                     <h2 className="font-bold text-[#5D4037] text-lg">Panadería</h2>
-                    <p className="text-xs text-[#8D6E63]">Dulce Aroma</p>
+                    <p className="text-xs text-[#8D6E63]">Santa Clara</p>
                   </div>
                 </div>
               </div>
