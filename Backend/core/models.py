@@ -9,7 +9,6 @@ class Usuario(AbstractUser):
         ('administrador', 'Administrador'),
     ]
     rol = models.CharField(max_length=20, choices=ROLES, default='cliente')
-    #avatar = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.username} ({self.rol})"
@@ -20,7 +19,7 @@ class Producto(models.Model):
     descripcion = models.TextField(blank=True, null=True)
     precio = models.DecimalField(max_digits=10, decimal_places=2)
     disponible = models.BooleanField(default=True)
-    imagen = models.URLField(blank=True, null=True)  # URL de imagen
+    imagen = models.URLField(blank=True, null=True)
 
     def __str__(self):
         return self.nombre
@@ -31,10 +30,11 @@ class Oferta(models.Model):
     descripcion = models.TextField()
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField()
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name="ofertas")
+    precio_oferta = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # NUEVO
+    productos = models.ManyToManyField(Producto, related_name="ofertas")  # CAMBIADO A ManyToMany
 
     def __str__(self):
-        return f"{self.titulo} - {self.producto.nombre}"
+        return f"{self.titulo}"
 
 
 class Pedido(models.Model):

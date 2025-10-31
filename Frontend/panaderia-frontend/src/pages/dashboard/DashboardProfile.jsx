@@ -115,7 +115,7 @@ export default function DashboardProfile() {
               </motion.div>
               
               <h2 className="text-2xl font-bold text-[#5D4037] mt-4">
-                {user?.username || "Usuario"}
+                {user?.first_name || "Usuario"}
               </h2>
               <p className="text-sm text-[#8D6E63] flex items-center justify-center gap-2 mt-1">
                 <FaEnvelope className="text-amber-600" />

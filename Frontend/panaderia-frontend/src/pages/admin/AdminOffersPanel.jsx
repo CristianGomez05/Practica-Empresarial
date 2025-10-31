@@ -1,7 +1,7 @@
 // Frontend/src/pages/admin/AdminOffersPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 
@@ -10,11 +10,14 @@ export default function AdminOffersPanel() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [offerToDelete, setOfferToDelete] = useState(null);
   const [editingOffer, setEditingOffer] = useState(null);
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
-    producto: '',
+    productos_ids: [], // Array de IDs de productos
+    precio_oferta: '', // Precio único para toda la oferta
     fecha_inicio: '',
     fecha_fin: ''
   });
@@ -43,10 +46,20 @@ export default function AdminOffersPanel() {
   const handleOpenModal = (offer = null) => {
     if (offer) {
       setEditingOffer(offer);
+      // Asegurarse de cargar los productos_ids correctamente
+      let productosIds = [];
+      if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
+        productosIds = offer.productos_ids;
+      } else if (offer.producto?.id) {
+        // Fallback para ofertas antiguas con un solo producto
+        productosIds = [offer.producto.id];
+      }
+      
       setFormData({
         titulo: offer.titulo,
         descripcion: offer.descripcion,
-        producto: offer.producto.id,
+        productos_ids: productosIds,
+        precio_oferta: offer.precio_oferta || offer.producto?.precio || '',
         fecha_inicio: offer.fecha_inicio,
         fecha_fin: offer.fecha_fin
       });
@@ -55,7 +68,8 @@ export default function AdminOffersPanel() {
       setFormData({
         titulo: '',
         descripcion: '',
-        producto: '',
+        productos_ids: [],
+        precio_oferta: '',
         fecha_inicio: '',
         fecha_fin: ''
       });
@@ -68,15 +82,50 @@ export default function AdminOffersPanel() {
     setEditingOffer(null);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const toggleProductSelection = (productId) => {
+    setFormData(prev => {
+      const isSelected = prev.productos_ids.includes(productId);
+      const newProductosIds = isSelected
+        ? prev.productos_ids.filter(id => id !== productId)
+        : [...prev.productos_ids, productId];
+      
+      return { ...prev, productos_ids: newProductosIds };
+    });
+  };
+
+  const handleSubmit = async () => {
+    // Validaciones
+    if (!formData.titulo.trim()) {
+      enqueueSnackbar('El título es requerido', { variant: 'warning' });
+      return;
+    }
+    if (!formData.descripcion.trim()) {
+      enqueueSnackbar('La descripción es requerida', { variant: 'warning' });
+      return;
+    }
+    if (formData.productos_ids.length === 0) {
+      enqueueSnackbar('Debes seleccionar al menos un producto', { variant: 'warning' });
+      return;
+    }
+    if (!formData.precio_oferta) {
+      enqueueSnackbar('El precio de la oferta es requerido', { variant: 'warning' });
+      return;
+    }
+    if (!formData.fecha_inicio || !formData.fecha_fin) {
+      enqueueSnackbar('Las fechas son requeridas', { variant: 'warning' });
+      return;
+    }
     
     try {
+      // Payload con soporte para múltiples productos
       const payload = {
-        ...formData,
-        producto_id: formData.producto
+        titulo: formData.titulo,
+        descripcion: formData.descripcion,
+        productos_ids: formData.productos_ids.map(id => parseInt(id)), // Array de IDs
+        fecha_inicio: formData.fecha_inicio,
+        fecha_fin: formData.fecha_fin,
+        precio_oferta: parseFloat(formData.precio_oferta)
       };
-      delete payload.producto;
 
       if (editingOffer) {
         await api.put(`/ofertas/${editingOffer.id}/`, payload);
@@ -99,13 +148,20 @@ export default function AdminOffersPanel() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta oferta?')) return;
+  const handleOpenDeleteModal = (offer) => {
+    setOfferToDelete(offer);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!offerToDelete) return;
     
     try {
-      await api.delete(`/ofertas/${id}/`);
-      enqueueSnackbar('Oferta eliminada', { variant: 'info' });
+      await api.delete(`/ofertas/${offerToDelete.id}/`);
+      enqueueSnackbar('Oferta eliminada exitosamente', { variant: 'success' });
       fetchData();
+      setShowDeleteModal(false);
+      setOfferToDelete(null);
     } catch (error) {
       console.error('Error eliminando oferta:', error);
       enqueueSnackbar('Error al eliminar oferta', { variant: 'error' });
@@ -133,6 +189,19 @@ export default function AdminOffersPanel() {
         textColor: 'text-green-700' 
       };
     }
+  };
+
+  // Función auxiliar para obtener productos de una oferta
+  const getOfferProducts = (offer) => {
+    if (offer.productos_ids && Array.isArray(offer.productos_ids) && offer.productos_ids.length > 0) {
+      return offer.productos_ids
+        .map(prodId => products.find(p => p.id === prodId))
+        .filter(Boolean); // Eliminar nulls
+    } else if (offer.producto) {
+      // Fallback para ofertas antiguas
+      return [offer.producto];
+    }
+    return [];
   };
 
   if (loading) {
@@ -170,6 +239,9 @@ export default function AdminOffersPanel() {
         <AnimatePresence>
           {offers.map((offer, index) => {
             const estado = getEstadoOferta(offer);
+            const offerProducts = getOfferProducts(offer);
+            const firstProduct = offerProducts[0];
+            
             return (
               <motion.div
                 key={offer.id}
@@ -181,9 +253,9 @@ export default function AdminOffersPanel() {
               >
                 {/* Image */}
                 <div className="relative h-48 bg-gradient-to-br from-orange-100 to-red-100">
-                  {offer.producto?.imagen ? (
+                  {firstProduct?.imagen ? (
                     <img
-                      src={offer.producto.imagen}
+                      src={firstProduct.imagen}
                       alt={offer.titulo}
                       className="w-full h-full object-cover"
                     />
@@ -197,6 +269,13 @@ export default function AdminOffersPanel() {
                   <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg`}>
                     {estado.text}
                   </div>
+
+                  {/* Badge de múltiples productos */}
+                  {offerProducts.length > 1 && (
+                    <div className="absolute top-3 left-3 bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+                      {offerProducts.length} productos
+                    </div>
+                  )}
                 </div>
 
                 {/* Content */}
@@ -208,15 +287,38 @@ export default function AdminOffersPanel() {
                     {offer.descripcion}
                   </p>
 
-                  {/* Product Info */}
+                  {/* Products Info */}
                   <div className="bg-amber-50 rounded-lg p-3 mb-3">
-                    <p className="text-xs text-[#8D6E63] mb-1">Producto</p>
-                    <p className="font-semibold text-[#5D4037]">
-                      {offer.producto?.nombre}
+                    <p className="text-xs text-[#8D6E63] mb-2">
+                      {offerProducts.length > 1 ? 'Productos incluidos' : 'Producto'}
                     </p>
-                    <p className="text-lg font-bold text-amber-700 mt-1">
-                      ₡{offer.producto?.precio}
-                    </p>
+                    
+                    {offerProducts.length > 0 ? (
+                      <div className="space-y-2">
+                        {offerProducts.map((producto, idx) => (
+                          <div key={idx} className="flex justify-between items-center">
+                            <p className="font-semibold text-[#5D4037] text-sm">
+                              {producto.nombre}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              ₡{producto.precio}
+                            </p>
+                          </div>
+                        ))}
+                        <div className="pt-2 mt-2 border-t border-amber-200">
+                          <div className="flex justify-between items-center">
+                            <p className="text-sm font-semibold text-amber-800">
+                              Precio Oferta:
+                            </p>
+                            <p className="text-lg font-bold text-amber-700">
+                              ₡{offer.precio_oferta}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">Sin productos</p>
+                    )}
                   </div>
 
                   {/* Dates */}
@@ -240,7 +342,7 @@ export default function AdminOffersPanel() {
                       Editar
                     </button>
                     <button
-                      onClick={() => handleDelete(offer.id)}
+                      onClick={() => handleOpenDeleteModal(offer)}
                       className="flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg transition-colors"
                     >
                       <FaTrash />
@@ -253,7 +355,7 @@ export default function AdminOffersPanel() {
         </AnimatePresence>
       </div>
 
-      {/* Modal */}
+      {/* Modal Crear/Editar */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -267,7 +369,7 @@ export default function AdminOffersPanel() {
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6">
@@ -283,7 +385,7 @@ export default function AdminOffersPanel() {
                   </button>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   {/* Título */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
@@ -294,8 +396,7 @@ export default function AdminOffersPanel() {
                       value={formData.titulo}
                       onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      placeholder="Ej: 2x1 en Croissants"
-                      required
+                      placeholder="Ej: Combo 2x1 en Croissants y Pan Francés"
                     />
                   </div>
 
@@ -310,28 +411,70 @@ export default function AdminOffersPanel() {
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                       placeholder="Describe los detalles de la oferta..."
                       rows="3"
-                      required
                     />
                   </div>
 
-                  {/* Producto */}
+                  {/* Selección de Productos */}
                   <div>
-                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
-                      Producto *
+                    <label className="block text-sm font-medium text-[#5D4037] mb-3">
+                      Productos Incluidos en la Oferta *
                     </label>
-                    <select
-                      value={formData.producto}
-                      onChange={(e) => setFormData({ ...formData, producto: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      required
-                    >
-                      <option value="">Selecciona un producto</option>
-                      {products.map(product => (
-                        <option key={product.id} value={product.id}>
-                          {product.nombre} - ₡{product.precio}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1 border border-gray-200 rounded-lg">
+                      {products.map(product => {
+                        const isSelected = formData.productos_ids.includes(product.id);
+                        return (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => toggleProductSelection(product.id)}
+                            className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                              isSelected
+                                ? 'border-orange-500 bg-orange-50 shadow-md'
+                                : 'border-gray-200 hover:border-orange-300 bg-white'
+                            }`}
+                          >
+                            <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                              isSelected 
+                                ? 'bg-orange-500 border-orange-500' 
+                                : 'border-gray-300'
+                            }`}>
+                              {isSelected && <FaCheck className="text-white text-xs" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-semibold text-sm truncate ${
+                                isSelected ? 'text-orange-900' : 'text-gray-800'
+                              }`}>
+                                {product.nombre}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                ₡{product.precio}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      ✓ {formData.productos_ids.length} producto(s) seleccionado(s)
+                    </p>
+                  </div>
+
+                  {/* Precio de la Oferta */}
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                      Precio de la Oferta Completa (₡) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.precio_oferta}
+                      onChange={(e) => setFormData({ ...formData, precio_oferta: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-lg font-semibold"
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-amber-700 mt-2">
+                      💡 Este será el precio total de la oferta que incluye todos los productos seleccionados
+                    </p>
                   </div>
 
                   {/* Fechas */}
@@ -345,7 +488,6 @@ export default function AdminOffersPanel() {
                         value={formData.fecha_inicio}
                         onChange={(e) => setFormData({ ...formData, fecha_inicio: e.target.value })}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        required
                       />
                     </div>
                     <div>
@@ -357,7 +499,6 @@ export default function AdminOffersPanel() {
                         value={formData.fecha_fin}
                         onChange={(e) => setFormData({ ...formData, fecha_fin: e.target.value })}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                        required
                       />
                     </div>
                   </div>
@@ -389,6 +530,54 @@ export default function AdminOffersPanel() {
                       Cancelar
                     </button>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmación de Eliminación */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDeleteModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaExclamationTriangle className="text-red-600 text-3xl" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                  ¿Eliminar Oferta?
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  ¿Estás seguro de que deseas eliminar "<strong>{offerToDelete?.titulo}</strong>"? 
+                  Esta acción no se puede deshacer.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmDelete}
+                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-colors shadow-lg"
+                  >
+                    Eliminar
+                  </button>
                 </div>
               </div>
             </motion.div>

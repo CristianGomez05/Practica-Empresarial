@@ -57,6 +57,7 @@ class ProductoSerializer(serializers.ModelSerializer):
                 'id': oferta.id,
                 'titulo': oferta.titulo,
                 'descripcion': oferta.descripcion,
+                'precio_oferta': float(oferta.precio_oferta),
                 'fecha_inicio': oferta.fecha_inicio,
                 'fecha_fin': oferta.fecha_fin
             }
@@ -65,13 +66,13 @@ class ProductoSerializer(serializers.ModelSerializer):
 
 class OfertaSerializer(serializers.ModelSerializer):
     """
-    Serializer para ofertas con validaciones
+    Serializer para ofertas con soporte para múltiples productos
     """
-    producto = ProductoSerializer(read_only=True)
-    producto_id = serializers.PrimaryKeyRelatedField(
-        queryset=Producto.objects.all(), 
-        source='producto', 
-        write_only=True
+    productos = ProductoSerializer(many=True, read_only=True)
+    productos_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        write_only=True,
+        required=True
     )
     dias_restantes = serializers.SerializerMethodField()
     esta_activa = serializers.SerializerMethodField()
@@ -80,7 +81,8 @@ class OfertaSerializer(serializers.ModelSerializer):
         model = Oferta
         fields = [
             'id', 'titulo', 'descripcion', 'fecha_inicio', 'fecha_fin', 
-            'producto', 'producto_id', 'dias_restantes', 'esta_activa'
+            'precio_oferta', 'productos', 'productos_ids', 
+            'dias_restantes', 'esta_activa'
         ]
     
     def get_dias_restantes(self, obj):
@@ -100,6 +102,22 @@ class OfertaSerializer(serializers.ModelSerializer):
         hoy = timezone.now().date()
         return obj.fecha_inicio <= hoy <= obj.fecha_fin
     
+    def validate_productos_ids(self, value):
+        """
+        Valida que los IDs de productos existan
+        """
+        if not value:
+            raise serializers.ValidationError("Debe seleccionar al menos un producto")
+        
+        # Verificar que todos los productos existan
+        for prod_id in value:
+            if not Producto.objects.filter(id=prod_id, disponible=True).exists():
+                raise serializers.ValidationError(
+                    f"El producto con ID {prod_id} no existe o no está disponible"
+                )
+        
+        return value
+    
     def validate(self, data):
         """
         Validaciones personalizadas
@@ -110,15 +128,48 @@ class OfertaSerializer(serializers.ModelSerializer):
                     'fecha_fin': 'La fecha de fin debe ser posterior a la fecha de inicio'
                 })
         
-        # Validar que la fecha de inicio no sea muy antigua
-        if data.get('fecha_inicio'):
-            hoy = timezone.now().date()
-            if data['fecha_inicio'] < hoy - timezone.timedelta(days=7):
-                raise serializers.ValidationError({
-                    'fecha_inicio': 'La fecha de inicio no puede ser más de 7 días en el pasado'
-                })
+        # Validar que el precio de oferta sea válido
+        if data.get('precio_oferta') is not None and data['precio_oferta'] <= 0:
+            raise serializers.ValidationError({
+                'precio_oferta': 'El precio debe ser mayor a 0'
+            })
         
         return data
+    
+    def create(self, validated_data):
+        """
+        Crea la oferta y asocia los productos
+        """
+        productos_ids = validated_data.pop('productos_ids')
+        oferta = Oferta.objects.create(**validated_data)
+        oferta.productos.set(productos_ids)
+        return oferta
+    
+    def update(self, instance, validated_data):
+        """
+        Actualiza la oferta y sus productos
+        """
+        productos_ids = validated_data.pop('productos_ids', None)
+        
+        # Actualizar campos básicos
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Actualizar productos si se proporcionaron
+        if productos_ids is not None:
+            instance.productos.set(productos_ids)
+        
+        return instance
+    
+    def to_representation(self, instance):
+        """
+        Personaliza la representación para incluir productos_ids
+        """
+        representation = super().to_representation(instance)
+        # Agregar lista de IDs para facilitar edición en frontend
+        representation['productos_ids'] = list(instance.productos.values_list('id', flat=True))
+        return representation
 
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
@@ -185,7 +236,6 @@ class PedidoSerializer(serializers.ModelSerializer):
         """
         Calcula el tiempo transcurrido desde que se hizo el pedido
         """
-        from django.utils import timezone
         ahora = timezone.now()
         delta = ahora - obj.fecha
         

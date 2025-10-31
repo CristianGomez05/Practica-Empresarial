@@ -10,7 +10,7 @@ export function CartProvider({ children }) {
 
   // Generar clave única para el carrito del usuario
   const getCartKey = () => {
-    if (!user) return "cart_items_guest"; // Carrito para usuarios no autenticados
+    if (!user) return "cart_items_guest";
     return `cart_items_${user.user_id || user.id || user.username}`;
   };
 
@@ -31,7 +31,7 @@ export function CartProvider({ children }) {
       console.error("Error cargando carrito:", error);
       setItems([]);
     }
-  }, [user]); // Se ejecuta cuando cambia el usuario
+  }, [user]);
 
   // Guardar carrito en localStorage cuando cambien los items
   useEffect(() => {
@@ -44,15 +44,42 @@ export function CartProvider({ children }) {
     }
   }, [items, user]);
 
+  // Añadir producto individual
   const add = (product, qty = 1) => {
     setItems((prev) => {
-      const found = prev.find((i) => i.id === product.id);
+      const found = prev.find((i) => i.id === product.id && !i.isOffer);
       if (found) {
         return prev.map((i) => 
-          i.id === product.id ? { ...i, qty: i.qty + qty } : i
+          i.id === product.id && !i.isOffer ? { ...i, qty: i.qty + qty } : i
         );
       }
-      return [...prev, { ...product, qty }];
+      return [...prev, { ...product, qty, isOffer: false }];
+    });
+  };
+
+  // Añadir oferta completa
+  const addOffer = (offer) => {
+    console.log('📦 addOffer llamado con:', offer);
+    setItems((prev) => {
+      // Generar ID único para la oferta basado en el ID de la oferta y timestamp
+      const offerId = `offer_${offer.id}_${Date.now()}`;
+      
+      const offerItem = {
+        id: offerId,
+        offerId: offer.id, // ID original de la oferta
+        nombre: offer.titulo,
+        descripcion: offer.descripcion,
+        precio: parseFloat(offer.precio_oferta),
+        qty: 1,
+        isOffer: true,
+        productos: offer.productos || [], // Array de productos incluidos
+        imagen: offer.productos?.[0]?.imagen || null, // Imagen del primer producto
+      };
+      
+      console.log('✅ Oferta creada:', offerItem);
+      const newItems = [...prev, offerItem];
+      console.log('🛒 Nuevo estado del carrito:', newItems);
+      return newItems;
     });
   };
 
@@ -80,7 +107,7 @@ export function CartProvider({ children }) {
   );
 
   return (
-    <CartContext.Provider value={{ items, add, updateQty, remove, clear, total }}>
+    <CartContext.Provider value={{ items, add, addOffer, updateQty, remove, clear, total }}>
       {children}
     </CartContext.Provider>
   );

@@ -1,7 +1,6 @@
-// Frontend/src/pages/admin/AdminProducts.jsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaBox, FaSave, FaTimes, FaImage } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaBox, FaSave, FaTimes, FaImage, FaExclamationTriangle } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 
@@ -9,6 +8,8 @@ export default function AdminProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [productToDelete, setProductToDelete] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({
     nombre: '',
@@ -83,13 +84,20 @@ export default function AdminProducts() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar este producto?')) return;
+  const handleOpenDeleteModal = (product) => {
+    setProductToDelete(product);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!productToDelete) return;
     
     try {
-      await api.delete(`/productos/${id}/`);
-      enqueueSnackbar('Producto eliminado', { variant: 'info' });
+      await api.delete(`/productos/${productToDelete.id}/`);
+      enqueueSnackbar('Producto eliminado exitosamente', { variant: 'success' });
       fetchProducts();
+      setShowDeleteModal(false);
+      setProductToDelete(null);
     } catch (error) {
       console.error('Error eliminando producto:', error);
       enqueueSnackbar('Error al eliminar producto', { variant: 'error' });
@@ -209,7 +217,7 @@ export default function AdminProducts() {
                           <FaEdit />
                         </button>
                         <button
-                          onClick={() => handleDelete(product.id)}
+                          onClick={() => handleOpenDeleteModal(product)}
                           className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
                         >
                           <FaTrash />
@@ -224,7 +232,180 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {/* Modal - Ver código completo en implementación */}
+      {/* Modal Crear/Editar */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={handleCloseModal}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-[#5D4037]">
+                    {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+                  </h2>
+                  <button
+                    onClick={handleCloseModal}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <FaTimes size={24} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Nombre */}
+                  <div>
+                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                      Nombre del Producto *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.nombre}
+                      onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Ej: Croissant de Chocolate"
+                      required
+                    />
+                  </div>
+
+                  {/* Descripción */}
+                  <div>
+                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                      Descripción
+                    </label>
+                    <textarea
+                      value={formData.descripcion}
+                      onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Describe el producto..."
+                      rows="3"
+                    />
+                  </div>
+
+                  {/* Precio */}
+                  <div>
+                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                      Precio (₡) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={formData.precio}
+                      onChange={(e) => setFormData({ ...formData, precio: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+
+                  {/* Imagen URL */}
+                  <div>
+                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                      URL de Imagen
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.imagen}
+                      onChange={(e) => setFormData({ ...formData, imagen: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="https://ejemplo.com/imagen.jpg"
+                    />
+                  </div>
+
+                  {/* Disponible */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.disponible}
+                      onChange={(e) => setFormData({ ...formData, disponible: e.target.checked })}
+                      className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                    />
+                    <label className="text-sm font-medium text-[#5D4037]">
+                      Producto disponible
+                    </label>
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="submit"
+                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
+                    >
+                      <FaSave />
+                      {editingProduct ? 'Guardar Cambios' : 'Crear Producto'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCloseModal}
+                      className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmación de Eliminación */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDeleteModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FaExclamationTriangle className="text-red-600 text-3xl" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-2">
+                  ¿Eliminar Producto?
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  ¿Estás seguro de que deseas eliminar "<strong>{productToDelete?.nombre}</strong>"? 
+                  Esta acción no se puede deshacer.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleConfirmDelete}
+                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-colors shadow-lg"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

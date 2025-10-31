@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from datetime import datetime, timedelta
+from decimal import Decimal
 from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
 from .serializers import (
     UsuarioSerializer, 
@@ -106,7 +107,8 @@ class OfertaViewSet(viewsets.ModelViewSet):
         return [EsAdministrador()]
     
     def get_queryset(self):
-        return Oferta.objects.select_related('producto').all()
+        # Usar prefetch_related porque ahora productos es ManyToMany
+        return Oferta.objects.prefetch_related('productos').all()
     
     @action(detail=False, methods=['get'])
     def activas(self, request):
@@ -118,7 +120,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
         ofertas = Oferta.objects.filter(
             fecha_inicio__lte=hoy,
             fecha_fin__gte=hoy
-        ).select_related('producto')
+        ).prefetch_related('productos')
         serializer = self.get_serializer(ofertas, many=True)
         return Response(serializer.data)
     
@@ -148,6 +150,7 @@ class PedidoViewSet(viewsets.ModelViewSet):
     ViewSet para pedidos
     - Clientes: solo ven y crean sus propios pedidos
     - Administradores: ven todos los pedidos y pueden cambiar estados
+    - Soporta precios personalizados para ofertas
     """
     serializer_class = PedidoSerializer
     permission_classes = [IsAuthenticated, EsClienteOAdmin]
@@ -161,11 +164,17 @@ class PedidoViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         Crear pedido con detalles y calcular total
+        Ahora soporta precios personalizados para ofertas
         POST /core/pedidos/
         Body: {
             "items": [
-                {"producto": 1, "cantidad": 2},
-                {"producto": 3, "cantidad": 1}
+                {
+                    "producto": 1, 
+                    "cantidad": 2,
+                    "precio_unitario": 1500.00,  # Opcional: para ofertas
+                    "es_oferta": true,           # Opcional: marcar como oferta
+                    "oferta_titulo": "Combo 2x1" # Opcional: nombre de la oferta
+                }
             ]
         }
         """
@@ -189,10 +198,18 @@ class PedidoViewSet(viewsets.ModelViewSet):
         pedido = serializer.save(usuario=self.request.user)
         
         # Crear detalles y calcular total
-        total = 0
+        total = Decimal('0.00')
+        
         for item_data in items_data:
             producto = Producto.objects.get(id=item_data['producto'])
             cantidad = item_data['cantidad']
+            
+            # Usar precio personalizado si se proporciona (para ofertas)
+            # Si no, usar el precio del producto
+            if 'precio_unitario' in item_data:
+                precio_unitario = Decimal(str(item_data['precio_unitario']))
+            else:
+                precio_unitario = producto.precio
             
             DetallePedido.objects.create(
                 pedido=pedido,
@@ -200,7 +217,8 @@ class PedidoViewSet(viewsets.ModelViewSet):
                 cantidad=cantidad
             )
             
-            total += producto.precio * cantidad
+            # Calcular total usando el precio correcto
+            total += precio_unitario * cantidad
         
         # Actualizar total
         pedido.total = total

@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../../hooks/useCart";
 import { useNavigate } from "react-router-dom";
-import { FaShoppingCart, FaTrash, FaMinus, FaPlus, FaCheckCircle } from "react-icons/fa";
+import { FaShoppingCart, FaTrash, FaMinus, FaPlus, FaCheckCircle, FaTag, FaBox } from "react-icons/fa";
 import { useSnackbar } from "notistack";
 import api from "../../services/api";
 
@@ -34,11 +34,38 @@ export default function DashboardCart() {
 
     setLoading(true);
     try {
+      // Preparar items para el pedido
+      const orderItems = items.flatMap((item) => {
+        if (item.isOffer) {
+          // Si es una oferta, necesitamos distribuir el precio entre los productos
+          console.log('🎁 Procesando oferta:', item);
+          const precioOferta = parseFloat(item.precio);
+          const numProductos = item.productos.length;
+          const precioPorProducto = precioOferta / numProductos; // Dividir precio equitativamente
+          
+          return item.productos.map((producto) => ({
+            producto: producto.id,
+            cantidad: item.qty,
+            precio_unitario: precioPorProducto, // Precio prorrateado
+            es_oferta: true,
+            oferta_titulo: item.nombre
+          }));
+        } else {
+          // Si es un producto individual
+          console.log('📦 Procesando producto:', item);
+          return [{
+            producto: item.id,
+            cantidad: item.qty,
+            precio_unitario: parseFloat(item.precio),
+            es_oferta: false
+          }];
+        }
+      });
+
+      console.log('📋 Items del pedido:', orderItems);
+
       const orderData = {
-        items: items.map((item) => ({
-          producto: item.id,
-          cantidad: item.qty,
-        })),
+        items: orderItems,
         total,
       };
 
@@ -57,9 +84,10 @@ export default function DashboardCart() {
       }, 1000);
     } catch (error) {
       console.error("Error creando pedido:", error);
-      enqueueSnackbar("Error al crear el pedido. Intenta nuevamente.", {
-        variant: "error",
-      });
+      enqueueSnackbar(
+        error.response?.data?.error || "Error al crear el pedido. Intenta nuevamente.", 
+        { variant: "error" }
+      );
     } finally {
       setLoading(false);
     }
@@ -103,7 +131,7 @@ export default function DashboardCart() {
         <div>
           <h1 className="text-3xl font-bold text-[#5D4037]">Mi Carrito</h1>
           <p className="text-[#8D6E63]">
-            {items.length} {items.length === 1 ? "producto" : "productos"}
+            {items.length} {items.length === 1 ? "item" : "items"}
           </p>
         </div>
       </div>
@@ -118,7 +146,11 @@ export default function DashboardCart() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className="bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-shadow"
+                className={`bg-white rounded-xl shadow-md p-6 border-2 transition-all ${
+                  item.isOffer 
+                    ? 'border-green-200 bg-gradient-to-r from-green-50 to-white' 
+                    : 'border-gray-100 hover:shadow-lg'
+                }`}
               >
                 <div className="flex gap-4">
                   {/* Image */}
@@ -135,19 +167,50 @@ export default function DashboardCart() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-lg text-[#5D4037] mb-1 truncate">
+                    {/* Badge si es oferta */}
+                    {item.isOffer && (
+                      <span className="inline-flex items-center gap-1 bg-green-600 text-white text-xs px-2 py-1 rounded-full mb-2">
+                        <FaTag className="text-[10px]" />
+                        OFERTA ESPECIAL
+                      </span>
+                    )}
+                    
+                    <h3 className="font-semibold text-lg text-[#5D4037] mb-1">
                       {item.nombre}
                     </h3>
-                    <p className="text-sm text-[#8D6E63] mb-3 line-clamp-2">
-                      {item.descripcion}
-                    </p>
+                    
+                    {item.descripcion && (
+                      <p className="text-sm text-[#8D6E63] mb-3 line-clamp-2">
+                        {item.descripcion}
+                      </p>
+                    )}
+
+                    {/* Productos incluidos (solo para ofertas) */}
+                    {item.isOffer && item.productos && (
+                      <div className="bg-white rounded-lg p-3 mb-3 border border-green-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FaBox className="text-green-600 text-sm" />
+                          <span className="text-sm font-semibold text-gray-700">
+                            Incluye {item.productos.length} producto{item.productos.length > 1 ? 's' : ''}:
+                          </span>
+                        </div>
+                        <ul className="space-y-1">
+                          {item.productos.map((producto, idx) => (
+                            <li key={idx} className="text-sm text-gray-600 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
+                              {producto.nombre}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between">
                       {/* Quantity Controls */}
                       <div className="flex items-center gap-3">
                         <button
                           onClick={() => handleUpdateQty(item.id, item.qty - 1)}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                          className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
                           disabled={item.qty <= 1}
                         >
                           <FaMinus className="text-xs" />
