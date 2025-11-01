@@ -29,8 +29,12 @@ export default function DashboardLayout() {
   }, [accessToken, navigate]);
 
   const handleLogout = () => {
-    logout();
-    navigate("/"); // Redirige a la Landing Page
+    // Primero navega
+    navigate("/", { replace: true });
+    // Luego hace logout (después de un pequeño delay para asegurar navegación)
+    setTimeout(() => {
+      logout();
+    }, 100);
   };
 
   const cartItemCount = items.reduce((sum, item) => sum + (item.qty || 1), 0);
@@ -125,24 +129,38 @@ export default function DashboardLayout() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-[#5D4037] text-xl"
+              className="text-[#5D4037] text-xl p-2 hover:bg-amber-50 rounded-lg transition-colors"
             >
               {sidebarOpen ? <FaTimes /> : <FaBars />}
             </button>
-            <h1 className="font-bold text-[#5D4037]">Panadería Santa Clara 🥐</h1>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🥐</span>
+              <h1 className="font-bold text-[#5D4037]">Panadería</h1>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-2">
+            {/* Cart Icon */}
             <NavLink
               to="/dashboard/carrito"
-              className="relative text-amber-700 text-xl"
+              className="relative text-amber-700 text-xl p-2 hover:bg-amber-50 rounded-lg transition-colors"
             >
               <FaShoppingCart />
               {cartItemCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
                   {cartItemCount}
                 </span>
               )}
             </NavLink>
+
+            {/* Logout Button - Solo ícono en móvil pequeño, texto en sm+ */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+            >
+              <FaSignOutAlt />
+              <span className="hidden sm:inline">Salir</span>
+            </button>
           </div>
         </header>
 
@@ -150,22 +168,32 @@ export default function DashboardLayout() {
         {sidebarOpen && (
           <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setSidebarOpen(false)}>
             <aside
-              className="w-64 h-full bg-white shadow-xl"
+              className="w-64 h-full bg-white shadow-xl flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6 border-b border-[#E8D5C4]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-amber-600 to-amber-800 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-lg">🥐</span>
+              {/* Logo */}
+              <div className="p-6 border-b border-[#E8D5C4] bg-gradient-to-r from-amber-50 to-orange-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-amber-600 to-amber-800 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">🥐</span>
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-[#5D4037] text-lg">Panadería</h2>
+                      <p className="text-xs text-[#8D6E63]">Santa Clara</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="font-bold text-[#5D4037] text-lg">Panadería</h2>
-                    <p className="text-xs text-[#8D6E63]">Santa Clara</p>
-                  </div>
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="text-[#8D6E63] hover:text-[#5D4037] p-1"
+                  >
+                    <FaTimes />
+                  </button>
                 </div>
               </div>
 
-              <nav className="p-4 space-y-1">
+              {/* Navigation */}
+              <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
                 {menuItems.map((item) => (
                   <NavLink
                     key={item.to}
@@ -175,7 +203,7 @@ export default function DashboardLayout() {
                       `flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
                         ? "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 font-semibold"
                         : "text-[#6D4C41] hover:bg-[#FFF8F0]"
-                      }`
+                      } ${item.isAdmin ? 'border-l-4 border-orange-500' : ''}`
                     }
                   >
                     <item.icon className="text-lg" />
@@ -189,10 +217,22 @@ export default function DashboardLayout() {
                 ))}
               </nav>
 
-              <div className="absolute bottom-0 w-full p-4 border-t border-[#E8D5C4]">
+              {/* User Info & Logout */}
+              <div className="p-4 border-t border-[#E8D5C4]">
+                <div className="flex items-center gap-3 mb-3 px-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold">
+                    {user?.username?.[0]?.toUpperCase() || "U"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#5D4037] truncate">
+                      {user?.username || "Usuario"}
+                    </p>
+                    <p className="text-xs text-[#8D6E63] truncate">{user?.email}</p>
+                  </div>
+                </div>
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
                 >
                   <FaSignOutAlt />
                   <span>Cerrar sesión</span>

@@ -1,6 +1,6 @@
 // src/pages/LoginPage.jsx
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../components/auth/AuthContext";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
@@ -33,9 +33,10 @@ export default function LoginPage() {
 
       const { access, refresh, user: userData } = res.data;
 
-      // Guardar tokens en localStorage
-      localStorage.setItem("access", access);
-      localStorage.setItem("refresh", refresh);
+      // ✅ CRÍTICO: Guardar en localStorage PRIMERO
+      localStorage.setItem('access', access);
+      localStorage.setItem('refresh', refresh);
+      console.log("💾 Tokens guardados en localStorage");
 
       // Actualizar el contexto
       setAccessToken(access);
@@ -45,8 +46,6 @@ export default function LoginPage() {
       const decoded = jwtDecode(access);
       console.log("🔍 Token decodificado:", decoded);
       console.log("🔍 userData de respuesta:", userData);
-      console.log("🔍 Rol en token decodificado:", decoded.rol);
-      console.log("🔍 Rol en userData:", userData?.rol);
       
       // Usar userData si está disponible, sino usar decoded
       const userInfo = userData || decoded;
@@ -163,9 +162,12 @@ export default function LoginPage() {
         <div className="text-center pt-4">
           <p className="text-sm text-gray-600">
             ¿No tienes cuenta?{" "}
-            <span className="text-amber-700 cursor-pointer hover:underline font-semibold">
-              Contáctanos
-            </span>
+            <Link 
+              to="/register" 
+              className="text-amber-700 hover:text-amber-800 cursor-pointer hover:underline font-semibold"
+            >
+              Regístrate
+            </Link>
           </p>
         </div>
       </div>

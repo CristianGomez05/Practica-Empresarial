@@ -357,6 +357,109 @@ class PedidoCreateSerializer(serializers.Serializer):
         """
         return PedidoSerializer(instance, context=self.context).data
     
+
+class UsuarioRegistroSerializer(serializers.ModelSerializer):
+    """
+    Serializer para el registro de nuevos usuarios
+    """
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={'input_type': 'password'},
+        help_text="La contraseña debe tener al menos 8 caracteres"
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'},
+        help_text="Repite la contraseña"
+    )
+
+    class Meta:
+        model = Usuario
+        fields = [
+            'username', 'email', 'password', 'password_confirm',
+            'first_name', 'last_name'
+        ]
+        extra_kwargs = {
+            'email': {'required': True},
+            'first_name': {'required': True},
+            'last_name': {'required': True}
+        }
+
+    def validate_username(self, value):
+        """
+        Validar que el username sea único
+        """
+        if Usuario.objects.filter(username=value).exists():
+            raise serializers.ValidationError(
+                "Este nombre de usuario ya está en uso"
+            )
+        return value
+
+    def validate_email(self, value):
+        """
+        Validar que el email sea único y válido
+        """
+        if Usuario.objects.filter(email=value).exists():
+            raise serializers.ValidationError(
+                "Este correo electrónico ya está registrado"
+            )
+        
+        # Validación adicional del formato de email
+        if '@' not in value or '.' not in value.split('@')[-1]:
+            raise serializers.ValidationError(
+                "Ingresa un correo electrónico válido"
+            )
+        
+        return value.lower()
+
+    def validate(self, data):
+        """
+        Validar que las contraseñas coincidan
+        """
+        if data['password'] != data['password_confirm']:
+            raise serializers.ValidationError({
+                'password_confirm': 'Las contraseñas no coinciden'
+            })
+        
+        # Validación adicional de contraseña
+        password = data['password']
+        if len(password) < 8:
+            raise serializers.ValidationError({
+                'password': 'La contraseña debe tener al menos 8 caracteres'
+            })
+        
+        # Verificar que tenga al menos una letra y un número
+        if not any(c.isalpha() for c in password):
+            raise serializers.ValidationError({
+                'password': 'La contraseña debe contener al menos una letra'
+            })
+        
+        if not any(c.isdigit() for c in password):
+            raise serializers.ValidationError({
+                'password': 'La contraseña debe contener al menos un número'
+            })
+        
+        return data
+
+    def create(self, validated_data):
+        """
+        Crear el usuario con la contraseña hasheada
+        """
+        # Remover password_confirm
+        validated_data.pop('password_confirm')
+        
+        # Crear usuario
+        usuario = Usuario.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name'],
+            rol='cliente'  # Por defecto todos los registrados son clientes
+        )
+        
+        return usuario
     
 # ============================================================================
 # CUSTOM JWT SERIALIZER - DEBE IR AL FINAL

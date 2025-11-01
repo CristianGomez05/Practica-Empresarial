@@ -14,6 +14,7 @@ import DashboardCart from "./pages/dashboard/DashboardCart";
 import DashboardOrders from "./pages/dashboard/DashboardOrders";
 import DashboardProfile from "./pages/dashboard/DashboardProfile";
 import OrderConfirmation from "./pages/OrderConfirmation";
+import RegisterPage from './pages/RegisterPage';
 
 // Importar componentes de administrador
 import AdminLayout from "./components/admin/AdminLayout";
@@ -40,6 +41,7 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/catalogo" element={<Catalog />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route path="/producto/:id" element={<ProductDetail />} />
         
         {/* Dashboard principal (punto de entrada OAuth) */}

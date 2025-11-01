@@ -90,10 +90,10 @@ const Landing = () => {
       <Navbar />
 
       {/* ================== HERO SECTION ================== */}
-      <section id="inicio" className="relative flex flex-col md:flex-row items-center justify-between max-w-7xl mx-auto px-6 md:px-12 pt-32 md:pt-40 pb-20 gap-10 overflow-hidden">
+      <section id="inicio" className="relative flex flex-col md:flex-row items-center justify-between max-w-7x1 mx-auto px-1 md:px-12 pt-32 md:pt-40 pb-20 gap-10 overflow-hidden">
         {/* Decorative elements */}
         <div className="absolute top-20 left-10 w-72 h-72 bg-amber-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-        <div className="absolute top-40 right-10 w-72 h-72 bg-orange-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div className="absolute top-20 right-10 w-72 h-72 bg-orange-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
         
         {/* Texto */}
         <motion.div {...fadeUp()} className="flex-1 z-10">

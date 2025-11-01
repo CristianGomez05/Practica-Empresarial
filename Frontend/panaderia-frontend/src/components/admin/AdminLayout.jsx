@@ -13,8 +13,12 @@ export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = () => {
-    logout();
-    navigate("/"); // Redirige a la Landing Page
+    // Primero navega
+    navigate("/", { replace: true });
+    // Luego hace logout (después de un pequeño delay para asegurar navegación)
+    setTimeout(() => {
+      logout();
+    }, 100);
   };
 
   const menuItems = [

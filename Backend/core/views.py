@@ -1,7 +1,7 @@
 # Backend/core/views.py
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
@@ -13,9 +13,46 @@ from .serializers import (
     ProductoSerializer, 
     OfertaSerializer, 
     PedidoSerializer, 
-    DetallePedidoSerializer
+    DetallePedidoSerializer,
+    UsuarioRegistroSerializer  # Ya está importado desde serializers.py
 )
 from .permissions import EsAdministrador, EsClienteOAdmin
+
+
+# ============================================================================
+# NUEVO: Endpoint de Registro
+# ============================================================================
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registro_usuario(request):
+    """
+    Endpoint para registrar nuevos usuarios
+    POST /core/registro/
+    Body: {
+        "username": "usuario123",
+        "email": "usuario@example.com",
+        "password": "contraseña_segura",
+        "first_name": "Nombre",
+        "last_name": "Apellido"
+    }
+    """
+    serializer = UsuarioRegistroSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        usuario = serializer.save()
+        return Response({
+            'message': 'Usuario registrado exitosamente',
+            'user': {
+                'id': usuario.id,
+                'username': usuario.username,
+                'email': usuario.email,
+                'first_name': usuario.first_name,
+                'last_name': usuario.last_name,
+                'rol': usuario.rol
+            }
+        }, status=status.HTTP_201_CREATED)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UsuarioViewSet(viewsets.ModelViewSet):
@@ -165,18 +202,6 @@ class PedidoViewSet(viewsets.ModelViewSet):
         """
         Crear pedido con detalles y calcular total
         Ahora soporta precios personalizados para ofertas
-        POST /core/pedidos/
-        Body: {
-            "items": [
-                {
-                    "producto": 1, 
-                    "cantidad": 2,
-                    "precio_unitario": 1500.00,  # Opcional: para ofertas
-                    "es_oferta": true,           # Opcional: marcar como oferta
-                    "oferta_titulo": "Combo 2x1" # Opcional: nombre de la oferta
-                }
-            ]
-        }
         """
         items_data = self.request.data.get('items', [])
         
@@ -205,7 +230,6 @@ class PedidoViewSet(viewsets.ModelViewSet):
             cantidad = item_data['cantidad']
             
             # Usar precio personalizado si se proporciona (para ofertas)
-            # Si no, usar el precio del producto
             if 'precio_unitario' in item_data:
                 precio_unitario = Decimal(str(item_data['precio_unitario']))
             else:
@@ -217,22 +241,17 @@ class PedidoViewSet(viewsets.ModelViewSet):
                 cantidad=cantidad
             )
             
-            # Calcular total usando el precio correcto
             total += precio_unitario * cantidad
         
-        # Actualizar total
         pedido.total = total
         pedido.save()
         
-        # El signal enviará la confirmación automáticamente
         return pedido
     
     @action(detail=True, methods=['patch'], permission_classes=[EsAdministrador])
     def cambiar_estado(self, request, pk=None):
         """
         Cambiar el estado de un pedido (solo administradores)
-        PATCH /core/pedidos/{id}/cambiar_estado/
-        Body: {"estado": "en_preparacion"}
         """
         pedido = self.get_object()
         nuevo_estado = request.data.get('estado')
@@ -246,7 +265,6 @@ class PedidoViewSet(viewsets.ModelViewSet):
         pedido.estado = nuevo_estado
         pedido.save(update_fields=['estado'])
         
-        # El signal enviará la notificación automáticamente
         serializer = self.get_serializer(pedido)
         return Response({
             'message': 'Estado actualizado',
@@ -257,7 +275,6 @@ class PedidoViewSet(viewsets.ModelViewSet):
     def mis_pedidos(self, request):
         """
         Obtiene todos los pedidos del usuario actual
-        GET /core/pedidos/mis_pedidos/
         """
         pedidos = Pedido.objects.filter(
             usuario=request.user
@@ -270,25 +287,20 @@ class PedidoViewSet(viewsets.ModelViewSet):
     def estadisticas(self, request):
         """
         Estadísticas de pedidos (solo administradores)
-        GET /core/pedidos/estadisticas/
         """
-        # Pedidos por estado
         por_estado = Pedido.objects.values('estado').annotate(
             total=Count('id')
         )
         
-        # Total de ventas
         total_ventas = Pedido.objects.aggregate(
             total=Sum('total')
         )['total'] or 0
         
-        # Pedidos del mes actual
         mes_actual = timezone.now().replace(day=1)
         pedidos_mes = Pedido.objects.filter(
             fecha__gte=mes_actual
         ).count()
         
-        # Productos más vendidos
         mas_vendidos = DetallePedido.objects.values(
             'producto__nombre'
         ).annotate(

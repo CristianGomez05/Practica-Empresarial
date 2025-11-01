@@ -1,10 +1,11 @@
 // src/components/auth/ProtectedRoute.jsx
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
 
 export default function ProtectedRoute({ children }) {
   const { accessToken, loading } = useAuth();
+  const location = useLocation();
 
   // Mientras se verifica autenticación, mostrar loading
   if (loading) {
@@ -19,9 +20,10 @@ export default function ProtectedRoute({ children }) {
   }
 
   // Si después de loading NO hay token, redirigir a login
+  // Guardamos la ruta actual para redirigir después del login
   if (!accessToken) {
     console.log("🚫 No autenticado, redirigiendo a /login");
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Si hay token, mostrar contenido protegido

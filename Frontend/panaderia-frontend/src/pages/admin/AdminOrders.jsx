@@ -12,7 +12,7 @@ export default function AdminOrders() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [filterEstado, setFilterEstado] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortOrder, setSortOrder] = useState('prioridad'); // Nueva opción de ordenamiento
+  const [sortOrder, setSortOrder] = useState('prioridad');
   const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
@@ -36,30 +36,17 @@ export default function AdminOrders() {
     }
   };
 
-  // Función para calcular la prioridad de un pedido
-  const calcularPrioridad = (order) => {
-    const prioridadEstado = {
-      recibido: 4,           // Máxima prioridad
-      en_preparacion: 3,     // Alta prioridad
-      listo: 2,              // Media prioridad
-      entregado: 1           // Baja prioridad
+  // Sistema de prioridades mejorado
+  const getPrioridadPorEstado = (estado) => {
+    const prioridades = {
+      'recibido': 4,        // Máxima prioridad
+      'en_preparacion': 3,  // Alta prioridad
+      'listo': 2,           // Media prioridad
+      'entregado': 1        // Baja prioridad
     };
-
-    // Calcular antigüedad en minutos
-    const ahora = new Date();
-    const fechaPedido = new Date(order.fecha);
-    const minutosAntiguedad = Math.floor((ahora - fechaPedido) / (1000 * 60));
-
-    // Prioridad base por estado
-    const prioridadBase = prioridadEstado[order.estado] || 0;
-
-    // Bonus por antigüedad (cada 10 minutos suma 0.1 a la prioridad)
-    const bonusAntiguedad = minutosAntiguedad / 100;
-
-    return prioridadBase + bonusAntiguedad;
+    return prioridades[estado] || 0;
   };
 
-  // Función para obtener el tiempo de espera formateado
   const getTiempoEspera = (fecha) => {
     const ahora = new Date();
     const fechaPedido = new Date(fecha);
@@ -76,7 +63,6 @@ export default function AdminOrders() {
     }
   };
 
-  // Función para determinar el color del indicador de tiempo
   const getTiempoColor = (fecha, estado) => {
     if (estado === 'entregado') return 'text-gray-400';
 
@@ -110,12 +96,24 @@ export default function AdminOrders() {
     filtered.sort((a, b) => {
       switch (sortOrder) {
         case 'prioridad':
-          // Más recientes primero
-          return new Date(b.fecha) - new Date(a.fecha);
+          // Primero ordenar por prioridad de estado (recibido > en_preparacion > listo > entregado)
+          const prioridadA = getPrioridadPorEstado(a.estado);
+          const prioridadB = getPrioridadPorEstado(b.estado);
+          
+          if (prioridadA !== prioridadB) {
+            return prioridadB - prioridadA; // Mayor prioridad primero
+          }
+          
+          // Si tienen el mismo estado, ordenar por antigüedad (más antiguos primero = FIFO)
+          return new Date(a.fecha) - new Date(b.fecha);
         
         case 'mas_antiguo':
           // Más antiguos primero
           return new Date(a.fecha) - new Date(b.fecha);
+        
+        case 'mas_reciente':
+          // Más recientes primero
+          return new Date(b.fecha) - new Date(a.fecha);
         
         case 'monto_mayor':
           // Mayor monto primero
@@ -153,22 +151,26 @@ export default function AdminOrders() {
       recibido: { 
         bg: 'bg-blue-100', 
         text: 'text-blue-700', 
-        label: '📋 Recibido' 
+        label: '📋 Recibido',
+        priority: '🔴 Urgente'
       },
       en_preparacion: { 
         bg: 'bg-yellow-100', 
         text: 'text-yellow-700', 
-        label: '👨‍🍳 En Preparación' 
+        label: '👨‍🍳 En Preparación',
+        priority: '🟡 Alta'
       },
       listo: { 
         bg: 'bg-green-100', 
         text: 'text-green-700', 
-        label: '✅ Listo' 
+        label: '✅ Listo',
+        priority: '🟢 Media'
       },
       entregado: { 
         bg: 'bg-purple-100', 
         text: 'text-purple-700', 
-        label: '🎉 Entregado' 
+        label: '🎉 Entregado',
+        priority: '⚪ Completado'
       }
     };
     return badges[estado] || badges.recibido;
@@ -183,8 +185,9 @@ export default function AdminOrders() {
   ];
 
   const ordenamientos = [
-    { value: 'prioridad', label: '🔥 Prioridad' },
+    { value: 'prioridad', label: '🎯 Por Prioridad' },
     { value: 'mas_antiguo', label: '⏰ Más Antiguos' },
+    { value: 'mas_reciente', label: '🆕 Más Recientes' },
     { value: 'monto_mayor', label: '💰 Mayor Monto' },
     { value: 'monto_menor', label: '💵 Menor Monto' }
   ];
@@ -194,6 +197,17 @@ export default function AdminOrders() {
     en_preparacion: 'listo',
     listo: 'entregado',
     entregado: null
+  };
+
+  // Calcular si un pedido es urgente (más de 30 minutos en estado recibido o en_preparacion)
+  const esUrgente = (order) => {
+    if (order.estado === 'listo' || order.estado === 'entregado') return false;
+    
+    const ahora = new Date();
+    const fechaPedido = new Date(order.fecha);
+    const minutos = Math.floor((ahora - fechaPedido) / (1000 * 60));
+    
+    return minutos > 30;
   };
 
   if (loading) {
@@ -231,7 +245,6 @@ export default function AdminOrders() {
             />
           </div>
 
-          {/* Filter Estado */}
           <div className="relative">
             <FaFilter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
             <select
@@ -247,7 +260,6 @@ export default function AdminOrders() {
             </select>
           </div>
 
-          {/* Sort Order */}
           <div className="relative">
             <FaSortAmountDown className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
             <select
@@ -265,14 +277,27 @@ export default function AdminOrders() {
         </div>
       </div>
 
+      {/* Indicador de ordenamiento activo */}
+      {sortOrder === 'prioridad' && (
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+          <p className="text-blue-700 text-sm font-semibold">
+            🎯 Mostrando pedidos por prioridad: 
+            <span className="ml-2">Recibidos → En Preparación → Listos → Entregados</span>
+          </p>
+          <p className="text-blue-600 text-xs mt-1">
+            Dentro de cada estado, los pedidos más antiguos aparecen primero
+          </p>
+        </div>
+      )}
+
       {/* Orders List */}
       <div className="space-y-4">
         <AnimatePresence>
           {filteredOrders.map((order, index) => {
             const badge = getEstadoBadge(order.estado);
             const siguienteEstado = estadosSiguientes[order.estado];
-            const prioridad = calcularPrioridad(order);
-            const esUrgente = prioridad > 4.5 && order.estado !== 'entregado';
+            const urgente = esUrgente(order);
+            const prioridad = getPrioridadPorEstado(order.estado);
 
             return (
               <motion.div
@@ -282,7 +307,7 @@ export default function AdminOrders() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ delay: index * 0.05 }}
                 className={`bg-white rounded-xl shadow-md border-2 overflow-hidden hover:shadow-lg transition-all ${
-                  esUrgente ? 'border-red-300 shadow-red-100' : 'border-gray-100'
+                  urgente ? 'border-red-300 shadow-red-100' : 'border-gray-100'
                 }`}
               >
                 <div className="p-6">
@@ -290,14 +315,23 @@ export default function AdminOrders() {
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 bg-gradient-to-br rounded-full flex items-center justify-center text-white font-bold shadow-lg ${
-                        esUrgente ? 'from-red-500 to-red-600 animate-pulse' : 'from-amber-400 to-amber-600'
+                        urgente ? 'from-red-500 to-red-600 animate-pulse' : 
+                        prioridad === 4 ? 'from-blue-500 to-blue-600' :
+                        prioridad === 3 ? 'from-yellow-500 to-yellow-600' :
+                        prioridad === 2 ? 'from-green-500 to-green-600' :
+                        'from-purple-500 to-purple-600'
                       }`}>
                         #{order.id}
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-800 text-lg">
-                          {order.usuario?.username || 'Cliente'}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-gray-800 text-lg">
+                            {order.usuario?.username || 'Cliente'}
+                          </p>
+                          <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">
+                            {badge.priority}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-3 text-sm">
                           <span className="text-gray-500">
                             {new Date(order.fecha).toLocaleString('es-ES', {
@@ -325,7 +359,7 @@ export default function AdminOrders() {
                   </div>
 
                   {/* Alerta de urgencia */}
-                  {esUrgente && (
+                  {urgente && (
                     <div className="mb-4 px-4 py-2 bg-red-50 border-l-4 border-red-500 rounded">
                       <p className="text-red-700 text-sm font-semibold">
                         🚨 Pedido urgente - Requiere atención inmediata
@@ -369,7 +403,7 @@ export default function AdminOrders() {
                       <button
                         onClick={() => handleChangeEstado(order.id, siguienteEstado)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold ${
-                          esUrgente 
+                          urgente 
                             ? 'bg-red-50 hover:bg-red-100 text-red-600 animate-pulse' 
                             : 'bg-green-50 hover:bg-green-100 text-green-600'
                         }`}
@@ -393,7 +427,7 @@ export default function AdminOrders() {
         )}
       </div>
 
-      {/* Modal de Detalles */}
+      {/* Modal de Detalles - Sin cambios */}
       {selectedOrder && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -409,7 +443,6 @@ export default function AdminOrders() {
             className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header del Modal */}
             <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -432,9 +465,7 @@ export default function AdminOrders() {
               </div>
             </div>
 
-            {/* Contenido del Modal */}
             <div className="p-6 space-y-6">
-              {/* Información General */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <p className="text-sm text-gray-600 mb-1">Fecha del Pedido</p>
@@ -472,7 +503,6 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {/* Total */}
               <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-5 rounded-xl border-2 border-amber-200">
                 <div className="flex items-center justify-between">
                   <div>
@@ -487,7 +517,6 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {/* Productos */}
               <div>
                 <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
                   🛍️ Productos ({selectedOrder.detalles?.length || 0})
@@ -531,17 +560,6 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {/* Notas/Observaciones si existen */}
-              {selectedOrder.notas && (
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                  <p className="text-sm text-blue-700 font-semibold mb-1">
-                    📝 Notas del Cliente
-                  </p>
-                  <p className="text-gray-700">{selectedOrder.notas}</p>
-                </div>
-              )}
-
-              {/* Acciones */}
               <div className="flex gap-3 pt-4 border-t">
                 {estadosSiguientes[selectedOrder.estado] && (
                   <button

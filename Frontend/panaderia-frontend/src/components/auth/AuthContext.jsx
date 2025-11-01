@@ -67,20 +67,25 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Logout limpio
+  // Logout limpio - SIN redirección automática
   const logout = () => {
     console.log("🚪 Cerrando sesión...");
-    localStorage.removeItem("access");
-    localStorage.removeItem("refresh");
-
-    // Limpiar el carrito del usuario actual
+    
+    // Limpiar el carrito del usuario actual ANTES de limpiar el estado
     if (user) {
       localStorage.removeItem(`cart_items_${user.user_id || user.id}`);
     }
 
+    // Limpiar localStorage
+    localStorage.removeItem("access");
+    localStorage.removeItem("refresh");
+
+    // Limpiar estado
     setAccessToken(null);
     setRefreshToken(null);
     setUser(null);
+
+    console.log("✅ Sesión cerrada - sin redirección automática");
   };
 
   // Auto-verificación inicial - SOLO si hay token en localStorage

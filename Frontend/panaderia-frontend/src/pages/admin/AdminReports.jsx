@@ -230,7 +230,7 @@ export default function AdminReports() {
         </head>
         <body>
           <div class="header">
-            <h1>🥐 Panadería Artesanal</h1>
+            <h1>🥐 Panadería Santa Clara</h1>
             <p>Reporte ${nombrePeriodo}</p>
             <p>Generado el ${new Date().toLocaleDateString('es-ES', { 
               weekday: 'long', 
