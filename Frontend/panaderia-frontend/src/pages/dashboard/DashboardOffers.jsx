@@ -3,13 +3,13 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../../services/api";
 import { useCart } from "../../hooks/useCart";
-import { FaShoppingCart, FaTag, FaClock, FaCheck, FaBox } from "react-icons/fa";
+import { FaShoppingCart, FaTag, FaClock, FaCheck, FaBox, FaExclamationTriangle } from "react-icons/fa";
 import { useSnackbar } from "notistack";
 
 export default function DashboardOffers() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { add, addOffer } = useCart(); // ✅ Desestructurar ambas funciones
+  const { add, addOffer } = useCart();
   const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
@@ -38,36 +38,69 @@ export default function DashboardOffers() {
   }, [enqueueSnackbar]);
 
   const handleAddAllToCart = (offer) => {
-    if (offer.productos && offer.productos.length > 0) {
-      console.log('🛒 Añadiendo oferta al carrito:', offer); // Debug
-      addOffer(offer); // ✅ Usar addOffer directamente
-      
-      enqueueSnackbar(
-        `Oferta "${offer.titulo}" añadida al carrito por ₡${offer.precio_oferta}`, 
-        {
-          variant: "success",
-          autoHideDuration: 3000,
-        }
-      );
-    } else {
+    // ⭐ VALIDACIÓN: Verificar que todos los productos tengan stock
+    if (!offer.productos || offer.productos.length === 0) {
       console.error('❌ Oferta sin productos:', offer);
       enqueueSnackbar("Error: La oferta no tiene productos", { variant: "error" });
+      return;
     }
+
+    const productosAgotados = offer.productos.filter(p => p.stock === 0);
+    
+    if (productosAgotados.length > 0) {
+      enqueueSnackbar(
+        `No se puede agregar la oferta. Productos agotados: ${productosAgotados.map(p => p.nombre).join(', ')}`,
+        { variant: "error", autoHideDuration: 5000 }
+      );
+      return;
+    }
+
+    // Verificar que no se exceda el stock de ningún producto
+    const productosConStockInsuficiente = offer.productos.filter(p => p.stock < 1);
+    
+    if (productosConStockInsuficiente.length > 0) {
+      enqueueSnackbar(
+        "Algunos productos de la oferta tienen stock insuficiente",
+        { variant: "warning" }
+      );
+      return;
+    }
+
+    console.log('🛒 Añadiendo oferta al carrito:', offer);
+    addOffer(offer);
+    
+    enqueueSnackbar(
+      `Oferta "${offer.titulo}" añadida al carrito por ₡${offer.precio_oferta}`, 
+      {
+        variant: "success",
+        autoHideDuration: 3000,
+      }
+    );
   };
 
   const handleAddSingleProduct = (producto, offerTitle) => {
-    if (producto.disponible) {
-      add(producto, 1);
-      enqueueSnackbar(`${producto.nombre} añadido al carrito`, {
-        variant: "success",
+    // ⭐ VALIDACIÓN DE STOCK
+    if (producto.stock === 0) {
+      enqueueSnackbar(`${producto.nombre} está agotado`, {
+        variant: "error",
         autoHideDuration: 2000,
       });
-    } else {
+      return;
+    }
+
+    if (!producto.disponible) {
       enqueueSnackbar(`${producto.nombre} no está disponible`, {
         variant: "warning",
         autoHideDuration: 2000,
       });
+      return;
     }
+
+    add(producto, 1);
+    enqueueSnackbar(`${producto.nombre} añadido al carrito`, {
+      variant: "success",
+      autoHideDuration: 2000,
+    });
   };
 
   const formatDate = (dateString) => {
@@ -92,6 +125,11 @@ export default function DashboardOffers() {
     if (totalRegular === 0) return 0;
     const savings = totalRegular - parseFloat(offer.precio_oferta || 0);
     return Math.round((savings / totalRegular) * 100);
+  };
+
+  // ⭐ Verificar si la oferta tiene productos agotados
+  const ofertaTieneProductosAgotados = (offer) => {
+    return offer.productos?.some(p => p.stock === 0) || false;
   };
 
   if (loading) {
@@ -133,6 +171,8 @@ export default function DashboardOffers() {
             const discountPercent = calculateDiscountPercentage(offer);
             const totalRegular = offer.productos?.reduce((sum, p) => sum + parseFloat(p.precio || 0), 0) || 0;
             const firstProduct = offer.productos?.[0];
+            const tieneAgotados = ofertaTieneProductosAgotados(offer);
+            const productosAgotados = offer.productos?.filter(p => p.stock === 0) || [];
 
             return (
               <motion.div
@@ -140,11 +180,30 @@ export default function DashboardOffers() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className="bg-white rounded-2xl shadow-lg overflow-hidden border-2 border-green-100 hover:border-green-300 transition-all duration-300 group"
+                className={`bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-300 group ${
+                  tieneAgotados 
+                    ? 'border-red-300 opacity-75' 
+                    : 'border-green-100 hover:border-green-300'
+                }`}
               >
+                {/* ⭐ Alerta de Productos Agotados */}
+                {tieneAgotados && (
+                  <div className="bg-red-50 border-b-2 border-red-200 p-3 flex items-start gap-2">
+                    <FaExclamationTriangle className="text-red-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-red-800">
+                      <p className="font-semibold">Algunos productos de esta oferta están agotados:</p>
+                      <ul className="mt-1 space-y-1">
+                        {productosAgotados.map((p, idx) => (
+                          <li key={idx}>• {p.nombre}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
                 <div className="relative">
                   {/* Discount Badge */}
-                  {discountPercent > 0 && (
+                  {discountPercent > 0 && !tieneAgotados && (
                     <div className="absolute top-4 right-4 bg-red-500 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg z-10 transform rotate-12">
                       <div className="text-center">
                         <p className="text-2xl font-bold leading-none">-{discountPercent}%</p>
@@ -154,14 +213,18 @@ export default function DashboardOffers() {
                   )}
 
                   {/* Ribbon */}
-                  <div className="absolute top-4 left-0 bg-gradient-to-r from-green-600 to-green-500 text-white px-6 py-2 rounded-r-full shadow-lg z-10">
+                  <div className={`absolute top-4 left-0 ${
+                    tieneAgotados ? 'bg-gray-400' : 'bg-gradient-to-r from-green-600 to-green-500'
+                  } text-white px-6 py-2 rounded-r-full shadow-lg z-10`}>
                     <span className="font-bold text-sm flex items-center gap-2">
-                      <FaTag /> OFERTA
+                      <FaTag /> {tieneAgotados ? 'NO DISPONIBLE' : 'OFERTA'}
                     </span>
                   </div>
 
                   {/* Image */}
-                  <div className="h-56 overflow-hidden bg-gradient-to-br from-green-50 to-yellow-50">
+                  <div className={`h-56 overflow-hidden bg-gradient-to-br from-green-50 to-yellow-50 ${
+                    tieneAgotados ? 'opacity-60 grayscale' : ''
+                  }`}>
                     {firstProduct?.imagen ? (
                       <img
                         src={firstProduct.imagen}
@@ -185,7 +248,7 @@ export default function DashboardOffers() {
                   {/* Description */}
                   <p className="text-[#8D6E63] mb-4">{offer.descripcion}</p>
 
-                  {/* Products List */}
+                  {/* Products List con Stock */}
                   {offer.productos && offer.productos.length > 0 && (
                     <div className="bg-amber-50 rounded-lg p-4 mb-4 border border-amber-100">
                       <div className="flex items-center gap-2 mb-3">
@@ -196,34 +259,61 @@ export default function DashboardOffers() {
                       </div>
                       
                       <div className="space-y-2 mb-3">
-                        {offer.productos.map((producto, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between bg-white rounded-lg p-2 hover:bg-amber-50 transition-colors group/item"
-                          >
-                            <div className="flex items-center gap-2 flex-1">
-                              <FaCheck className="text-green-600 text-xs flex-shrink-0" />
-                              <span className="text-sm text-[#5D4037] font-medium">
-                                {producto.nombre}
-                              </span>
+                        {offer.productos.map((producto, idx) => {
+                          const agotado = producto.stock === 0;
+                          const stockBajo = producto.stock > 0 && producto.stock <= 5;
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-center justify-between bg-white rounded-lg p-2 transition-colors group/item ${
+                                agotado 
+                                  ? 'opacity-50 bg-red-50' 
+                                  : 'hover:bg-amber-50'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 flex-1">
+                                {agotado ? (
+                                  <FaExclamationTriangle className="text-red-600 text-xs flex-shrink-0" />
+                                ) : (
+                                  <FaCheck className="text-green-600 text-xs flex-shrink-0" />
+                                )}
+                                <span className={`text-sm font-medium ${
+                                  agotado ? 'text-red-600' : 'text-[#5D4037]'
+                                }`}>
+                                  {producto.nombre}
+                                </span>
+                                {agotado && (
+                                  <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">
+                                    AGOTADO
+                                  </span>
+                                )}
+                                {stockBajo && !agotado && (
+                                  <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                                    Solo {producto.stock}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm text-gray-500 line-through">
+                                  ₡{producto.precio}
+                                </span>
+                                {!agotado && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddSingleProduct(producto, offer.titulo);
+                                    }}
+                                    className="opacity-0 group-hover/item:opacity-100 transition-opacity text-green-600 hover:text-green-700 p-1"
+                                    title="Añadir solo este producto"
+                                  >
+                                    <FaShoppingCart className="text-sm" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm text-gray-500 line-through">
-                                ₡{producto.precio}
-                              </span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAddSingleProduct(producto, offer.titulo);
-                                }}
-                                className="opacity-0 group-hover/item:opacity-100 transition-opacity text-green-600 hover:text-green-700 p-1"
-                                title="Añadir solo este producto"
-                              >
-                                <FaShoppingCart className="text-sm" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
 
                       {/* Price Comparison */}
@@ -238,7 +328,7 @@ export default function DashboardOffers() {
                             ₡{parseFloat(offer.precio_oferta || 0).toFixed(2)}
                           </span>
                         </div>
-                        {savings > 0 && (
+                        {savings > 0 && !tieneAgotados && (
                           <div className="bg-green-100 text-green-800 text-center py-2 rounded-md">
                             <p className="text-sm font-semibold">
                               ¡Ahorras ₡{savings.toFixed(2)}!
@@ -261,14 +351,23 @@ export default function DashboardOffers() {
                     </div>
                   </div>
 
-                  {/* Action Button */}
+                  {/* Action Button con validación de stock */}
                   {offer.productos && offer.productos.length > 0 && (
                     <button
                       onClick={() => handleAddAllToCart(offer)}
-                      className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                      disabled={tieneAgotados}
+                      className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
+                        tieneAgotados
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white hover:shadow-xl'
+                      }`}
                     >
                       <FaShoppingCart className="text-lg" />
-                      <span>Agregar todos al carrito</span>
+                      <span>
+                        {tieneAgotados 
+                          ? 'Oferta no disponible' 
+                          : 'Agregar todos al carrito'}
+                      </span>
                     </button>
                   )}
                 </div>

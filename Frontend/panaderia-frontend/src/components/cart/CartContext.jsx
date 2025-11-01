@@ -1,92 +1,98 @@
 // src/components/cart/CartContext.jsx
-import React, { createContext, useEffect, useState } from "react";
-import { useAuth } from "../auth/AuthContext";
+import React, { createContext, useState, useEffect } from "react";
 
 export const CartContext = createContext();
 
 export function CartProvider({ children }) {
-  const { user } = useAuth();
   const [items, setItems] = useState([]);
 
-  // Generar clave única para el carrito del usuario
-  const getCartKey = () => {
-    if (!user) return "cart_items_guest";
-    return `cart_items_${user.user_id || user.id || user.username}`;
-  };
-
-  // Cargar carrito del usuario desde localStorage cuando cambie el usuario
+  // Cargar carrito desde localStorage al iniciar
   useEffect(() => {
-    const cartKey = getCartKey();
-    try {
-      const raw = localStorage.getItem(cartKey);
-      if (raw) {
-        const parsedItems = JSON.parse(raw);
-        setItems(parsedItems);
-        console.log(`🛒 Carrito cargado para: ${cartKey}`, parsedItems);
-      } else {
-        setItems([]);
-        console.log(`🛒 Carrito vacío para: ${cartKey}`);
+    const saved = localStorage.getItem("cart");
+    if (saved) {
+      try {
+        setItems(JSON.parse(saved));
+      } catch (err) {
+        console.error("Error al cargar carrito:", err);
       }
-    } catch (error) {
-      console.error("Error cargando carrito:", error);
-      setItems([]);
     }
-  }, [user]);
+  }, []);
 
-  // Guardar carrito en localStorage cuando cambien los items
+  // Guardar carrito en localStorage cada vez que cambie
   useEffect(() => {
-    const cartKey = getCartKey();
-    try {
-      localStorage.setItem(cartKey, JSON.stringify(items));
-      console.log(`💾 Carrito guardado para: ${cartKey}`);
-    } catch (error) {
-      console.error("Error guardando carrito:", error);
-    }
-  }, [items, user]);
+    localStorage.setItem("cart", JSON.stringify(items));
+  }, [items]);
 
-  // Añadir producto individual
-  const add = (product, qty = 1) => {
+  // Agregar producto o oferta al carrito con validación de stock
+  const add = (itemData, qty = 1) => {
+    // Validar stock si es un producto individual
+    if (!itemData.isOffer) {
+      if (itemData.stock === 0 || itemData.esta_agotado) {
+        alert("Este producto está agotado");
+        return;
+      }
+
+      // Verificar si ya existe en el carrito
+      const existing = items.find(
+        (i) => i.id === itemData.id && !i.isOffer
+      );
+
+      if (existing) {
+        const nuevaCantidad = existing.qty + qty;
+        if (nuevaCantidad > itemData.stock) {
+          alert(`Solo hay ${itemData.stock} unidades disponibles de ${itemData.nombre}`);
+          return;
+        }
+      }
+    }
+
+    // Si es una oferta, validar stock de todos sus productos
+    if (itemData.isOffer && itemData.productos) {
+      for (const producto of itemData.productos) {
+        if (producto.stock === 0) {
+          alert(`El producto "${producto.nombre}" incluido en esta oferta está agotado`);
+          return;
+        }
+      }
+    }
+
     setItems((prev) => {
-      const found = prev.find((i) => i.id === product.id && !i.isOffer);
-      if (found) {
-        return prev.map((i) => 
-          i.id === product.id && !i.isOffer ? { ...i, qty: i.qty + qty } : i
+      const existing = prev.find((i) => i.id === itemData.id);
+      if (existing) {
+        // Verificar stock antes de incrementar
+        if (!itemData.isOffer && existing.qty + qty > itemData.stock) {
+          alert(`Solo hay ${itemData.stock} unidades disponibles`);
+          return prev;
+        }
+
+        return prev.map((i) =>
+          i.id === itemData.id ? { ...i, qty: i.qty + qty } : i
         );
+      } else {
+        return [...prev, { ...itemData, qty }];
       }
-      return [...prev, { ...product, qty, isOffer: false }];
     });
   };
 
-  // Añadir oferta completa
-  const addOffer = (offer) => {
-    console.log('📦 addOffer llamado con:', offer);
-    setItems((prev) => {
-      // Generar ID único para la oferta basado en el ID de la oferta y timestamp
-      const offerId = `offer_${offer.id}_${Date.now()}`;
-      
-      const offerItem = {
-        id: offerId,
-        offerId: offer.id, // ID original de la oferta
-        nombre: offer.titulo,
-        descripcion: offer.descripcion,
-        precio: parseFloat(offer.precio_oferta),
-        qty: 1,
-        isOffer: true,
-        productos: offer.productos || [], // Array de productos incluidos
-        imagen: offer.productos?.[0]?.imagen || null, // Imagen del primer producto
-      };
-      
-      console.log('✅ Oferta creada:', offerItem);
-      const newItems = [...prev, offerItem];
-      console.log('🛒 Nuevo estado del carrito:', newItems);
-      return newItems;
-    });
-  };
+  // Actualizar cantidad con validación de stock
+  const updateQty = (id, newQty) => {
+    if (newQty < 1) {
+      remove(id);
+      return;
+    }
 
-  const updateQty = (id, qty) => {
-    if (qty < 1) return;
-    setItems((prev) => 
-      prev.map((i) => (i.id === id ? { ...i, qty } : i))
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          // Validar stock para productos individuales
+          if (!item.isOffer && newQty > item.stock) {
+            alert(`Solo hay ${item.stock} unidades disponibles de ${item.nombre}`);
+            return item; // Mantener cantidad actual
+          }
+          return { ...item, qty: newQty };
+        }
+        return item;
+      })
     );
   };
 
@@ -96,18 +102,36 @@ export function CartProvider({ children }) {
 
   const clear = () => {
     setItems([]);
-    const cartKey = getCartKey();
-    localStorage.removeItem(cartKey);
-    console.log(`🗑️ Carrito limpiado para: ${cartKey}`);
   };
 
-  const total = items.reduce(
-    (sum, item) => sum + (item.precio ?? item.price ?? 0) * (item.qty || 1), 
-    0
-  );
+  // Calcular total
+  const total = items.reduce((sum, item) => sum + item.precio * item.qty, 0);
+
+  // Verificar si hay problemas de stock en el carrito
+  const hasStockIssues = () => {
+    return items.some((item) => {
+      if (item.isOffer) {
+        // Verificar productos de la oferta
+        return item.productos?.some((p) => p.stock === 0);
+      } else {
+        // Verificar stock del producto
+        return item.stock === 0 || item.qty > item.stock;
+      }
+    });
+  };
 
   return (
-    <CartContext.Provider value={{ items, add, addOffer, updateQty, remove, clear, total }}>
+    <CartContext.Provider
+      value={{
+        items,
+        add,
+        updateQty,
+        remove,
+        clear,
+        total,
+        hasStockIssues,
+      }}
+    >
       {children}
     </CartContext.Provider>
   );

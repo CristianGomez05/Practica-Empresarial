@@ -7,6 +7,8 @@ from django.db.models import Q, Sum, Count
 from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
+from django.db import transaction
+from .emails import enviar_alerta_stock_agotado
 from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
 from .serializers import (
     UsuarioSerializer, 
@@ -180,6 +182,95 @@ class OfertaViewSet(viewsets.ModelViewSet):
         return Response({
             'message': 'Oferta eliminada exitosamente'
         }, status=status.HTTP_204_NO_CONTENT)
+    
+    @transaction.atomic
+    def perform_create(self, serializer):
+        """
+        Crear pedido con detalles, calcular total y REDUCIR STOCK
+        """
+        items_data = self.request.data.get('items', [])
+        
+        if not items_data:
+            return Response({
+                'error': 'Debe incluir al menos un producto'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # VALIDACIÓN 1: Verificar que todos los productos existan y estén disponibles
+        for item in items_data:
+            try:
+                producto = Producto.objects.select_for_update().get(
+                    id=item['producto'], 
+                    disponible=True
+                )
+                
+                # VALIDACIÓN 2: Verificar que haya stock suficiente
+                if producto.stock < item['cantidad']:
+                    return Response({
+                        'error': f'Stock insuficiente para {producto.nombre}. '
+                                f'Disponible: {producto.stock}, Solicitado: {item["cantidad"]}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+            except Producto.DoesNotExist:
+                return Response({
+                    'error': f'Producto {item["producto"]} no disponible'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Crear el pedido
+        pedido = serializer.save(usuario=self.request.user)
+        
+        # Crear detalles, calcular total y REDUCIR STOCK
+        total = Decimal('0.00')
+        productos_agotados = []
+        
+        for item_data in items_data:
+            producto = Producto.objects.select_for_update().get(id=item_data['producto'])
+            cantidad = item_data['cantidad']
+            
+            # Usar precio personalizado si se proporciona (para ofertas)
+            if 'precio_unitario' in item_data:
+                precio_unitario = Decimal(str(item_data['precio_unitario']))
+            else:
+                precio_unitario = producto.precio
+            
+            # Crear detalle del pedido
+            DetallePedido.objects.create(
+                pedido=pedido,
+                producto=producto,
+                cantidad=cantidad
+            )
+            
+            # Calcular total
+            total += precio_unitario * cantidad
+            
+            # ⭐ REDUCIR STOCK
+            stock_anterior = producto.stock
+            producto.stock -= cantidad
+            
+            # Si el stock llega a 0, marcar como no disponible
+            if producto.stock == 0:
+                producto.disponible = False
+                productos_agotados.append(producto)
+                print(f"⚠️ Producto {producto.nombre} (ID: {producto.id}) se ha AGOTADO")
+            
+            producto.save(update_fields=['stock', 'disponible'])
+            
+            print(f"📦 Stock reducido: {producto.nombre} | "
+                  f"Anterior: {stock_anterior} | Nuevo: {producto.stock}")
+        
+        # Actualizar total del pedido
+        pedido.total = total
+        pedido.save(update_fields=['total'])
+        
+        # ⭐ ENVIAR ALERTAS DE STOCK AGOTADO
+        for producto_agotado in productos_agotados:
+            # Solo enviar si no se ha enviado antes
+            if not producto_agotado.alerta_stock_enviada:
+                try:
+                    enviar_alerta_stock_agotado(producto_agotado.id)
+                except Exception as e:
+                    print(f"❌ Error al enviar alerta para {producto_agotado.nombre}: {e}")
+        
+        return pedido
 
 
 class PedidoViewSet(viewsets.ModelViewSet):

@@ -1,7 +1,7 @@
 // Frontend/src/pages/admin/AdminOffersPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaBox } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 
@@ -43,10 +43,8 @@ export default function AdminOffersPanel() {
     }
   };
 
-  // Función auxiliar para formatear fecha YYYY-MM-DD sin conversión de zona horaria
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
-    // Asegurarse de que la fecha se mantenga en formato local
     const date = new Date(dateString + 'T00:00:00');
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -103,7 +101,7 @@ export default function AdminOffersPanel() {
   };
 
   const handleSubmit = async () => {
-    // Validaciones
+    // Validaciones básicas
     if (!formData.titulo.trim()) {
       enqueueSnackbar('El título es requerido', { variant: 'warning' });
       return;
@@ -116,6 +114,19 @@ export default function AdminOffersPanel() {
       enqueueSnackbar('Debes seleccionar al menos un producto', { variant: 'warning' });
       return;
     }
+
+    // ⭐ VALIDACIÓN DE STOCK
+    const productosSeleccionados = products.filter(p => formData.productos_ids.includes(p.id));
+    const productosAgotados = productosSeleccionados.filter(p => p.stock === 0);
+    
+    if (productosAgotados.length > 0) {
+      enqueueSnackbar(
+        `No puedes crear una oferta con productos agotados: ${productosAgotados.map(p => p.nombre).join(', ')}`,
+        { variant: 'error', autoHideDuration: 5000 }
+      );
+      return;
+    }
+
     if (!formData.precio_oferta) {
       enqueueSnackbar('El precio de la oferta es requerido', { variant: 'warning' });
       return;
@@ -126,13 +137,12 @@ export default function AdminOffersPanel() {
     }
     
     try {
-      // Payload con fechas en formato correcto (sin conversión de zona horaria)
       const payload = {
         titulo: formData.titulo,
         descripcion: formData.descripcion,
         productos_ids: formData.productos_ids.map(id => parseInt(id)),
-        fecha_inicio: formData.fecha_inicio, // Ya está en formato YYYY-MM-DD
-        fecha_fin: formData.fecha_fin,       // Ya está en formato YYYY-MM-DD
+        fecha_inicio: formData.fecha_inicio,
+        fecha_fin: formData.fecha_fin,
         precio_oferta: parseFloat(formData.precio_oferta)
       };
 
@@ -179,6 +189,20 @@ export default function AdminOffersPanel() {
 
   const getEstadoOferta = (oferta) => {
     const hoy = new Date().toISOString().split('T')[0];
+    
+    // ⭐ Verificar si tiene productos agotados
+    const offerProducts = getOfferProducts(oferta);
+    const tieneAgotados = offerProducts.some(p => p.stock === 0);
+    
+    if (tieneAgotados) {
+      return { 
+        text: 'Productos Agotados', 
+        bg: 'bg-red-100', 
+        textColor: 'text-red-700',
+        icon: <FaExclamationTriangle />
+      };
+    }
+    
     if (oferta.fecha_inicio > hoy) {
       return { 
         text: 'Próxima', 
@@ -248,6 +272,8 @@ export default function AdminOffersPanel() {
             const estado = getEstadoOferta(offer);
             const offerProducts = getOfferProducts(offer);
             const firstProduct = offerProducts[0];
+            const productosAgotados = offerProducts.filter(p => p.stock === 0);
+            const tieneAgotados = productosAgotados.length > 0;
             
             return (
               <motion.div
@@ -256,10 +282,16 @@ export default function AdminOffersPanel() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ delay: index * 0.05 }}
-                className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-orange-100 hover:border-orange-300 transition-all"
+                className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 transition-all ${
+                  tieneAgotados 
+                    ? 'border-red-300 bg-red-50' 
+                    : 'border-orange-100 hover:border-orange-300'
+                }`}
               >
                 {/* Image */}
-                <div className="relative h-48 bg-gradient-to-br from-orange-100 to-red-100">
+                <div className={`relative h-48 bg-gradient-to-br from-orange-100 to-red-100 ${
+                  tieneAgotados ? 'opacity-60' : ''
+                }`}>
                   {firstProduct?.imagen ? (
                     <img
                       src={firstProduct.imagen}
@@ -272,8 +304,10 @@ export default function AdminOffersPanel() {
                     </div>
                   )}
                   
-                  <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg`}>
-                    {estado.text}
+                  {/* ⭐ Badge de Estado con Stock */}
+                  <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1`}>
+                    {estado.icon}
+                    <span>{estado.text}</span>
                   </div>
 
                   {offerProducts.length > 1 && (
@@ -285,6 +319,20 @@ export default function AdminOffersPanel() {
 
                 {/* Content */}
                 <div className="p-5">
+                  {tieneAgotados && (
+                    <div className="mb-3 bg-red-100 border border-red-300 rounded-lg p-3 flex items-start gap-2">
+                      <FaExclamationTriangle className="text-red-600 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-red-800">
+                        <p className="font-semibold">Productos agotados en esta oferta:</p>
+                        <ul className="mt-1 space-y-1">
+                          {productosAgotados.map((p, idx) => (
+                            <li key={idx}>• {p.nombre}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+
                   <h3 className="text-xl font-bold text-[#5D4037] mb-2">
                     {offer.titulo}
                   </h3>
@@ -292,7 +340,7 @@ export default function AdminOffersPanel() {
                     {offer.descripcion}
                   </p>
 
-                  {/* Products Info */}
+                  {/* Products Info con Stock */}
                   <div className="bg-amber-50 rounded-lg p-3 mb-3">
                     <p className="text-xs text-[#8D6E63] mb-2">
                       {offerProducts.length > 1 ? 'Productos incluidos' : 'Producto'}
@@ -300,16 +348,35 @@ export default function AdminOffersPanel() {
                     
                     {offerProducts.length > 0 ? (
                       <div className="space-y-2">
-                        {offerProducts.map((producto, idx) => (
-                          <div key={idx} className="flex justify-between items-center">
-                            <p className="font-semibold text-[#5D4037] text-sm">
-                              {producto.nombre}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              ₡{producto.precio}
-                            </p>
-                          </div>
-                        ))}
+                        {offerProducts.map((producto, idx) => {
+                          const agotado = producto.stock === 0;
+                          const stockBajo = producto.stock > 0 && producto.stock <= 5;
+
+                          return (
+                            <div key={idx} className={`flex justify-between items-center ${
+                              agotado ? 'opacity-60' : ''
+                            }`}>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-[#5D4037] text-sm">
+                                  {producto.nombre}
+                                </p>
+                                {agotado && (
+                                  <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">
+                                    AGOTADO
+                                  </span>
+                                )}
+                                {stockBajo && !agotado && (
+                                  <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                                    Stock: {producto.stock}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                ₡{producto.precio}
+                              </p>
+                            </div>
+                          );
+                        })}
                         <div className="pt-2 mt-2 border-t border-amber-200">
                           <div className="flex justify-between items-center">
                             <p className="text-sm font-semibold text-amber-800">
@@ -330,7 +397,7 @@ export default function AdminOffersPanel() {
                   <div className="text-sm text-[#8D6E63] mb-4 space-y-1">
                     <p>Inicio: {new Date(offer.fecha_inicio + 'T00:00:00').toLocaleDateString('es-ES')}</p>
                     <p>Fin: {new Date(offer.fecha_fin + 'T00:00:00').toLocaleDateString('es-ES')}</p>
-                    {offer.dias_restantes > 0 && (
+                    {offer.dias_restantes > 0 && !tieneAgotados && (
                       <p className="font-semibold text-orange-600">
                         {offer.dias_restantes} días restantes
                       </p>
@@ -360,7 +427,7 @@ export default function AdminOffersPanel() {
         </AnimatePresence>
       </div>
 
-      {/* Modal Crear/Editar */}
+      {/* Modal Crear/Editar (continúa igual pero con indicadores de stock) */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -419,7 +486,7 @@ export default function AdminOffersPanel() {
                     />
                   </div>
 
-                  {/* Selección de Productos */}
+                  {/* ⭐ Selección de Productos CON INDICADORES DE STOCK */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-3">
                       Productos Incluidos en la Oferta *
@@ -427,33 +494,61 @@ export default function AdminOffersPanel() {
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1 border border-gray-200 rounded-lg">
                       {products.map(product => {
                         const isSelected = formData.productos_ids.includes(product.id);
+                        const agotado = product.stock === 0;
+                        const stockBajo = product.stock > 0 && product.stock <= 5;
+                        
                         return (
                           <button
                             key={product.id}
                             type="button"
-                            onClick={() => toggleProductSelection(product.id)}
+                            onClick={() => !agotado && toggleProductSelection(product.id)}
+                            disabled={agotado}
                             className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
-                              isSelected
+                              agotado
+                                ? 'border-red-200 bg-red-50 opacity-50 cursor-not-allowed'
+                                : isSelected
                                 ? 'border-orange-500 bg-orange-50 shadow-md'
                                 : 'border-gray-200 hover:border-orange-300 bg-white'
                             }`}
                           >
                             <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
-                              isSelected 
+                              agotado
+                                ? 'border-red-300 bg-red-100'
+                                : isSelected 
                                 ? 'bg-orange-500 border-orange-500' 
                                 : 'border-gray-300'
                             }`}>
-                              {isSelected && <FaCheck className="text-white text-xs" />}
+                              {isSelected && !agotado && <FaCheck className="text-white text-xs" />}
+                              {agotado && <FaTimes className="text-red-600 text-xs" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className={`font-semibold text-sm truncate ${
-                                isSelected ? 'text-orange-900' : 'text-gray-800'
+                                agotado
+                                  ? 'text-red-600'
+                                  : isSelected 
+                                  ? 'text-orange-900' 
+                                  : 'text-gray-800'
                               }`}>
                                 {product.nombre}
                               </p>
-                              <p className="text-xs text-gray-500">
-                                ₡{product.precio}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs text-gray-500">
+                                  ₡{product.precio}
+                                </p>
+                                {agotado ? (
+                                  <span className="text-xs text-red-600 font-semibold">
+                                    AGOTADO
+                                  </span>
+                                ) : stockBajo ? (
+                                  <span className="text-xs text-orange-600 font-semibold">
+                                    Stock: {product.stock}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-green-600">
+                                    Stock: {product.stock}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </button>
                         );
@@ -542,7 +637,7 @@ export default function AdminOffersPanel() {
         )}
       </AnimatePresence>
 
-      {/* Modal de Confirmación de Eliminación */}
+      {/* Modal de Confirmación de Eliminación (igual que antes) */}
       <AnimatePresence>
         {showDeleteModal && (
           <motion.div

@@ -298,3 +298,131 @@ def enviar_actualizacion_estado(pedido_id):
     except Exception as e:
         print(f"❌ Error: {str(e)}")
         return False
+    
+def enviar_alerta_stock_agotado(producto_id):
+    """
+    Envía correo a todos los administradores cuando se agota el stock de un producto
+    """
+    try:
+        producto = Producto.objects.get(id=producto_id)
+        
+        # Obtener todos los administradores con email
+        administradores = Usuario.objects.filter(
+            rol='administrador',
+            is_active=True,
+            email__isnull=False
+        ).exclude(email='')
+        
+        destinatarios = [admin.email for admin in administradores if admin.email]
+        
+        if not destinatarios:
+            print("⚠️ No hay administradores con correos válidos")
+            return False
+        
+        # Asunto del correo
+        asunto = f"⚠️ Stock Agotado - {producto.nombre}"
+        
+        # Contenido HTML
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); 
+                           color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }}
+                .alert-box {{ background: #fef2f2; border-left: 4px solid #ef4444; 
+                             padding: 20px; margin: 20px 0; border-radius: 4px; }}
+                .product-info {{ background: white; padding: 20px; margin: 20px 0; 
+                                border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+                .button {{ display: inline-block; padding: 12px 30px; background: #ef4444; 
+                          color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                .footer {{ text-align: center; margin-top: 20px; color: #666; font-size: 12px; }}
+                .stock-zero {{ color: #ef4444; font-size: 24px; font-weight: bold; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>⚠️ Alerta de Inventario</h1>
+                    <h2>Stock Agotado</h2>
+                </div>
+                <div class="content">
+                    <div class="alert-box">
+                        <h3>🚨 Atención Requerida</h3>
+                        <p>El siguiente producto ha agotado sus existencias y requiere reabastecimiento inmediato:</p>
+                    </div>
+                    
+                    <div class="product-info">
+                        <h2>{producto.nombre}</h2>
+                        <p><strong>ID del Producto:</strong> {producto.id}</p>
+                        <p><strong>Precio:</strong> ₡{producto.precio}</p>
+                        <p><strong>Stock Actual:</strong> <span class="stock-zero">0 unidades</span></p>
+                        <p><strong>Estado:</strong> <span style="color: #ef4444;">❌ Agotado</span></p>
+                    </div>
+                    
+                    <p>Este producto ya no está disponible para los clientes. Por favor, actualiza el inventario lo antes posible.</p>
+                    
+                    <a href="http://localhost:5173/admin/productos/{producto.id}" class="button">
+                        Actualizar Inventario
+                    </a>
+                </div>
+                <div class="footer">
+                    <p>Este correo fue enviado automáticamente por el sistema de inventario.</p>
+                    <p>© 2025 Panadería Artesanal. Todos los derechos reservados.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Contenido de texto plano
+        text_content = f"""
+        ⚠️ ALERTA DE INVENTARIO - STOCK AGOTADO
+        
+        El producto ha agotado sus existencias:
+        
+        Producto: {producto.nombre}
+        ID: {producto.id}
+        Precio: ₡{producto.precio}
+        Stock Actual: 0 unidades
+        Estado: AGOTADO
+        
+        Este producto ya no está disponible para los clientes.
+        Por favor, actualiza el inventario lo antes posible.
+        
+        Accede al panel de administración para actualizar el stock:
+        http://localhost:5173/admin/productos/{producto.id}
+        
+        ---
+        Este es un mensaje automático del sistema de inventario.
+        """
+        
+        # Crear y enviar el correo
+        email = EmailMultiAlternatives(
+            subject=asunto,
+            body=text_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=destinatarios
+        )
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+        
+        # Marcar que ya se envió la alerta
+        producto.alerta_stock_enviada = True
+        producto.save(update_fields=['alerta_stock_enviada'])
+        
+        print(f"✅ Alerta de stock agotado enviada a {len(destinatarios)} administradores")
+        print(f"📧 Destinatarios: {', '.join(destinatarios)}")
+        return True
+        
+    except Producto.DoesNotExist:
+        print(f"❌ Producto {producto_id} no encontrado")
+        return False
+    except Exception as e:
+        print(f"❌ Error al enviar alerta de stock: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False

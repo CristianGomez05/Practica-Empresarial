@@ -20,22 +20,23 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
 class ProductoSerializer(serializers.ModelSerializer):
     """
-    Serializer para productos con información adicional
+    Serializer para productos con información adicional incluyendo stock
     """
     tiene_oferta = serializers.SerializerMethodField()
     oferta_activa = serializers.SerializerMethodField()
+    esta_agotado = serializers.SerializerMethodField()
     
     class Meta:
         model = Producto
         fields = [
             'id', 'nombre', 'descripcion', 'precio', 
-            'disponible', 'imagen', 'tiene_oferta', 'oferta_activa'
+            'disponible', 'imagen', 'stock', 'esta_agotado',
+            'tiene_oferta', 'oferta_activa'
         ]
+        read_only_fields = ['alerta_stock_enviada']
     
     def get_tiene_oferta(self, obj):
-        """
-        Verifica si el producto tiene una oferta activa
-        """
+        """Verifica si el producto tiene una oferta activa"""
         hoy = timezone.now().date()
         return obj.ofertas.filter(
             fecha_inicio__lte=hoy,
@@ -43,9 +44,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         ).exists()
     
     def get_oferta_activa(self, obj):
-        """
-        Retorna la oferta activa si existe
-        """
+        """Retorna la oferta activa si existe"""
         hoy = timezone.now().date()
         oferta = obj.ofertas.filter(
             fecha_inicio__lte=hoy,
@@ -62,6 +61,10 @@ class ProductoSerializer(serializers.ModelSerializer):
                 'fecha_fin': oferta.fecha_fin
             }
         return None
+    
+    def get_esta_agotado(self, obj):
+        """Verifica si el producto está agotado"""
+        return obj.stock == 0
 
 
 class OfertaSerializer(serializers.ModelSerializer):
