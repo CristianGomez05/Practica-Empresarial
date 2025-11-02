@@ -1,5 +1,6 @@
 # panaderia/settings.py
 from pathlib import Path
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-(i1*wc&ymgx0xmea-%031v6&irm1-km%(2zg)7wof5z(m##_07'
@@ -128,25 +129,51 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # CONFIGURACIÓN DE EMAIL
 # ==========================================
 
-# Para desarrollo: usar console backend (imprime en consola)
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Para desarrollo: descomenta esta línea para ver emails en consola
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# Para producción: usar SMTP real (Gmail, SendGrid, etc.)
-# Descomenta y configura cuando vayas a producción:
+# Para producción con Gmail (RECOMENDADO)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+
+# ⭐ IMPORTANTE: Usar variables de entorno o configurar directamente
+# Opción 1: Variables de entorno (MÁS SEGURO)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'panaderiasantaclara01@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'xzxk wtra ajnq wlja')
+
+# Opción 2: Configuración directa (para pruebas rápidas)
+# EMAIL_HOST_USER = 'tu-email@gmail.com'
+# EMAIL_HOST_PASSWORD = 'xxxx xxxx xxxx xxxx'  # Contraseña de aplicación de 16 dígitos
+
+DEFAULT_FROM_EMAIL = f'Panadería Artesanal <{EMAIL_HOST_USER}>'
+SERVER_EMAIL = EMAIL_HOST_USER
+
+# Configuración adicional para debugging
+EMAIL_TIMEOUT = 30  # Timeout en segundos
+
+# ==========================================
+# ALTERNATIVA: Configuración para Outlook/Hotmail
+# ==========================================
+# Descomenta estas líneas si usas Outlook en lugar de Gmail:
 
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_HOST = 'smtp-mail.outlook.com'
 # EMAIL_PORT = 587
 # EMAIL_USE_TLS = True
-# EMAIL_HOST_USER = 'tu-email@gmail.com'
-# EMAIL_HOST_PASSWORD = 'tu-contraseña-de-aplicación'
-# DEFAULT_FROM_EMAIL = 'Panadería Artesanal <tu-email@gmail.com>'
+# EMAIL_USE_SSL = False
+# EMAIL_HOST_USER = 'tu-email@outlook.com'
+# EMAIL_HOST_PASSWORD = 'tu-contraseña'  # Contraseña normal de Outlook
+# DEFAULT_FROM_EMAIL = f'Panadería Artesanal <{EMAIL_HOST_USER}>'
 
-# Para desarrollo (mientras tanto)
-DEFAULT_FROM_EMAIL = 'panaderia@localhost'
-
-# Nota: Para usar Gmail en producción necesitas:
-# 1. Activar verificación en 2 pasos en tu cuenta de Gmail
-# 2. Generar una "contraseña de aplicación" específica
-# 3. Usar esa contraseña de aplicación en EMAIL_HOST_PASSWORD
-# Más info: https://support.google.com/accounts/answer/185833
+print(f"\n{'='*60}")
+print(f"📧 CONFIGURACIÓN DE EMAIL")
+print(f"{'='*60}")
+print(f"Backend: {EMAIL_BACKEND}")
+print(f"Host: {EMAIL_HOST}")
+print(f"Port: {EMAIL_PORT}")
+print(f"Usuario: {EMAIL_HOST_USER}")
+print(f"From Email: {DEFAULT_FROM_EMAIL}")
+print(f"{'='*60}\n")

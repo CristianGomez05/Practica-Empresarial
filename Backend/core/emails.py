@@ -44,7 +44,7 @@ def enviar_notificacion_oferta(oferta_id):
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🥐 Panadería Artesanal</h1>
+                    <h1>🥐 Panadería Santa Clara</h1>
                     <h2>¡Nueva Oferta Especial!</h2>
                 </div>
                 <div class="content">
@@ -61,7 +61,7 @@ def enviar_notificacion_oferta(oferta_id):
                 </div>
                 <div class="footer">
                     <p>Este correo fue enviado automáticamente. Por favor no responder.</p>
-                    <p>© 2025 Panadería Artesanal. Todos los derechos reservados.</p>
+                    <p>© 2025 Panadería Santa Clara. Todos los derechos reservados.</p>
                 </div>
             </div>
         </body>
@@ -238,51 +238,256 @@ def enviar_confirmacion_pedido(pedido_id):
 def enviar_actualizacion_estado(pedido_id):
     """
     Notifica al usuario cuando cambia el estado de su pedido
+    Con diseño profesional y optimizado para Gmail/Outlook
     """
     try:
-        pedido = Pedido.objects.select_related('usuario').get(id=pedido_id)
+        pedido = Pedido.objects.select_related('usuario').prefetch_related('detalles__producto').get(id=pedido_id)
         
         if not pedido.usuario.email:
+            print(f"⚠️  Usuario {pedido.usuario.username} no tiene email configurado")
             return False
         
-        estado_mensajes = {
-            'recibido': ('Tu pedido ha sido recibido', '📋'),
-            'en_preparacion': ('Tu pedido está en preparación', '👨‍🍳'),
-            'listo': ('¡Tu pedido está listo para recoger!', '✅'),
-            'entregado': ('Tu pedido ha sido entregado', '🎉'),
+        print(f"\n{'='*60}")
+        print(f"📧 ENVIANDO EMAIL DE ACTUALIZACIÓN DE ESTADO")
+        print(f"{'='*60}")
+        print(f"Pedido: #{pedido.id}")
+        print(f"Usuario: {pedido.usuario.username}")
+        print(f"Email: {pedido.usuario.email}")
+        print(f"Estado: {pedido.get_estado_display()}")
+        print(f"{'='*60}\n")
+        
+        # Configuración según el estado
+        estado_config = {
+            'recibido': {
+                'titulo': '✅ Pedido Recibido',
+                'emoji': '📋',
+                'color': '#3b82f6',
+                'mensaje': 'Tu pedido ha sido recibido correctamente',
+                'descripcion': 'Estamos preparando tu pedido con los mejores ingredientes.'
+            },
+            'en_preparacion': {
+                'titulo': '👨‍🍳 Pedido en Preparación',
+                'emoji': '👨‍🍳',
+                'color': '#f59e0b',
+                'mensaje': 'Tu pedido está siendo preparado',
+                'descripcion': 'Nuestros panaderos están trabajando en tu pedido con mucho cuidado.'
+            },
+            'listo': {
+                'titulo': '✅ ¡Pedido Listo!',
+                'emoji': '🎉',
+                'color': '#10b981',
+                'mensaje': '¡Tu pedido está listo para recoger!',
+                'descripcion': 'Puedes pasar a recoger tu pedido en cualquier momento.'
+            },
+            'entregado': {
+                'titulo': '🎊 Pedido Entregado',
+                'emoji': '🎊',
+                'color': '#8b5cf6',
+                'mensaje': 'Tu pedido ha sido entregado',
+                'descripcion': '¡Esperamos que disfrutes tus productos! Gracias por tu compra.'
+            }
         }
         
-        mensaje, emoji = estado_mensajes.get(pedido.estado, ('Actualización de pedido', '📦'))
+        config = estado_config.get(pedido.estado, estado_config['recibido'])
         
-        asunto = f"{emoji} {mensaje} - Pedido #{pedido.id}"
+        # Asunto del correo
+        asunto = f"{config['emoji']} {config['titulo']} - Pedido #{pedido.id}"
         
+        # Construir lista de productos
+        productos_html = ""
+        for detalle in pedido.detalles.all():
+            subtotal = detalle.producto.precio * detalle.cantidad
+            productos_html += f"""
+            <tr>
+                <td style="padding: 12px; border-bottom: 1px solid #f3f4f6;">
+                    <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">
+                        {detalle.producto.nombre}
+                    </div>
+                    <div style="font-size: 13px; color: #6b7280;">
+                        ₡{detalle.producto.precio} × {detalle.cantidad}
+                    </div>
+                </td>
+                <td style="padding: 12px; border-bottom: 1px solid #f3f4f6; text-align: right; font-weight: 600; color: #1f2937;">
+                    ₡{subtotal}
+                </td>
+            </tr>
+            """
+        
+        # HTML del correo (optimizado para Gmail/Outlook)
         html_content = f"""
         <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial, sans-serif; padding: 20px;">
-            <div style="max-width: 600px; margin: 0 auto;">
-                <h1 style="color: #667eea;">{emoji} Actualización de Pedido</h1>
-                <p>Hola {pedido.usuario.first_name or pedido.usuario.username},</p>
-                <p><strong>{mensaje}</strong></p>
-                <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                    <p><strong>Pedido:</strong> #{pedido.id}</p>
-                    <p><strong>Estado actual:</strong> {pedido.get_estado_display()}</p>
-                    <p><strong>Total:</strong> ₡{pedido.total}</p>
-                </div>
-                <p>Gracias por tu preferencia.</p>
-            </div>
+        <html lang="es">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <title>{config['titulo']}</title>
+            <!--[if mso]>
+            <style type="text/css">
+                body, table, td {{font-family: Arial, sans-serif !important;}}
+            </style>
+            <![endif]-->
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f9fafb; line-height: 1.6;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f9fafb;">
+                <tr>
+                    <td style="padding: 40px 20px;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                            
+                            <!-- Header -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, {config['color']} 0%, {config['color']}dd 100%); padding: 40px 30px; text-align: center;">
+                                    <div style="font-size: 48px; margin-bottom: 16px;">🥐</div>
+                                    <h1 style="color: #ffffff; margin: 0 0 8px 0; font-size: 28px; font-weight: 700;">
+                                        Panadería Santa Clara
+                                    </h1>
+                                    <p style="color: rgba(255,255,255,0.95); margin: 0; font-size: 16px;">
+                                        {config['titulo']}
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Saludo -->
+                            <tr>
+                                <td style="padding: 30px 30px 20px;">
+                                    <p style="margin: 0; font-size: 16px; color: #374151;">
+                                        Hola <strong>{pedido.usuario.first_name or pedido.usuario.username}</strong>,
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Mensaje principal -->
+                            <tr>
+                                <td style="padding: 0 30px 30px;">
+                                    <div style="background: linear-gradient(135deg, {config['color']}15 0%, {config['color']}08 100%); border-left: 4px solid {config['color']}; padding: 20px; border-radius: 8px;">
+                                        <div style="font-size: 32px; margin-bottom: 8px;">{config['emoji']}</div>
+                                        <h2 style="margin: 0 0 8px 0; color: #1f2937; font-size: 20px;">
+                                            {config['mensaje']}
+                                        </h2>
+                                        <p style="margin: 0; color: #6b7280; font-size: 15px;">
+                                            {config['descripcion']}
+                                        </p>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Detalles del pedido -->
+                            <tr>
+                                <td style="padding: 0 30px 30px;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f9fafb; border-radius: 8px; overflow: hidden;">
+                                        <tr>
+                                            <td style="padding: 20px;">
+                                                <h3 style="margin: 0 0 16px 0; color: #1f2937; font-size: 18px; font-weight: 600;">
+                                                    📦 Detalles del Pedido
+                                                </h3>
+                                                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 16px;">
+                                                    <tr>
+                                                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                                                            Número de Pedido:
+                                                        </td>
+                                                        <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #1f2937; font-size: 14px;">
+                                                            #{pedido.id}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                                                            Fecha:
+                                                        </td>
+                                                        <td style="padding: 8px 0; text-align: right; font-weight: 600; color: #1f2937; font-size: 14px;">
+                                                            {pedido.fecha.strftime('%d/%m/%Y %H:%M')}
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                                                            Estado:
+                                                        </td>
+                                                        <td style="padding: 8px 0; text-align: right;">
+                                                            <span style="background-color: {config['color']}; color: #ffffff; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;">
+                                                                {pedido.get_estado_display()}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Productos -->
+                            <tr>
+                                <td style="padding: 0 30px 30px;">
+                                    <h3 style="margin: 0 0 16px 0; color: #1f2937; font-size: 18px; font-weight: 600;">
+                                        🛍️ Productos
+                                    </h3>
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                                        {productos_html}
+                                        <tr>
+                                            <td style="padding: 16px; background-color: {config['color']}10; border-top: 2px solid {config['color']}; font-weight: 700; color: #1f2937; font-size: 16px;">
+                                                Total
+                                            </td>
+                                            <td style="padding: 16px; background-color: {config['color']}10; border-top: 2px solid {config['color']}; text-align: right; font-weight: 700; color: {config['color']}; font-size: 20px;">
+                                                ₡{pedido.total}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- CTA Button (solo para estado 'listo') -->
+                            {'<tr><td style="padding: 0 30px 30px; text-align: center;"><a href="http://localhost:5173/dashboard/pedidos" style="display: inline-block; background: linear-gradient(135deg, ' + config['color'] + ' 0%, ' + config['color'] + 'dd 100%); color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Ver Mis Pedidos</a></td></tr>' if pedido.estado == 'listo' else ''}
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="padding: 30px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; text-align: center;">
+                                    <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">
+                                        Gracias por elegirnos 💚
+                                    </p>
+                                    <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                                        © 2025 Panadería Santa Clara. Todos los derechos reservados.
+                                    </p>
+                                    <p style="margin: 8px 0 0 0; color: #9ca3af; font-size: 11px;">
+                                        Este es un correo automático, por favor no responder.
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                        </table>
+                    </td>
+                </tr>
+            </table>
         </body>
         </html>
         """
         
+        # Contenido de texto plano (fallback)
         text_content = f"""
-        {mensaje}
+        {config['emoji']} {config['titulo']}
         
-        Pedido: #{pedido.id}
+        Hola {pedido.usuario.first_name or pedido.usuario.username},
+        
+        {config['mensaje']}
+        {config['descripcion']}
+        
+        DETALLES DEL PEDIDO
+        -------------------
+        Número de Pedido: #{pedido.id}
+        Fecha: {pedido.fecha.strftime('%d/%m/%Y %H:%M')}
         Estado: {pedido.get_estado_display()}
-        Total: ₡{pedido.total}
+        
+        PRODUCTOS
+        ---------
         """
         
+        for detalle in pedido.detalles.all():
+            subtotal = detalle.producto.precio * detalle.cantidad
+            text_content += f"\n{detalle.producto.nombre}\n"
+            text_content += f"₡{detalle.producto.precio} × {detalle.cantidad} = ₡{subtotal}\n"
+        
+        text_content += f"\nTOTAL: ₡{pedido.total}\n"
+        text_content += f"\n---\nGracias por elegirnos 💚\nPanadería Santa Clara"
+        
+        # Crear y enviar el correo
         email = EmailMultiAlternatives(
             subject=asunto,
             body=text_content,
@@ -290,13 +495,22 @@ def enviar_actualizacion_estado(pedido_id):
             to=[pedido.usuario.email]
         )
         email.attach_alternative(html_content, "text/html")
-        email.send()
         
-        print(f"✅ Actualización enviada a {pedido.usuario.email}")
+        # Enviar
+        email.send(fail_silently=False)
+        
+        print(f"✅ Email enviado exitosamente a {pedido.usuario.email}")
+        print(f"   Asunto: {asunto}")
+        print(f"   Estado: {pedido.get_estado_display()}\n")
         return True
         
+    except Pedido.DoesNotExist:
+        print(f"❌ Pedido {pedido_id} no encontrado")
+        return False
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
+        print(f"❌ Error al enviar actualización: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
     
 def enviar_alerta_stock_agotado(producto_id):
@@ -371,7 +585,7 @@ def enviar_alerta_stock_agotado(producto_id):
                 </div>
                 <div class="footer">
                     <p>Este correo fue enviado automáticamente por el sistema de inventario.</p>
-                    <p>© 2025 Panadería Artesanal. Todos los derechos reservados.</p>
+                    <p>© 2025 Panadería Santa Clara. Todos los derechos reservados.</p>
                 </div>
             </div>
         </body>
