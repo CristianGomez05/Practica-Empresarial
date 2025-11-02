@@ -16,7 +16,7 @@ from .serializers import (
     OfertaSerializer, 
     PedidoSerializer, 
     DetallePedidoSerializer,
-    UsuarioRegistroSerializer  # Ya está importado desde serializers.py
+    UsuarioRegistroSerializer  
 )
 from .permissions import EsAdministrador, EsClienteOAdmin
 
@@ -88,13 +88,37 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 class ProductoViewSet(viewsets.ModelViewSet):
     """
     ViewSet para productos
-    - Lectura pública
+    - Lectura pública (INCLUYE productos agotados)
     - Escritura solo para administradores
     """
-    queryset = Producto.objects.filter(disponible=True)
+    # ⭐ IMPORTANTE: Definir queryset como atributo de clase (requerido por DRF)
+    queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
     
+    def get_queryset(self):
+        """
+        ⭐ MOSTRAR TODOS LOS PRODUCTOS, incluso los agotados
+        El frontend decide qué mostrar según filtros
+        """
+        # NO filtrar por disponible - mostrar todos
+        queryset = Producto.objects.all().order_by('id')
+        
+        # Log para debugging
+        total = queryset.count()
+        disponibles = queryset.filter(stock__gt=0).count()
+        agotados = queryset.filter(stock=0).count()
+        
+        print(f"📦 ProductoViewSet.get_queryset()")
+        print(f"   Total: {total} productos")
+        print(f"   Disponibles: {disponibles}")
+        print(f"   Agotados: {agotados}")
+        
+        return queryset
+    
     def get_permissions(self):
+        """
+        Permisos: lectura pública, escritura solo admin
+        """
         if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
             return [AllowAny()]
         return [EsAdministrador()]
@@ -102,12 +126,36 @@ class ProductoViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def destacados(self, request):
         """
-        Obtiene productos destacados (los más caros o con ofertas)
+        Obtiene productos destacados (solo con stock)
         GET /core/productos/destacados/
         """
         productos = Producto.objects.filter(
-            disponible=True
+            stock__gt=0  # Solo productos con stock para destacados
         ).order_by('-precio')[:6]
+        serializer = self.get_serializer(productos, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def disponibles(self, request):
+        """
+        Obtiene solo productos disponibles (con stock)
+        GET /core/productos/disponibles/
+        """
+        productos = Producto.objects.filter(
+            stock__gt=0
+        ).order_by('nombre')
+        serializer = self.get_serializer(productos, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def agotados(self, request):
+        """
+        Obtiene solo productos agotados
+        GET /core/productos/agotados/
+        """
+        productos = Producto.objects.filter(
+            stock=0
+        ).order_by('nombre')
         serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
     
@@ -116,15 +164,15 @@ class ProductoViewSet(viewsets.ModelViewSet):
         """
         Busca productos por nombre o descripción
         GET /core/productos/buscar/?q=croissant
+        Incluye productos agotados en los resultados
         """
         query = request.query_params.get('q', '')
         if query:
             productos = Producto.objects.filter(
-                Q(nombre__icontains=query) | Q(descripcion__icontains=query),
-                disponible=True
-            )
+                Q(nombre__icontains=query) | Q(descripcion__icontains=query)
+            ).order_by('nombre')
         else:
-            productos = Producto.objects.filter(disponible=True)
+            productos = Producto.objects.all().order_by('nombre')
         
         serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
@@ -289,57 +337,144 @@ class PedidoViewSet(viewsets.ModelViewSet):
             return Pedido.objects.select_related('usuario').prefetch_related('detalles__producto').all()
         return Pedido.objects.filter(usuario=user).prefetch_related('detalles__producto').all()
 
+    @transaction.atomic
     def perform_create(self, serializer):
         """
-        Crear pedido con detalles y calcular total
-        Ahora soporta precios personalizados para ofertas
+        Crear pedido con detalles, calcular total y REDUCIR STOCK
         """
         items_data = self.request.data.get('items', [])
         
         if not items_data:
-            return Response({
-                'error': 'Debe incluir al menos un producto'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            raise Exception('Debe incluir al menos un producto')
         
-        # Validar que todos los productos existan y estén disponibles
+        print(f"\n{'='*60}")
+        print(f"🛒 CREANDO PEDIDO - Usuario: {self.request.user.username}")
+        print(f"📦 Items recibidos: {len(items_data)}")
+        print(f"{'='*60}\n")
+        
+        # VALIDACIÓN 1: Verificar que todos los productos existan y estén disponibles
         for item in items_data:
+            producto_id = item.get('producto')
+            cantidad = item.get('cantidad', 1)
+            
+            print(f"🔍 Validando producto ID: {producto_id}, Cantidad: {cantidad}")
+            
             try:
-                producto = Producto.objects.get(id=item['producto'], disponible=True)
+                producto = Producto.objects.select_for_update().get(id=producto_id)
+                print(f"   ✓ Producto encontrado: {producto.nombre}")
+                print(f"   📊 Stock actual: {producto.stock}")
+                
+                # VALIDACIÓN 2: Verificar que haya stock suficiente
+                if producto.stock < cantidad:
+                    error_msg = (
+                        f'Stock insuficiente para {producto.nombre}. '
+                        f'Disponible: {producto.stock}, Solicitado: {cantidad}'
+                    )
+                    print(f"   ❌ {error_msg}")
+                    raise Exception(error_msg)
+                
+                if not producto.disponible:
+                    error_msg = f'Producto {producto.nombre} no disponible'
+                    print(f"   ❌ {error_msg}")
+                    raise Exception(error_msg)
+                    
+                print(f"   ✓ Validación OK\n")
+                    
             except Producto.DoesNotExist:
-                return Response({
-                    'error': f'Producto {item["producto"]} no disponible'
-                }, status=status.HTTP_400_BAD_REQUEST)
+                error_msg = f'Producto {producto_id} no encontrado'
+                print(f"   ❌ {error_msg}\n")
+                raise Exception(error_msg)
         
         # Crear el pedido
         pedido = serializer.save(usuario=self.request.user)
+        print(f"✅ Pedido #{pedido.id} creado\n")
         
-        # Crear detalles y calcular total
+        # Crear detalles, calcular total y REDUCIR STOCK
         total = Decimal('0.00')
+        productos_agotados = []
+        
+        print(f"{'='*60}")
+        print(f"📝 PROCESANDO ITEMS Y REDUCIENDO STOCK")
+        print(f"{'='*60}\n")
         
         for item_data in items_data:
-            producto = Producto.objects.get(id=item_data['producto'])
+            producto = Producto.objects.select_for_update().get(id=item_data['producto'])
             cantidad = item_data['cantidad']
             
             # Usar precio personalizado si se proporciona (para ofertas)
             if 'precio_unitario' in item_data:
                 precio_unitario = Decimal(str(item_data['precio_unitario']))
+                print(f"💰 {producto.nombre}: Precio oferta ₡{precio_unitario}")
             else:
                 precio_unitario = producto.precio
+                print(f"💰 {producto.nombre}: Precio regular ₡{precio_unitario}")
             
+            # Crear detalle del pedido
             DetallePedido.objects.create(
                 pedido=pedido,
                 producto=producto,
                 cantidad=cantidad
             )
+            print(f"   ✓ Detalle creado")
             
-            total += precio_unitario * cantidad
+            # Calcular total
+            subtotal = precio_unitario * cantidad
+            total += subtotal
+            print(f"   💵 Subtotal: ₡{subtotal}")
+            
+            # ⭐ REDUCIR STOCK (ESTA ES LA PARTE CRÍTICA)
+            stock_anterior = producto.stock
+            producto.stock -= cantidad
+            
+            print(f"\n   📦 REDUCCIÓN DE STOCK:")
+            print(f"      Producto: {producto.nombre}")
+            print(f"      Stock anterior: {stock_anterior}")
+            print(f"      Cantidad vendida: {cantidad}")
+            print(f"      Stock nuevo: {producto.stock}")
+            
+            # Si el stock llega a 0, marcar como no disponible
+            if producto.stock == 0:
+                producto.disponible = False
+                productos_agotados.append(producto)
+                print(f"      ⚠️  PRODUCTO AGOTADO - Marcado como no disponible")
+            elif producto.stock <= 5:
+                print(f"      ⚠️  STOCK BAJO - Solo quedan {producto.stock} unidades")
+            
+            # GUARDAR LOS CAMBIOS EN LA BASE DE DATOS
+            producto.save(update_fields=['stock', 'disponible'])
+            print(f"      ✅ Cambios guardados en BD\n")
         
+        # Actualizar total del pedido
         pedido.total = total
-        pedido.save()
+        pedido.save(update_fields=['total'])
+        
+        print(f"{'='*60}")
+        print(f"💵 TOTAL DEL PEDIDO: ₡{total}")
+        print(f"{'='*60}\n")
+        
+        # ⭐ ENVIAR ALERTAS DE STOCK AGOTADO
+        if productos_agotados:
+            print(f"{'='*60}")
+            print(f"📧 ENVIANDO ALERTAS DE STOCK AGOTADO")
+            print(f"{'='*60}\n")
+            
+            for producto_agotado in productos_agotados:
+                # Solo enviar si no se ha enviado antes
+                if not producto_agotado.alerta_stock_enviada:
+                    try:
+                        print(f"📧 Enviando alerta para: {producto_agotado.nombre}")
+                        enviar_alerta_stock_agotado(producto_agotado.id)
+                        print(f"   ✅ Alerta enviada\n")
+                    except Exception as e:
+                        print(f"   ❌ Error al enviar alerta: {e}\n")
+        
+        print(f"{'='*60}")
+        print(f"✨ PEDIDO COMPLETADO EXITOSAMENTE")
+        print(f"{'='*60}\n")
         
         return pedido
     
-    @action(detail=True, methods=['patch'], permission_classes=[EsAdministrador])
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def cambiar_estado(self, request, pk=None):
         """
         Cambiar el estado de un pedido (solo administradores)
@@ -373,37 +508,6 @@ class PedidoViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(pedidos, many=True)
         return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'], permission_classes=[EsAdministrador])
-    def estadisticas(self, request):
-        """
-        Estadísticas de pedidos (solo administradores)
-        """
-        por_estado = Pedido.objects.values('estado').annotate(
-            total=Count('id')
-        )
-        
-        total_ventas = Pedido.objects.aggregate(
-            total=Sum('total')
-        )['total'] or 0
-        
-        mes_actual = timezone.now().replace(day=1)
-        pedidos_mes = Pedido.objects.filter(
-            fecha__gte=mes_actual
-        ).count()
-        
-        mas_vendidos = DetallePedido.objects.values(
-            'producto__nombre'
-        ).annotate(
-            total_vendido=Sum('cantidad')
-        ).order_by('-total_vendido')[:5]
-        
-        return Response({
-            'por_estado': list(por_estado),
-            'total_ventas': float(total_ventas),
-            'pedidos_mes_actual': pedidos_mes,
-            'productos_mas_vendidos': list(mas_vendidos)
-        })
 
 
 class DetallePedidoViewSet(viewsets.ReadOnlyModelViewSet):

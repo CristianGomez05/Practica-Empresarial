@@ -74,6 +74,59 @@ export function CartProvider({ children }) {
     });
   };
 
+  // ⭐ NUEVA FUNCIÓN: Agregar oferta completa al carrito
+  const addOffer = (offerData) => {
+    console.log('🎁 addOffer llamado con:', offerData);
+
+    // Validar que la oferta tenga productos
+    if (!offerData.productos || offerData.productos.length === 0) {
+      alert("Esta oferta no tiene productos válidos");
+      return;
+    }
+
+    // Validar stock de todos los productos
+    const productosAgotados = offerData.productos.filter(p => p.stock === 0);
+    if (productosAgotados.length > 0) {
+      alert(
+        `No se puede agregar la oferta. Productos agotados: ${productosAgotados.map(p => p.nombre).join(', ')}`
+      );
+      return;
+    }
+
+    // Crear item de oferta para el carrito
+    const offerItem = {
+      id: `oferta-${offerData.id}`, // ID único para ofertas
+      nombre: offerData.titulo,
+      title: offerData.titulo,
+      descripcion: offerData.descripcion,
+      precio: parseFloat(offerData.precio_oferta),
+      imagen: offerData.productos[0]?.imagen || null,
+      productos: offerData.productos,
+      isOffer: true,
+      stock: Math.min(...offerData.productos.map(p => p.stock)), // Stock = el mínimo de los productos
+      qty: 1
+    };
+
+    console.log('🛒 Item de oferta preparado:', offerItem);
+
+    setItems((prev) => {
+      // Verificar si la oferta ya está en el carrito
+      const existing = prev.find((i) => i.id === offerItem.id);
+      
+      if (existing) {
+        // Incrementar cantidad si ya existe
+        console.log('✓ Oferta ya existe, incrementando cantidad');
+        return prev.map((i) =>
+          i.id === offerItem.id ? { ...i, qty: i.qty + 1 } : i
+        );
+      } else {
+        // Agregar nueva oferta
+        console.log('✓ Nueva oferta agregada al carrito');
+        return [...prev, offerItem];
+      }
+    });
+  };
+
   // Actualizar cantidad con validación de stock
   const updateQty = (id, newQty) => {
     if (newQty < 1) {
@@ -125,6 +178,7 @@ export function CartProvider({ children }) {
       value={{
         items,
         add,
+        addOffer,  // ⭐ Exportar la nueva función
         updateQty,
         remove,
         clear,

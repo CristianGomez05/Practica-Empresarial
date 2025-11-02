@@ -18,14 +18,22 @@ export default function DashboardOffers() {
         const res = await api.get("/ofertas/");
         const data = res.data.results || res.data;
         
-        // Filtrar ofertas activas
+        // Filtrar ofertas activas con corrección de zona horaria
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Resetear a medianoche local
+        
         const activeOffers = data.filter((offer) => {
-          const startDate = new Date(offer.fecha_inicio);
-          const endDate = new Date(offer.fecha_fin);
+          // ⭐ FIX: Agregar 'T00:00:00' para fechas locales
+          const startDate = new Date(offer.fecha_inicio + 'T00:00:00');
+          const endDate = new Date(offer.fecha_fin + 'T00:00:00');
+          
+          startDate.setHours(0, 0, 0, 0);
+          endDate.setHours(23, 59, 59, 999);
+          
           return today >= startDate && today <= endDate;
         });
         
+        console.log('📅 Ofertas activas:', activeOffers.length);
         setOffers(activeOffers);
       } catch (error) {
         console.error("Error cargando ofertas:", error);
@@ -104,7 +112,8 @@ export default function DashboardOffers() {
   };
 
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
+    // ⭐ FIX: Agregar 'T00:00:00' para forzar zona horaria local
+    const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString("es-ES", {
       day: "numeric",
       month: "short",

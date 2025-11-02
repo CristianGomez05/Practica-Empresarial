@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   FaChartBar, FaDollarSign, FaShoppingCart, FaUsers, 
-  FaCalendar, FaDownload, FaArrowUp, FaChartLine 
+  FaCalendar, FaDownload, FaArrowUp, FaChartLine, FaChartPie 
 } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
@@ -18,10 +18,11 @@ export default function AdminReports() {
     clientesActivos: 0,
     productoMasVendido: null,
     ventasPorDia: [],
-    promedioVenta: 0
+    promedioVenta: 0,
+    productosPorVentas: [] 
   });
   const [loading, setLoading] = useState(true);
-  const [periodo, setPeriodo] = useState('mes'); // hoy, semana, mes
+  const [periodo, setPeriodo] = useState('mes');
   const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
@@ -38,61 +39,111 @@ export default function AdminReports() {
       ]);
 
       const pedidosData = pedidos.data.results || pedidos.data;
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
       
-      const inicioSemana = new Date(hoy);
-      inicioSemana.setDate(hoy.getDate() - 7);
+      // ⭐ FIX: Obtener fecha actual en zona horaria local
+      const hoy = new Date();
+      const hoySoloFecha = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      
+      const inicioSemana = new Date(hoySoloFecha);
+      inicioSemana.setDate(hoySoloFecha.getDate() - 6); // Últimos 7 días incluyendo hoy
       
       const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
-      // Calcular ventas por período
-      const ventasHoy = pedidosData
-        .filter(p => {
-          const fechaPedido = new Date(p.fecha);
-          fechaPedido.setHours(0, 0, 0, 0);
-          return fechaPedido.getTime() === hoy.getTime();
-        })
-        .reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
+      console.log('📅 Filtros de fecha:');
+      console.log('   Hoy:', hoySoloFecha.toLocaleDateString());
+      console.log('   Inicio Semana:', inicioSemana.toLocaleDateString());
+      console.log('   Inicio Mes:', inicioMes.toLocaleDateString());
 
-      const ventasSemana = pedidosData
-        .filter(p => new Date(p.fecha) >= inicioSemana)
-        .reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
+      // ⭐ FIX: Función para comparar fechas ignorando la hora
+      const esMismaFecha = (fecha1, fecha2) => {
+        const f1 = new Date(fecha1);
+        const f2 = new Date(fecha2);
+        return f1.getFullYear() === f2.getFullYear() &&
+               f1.getMonth() === f2.getMonth() &&
+               f1.getDate() === f2.getDate();
+      };
 
-      const ventasMes = pedidosData
-        .filter(p => new Date(p.fecha) >= inicioMes)
-        .reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
+      // ⭐ CORREGIDO: Calcular ventas por período
+      const pedidosHoy = pedidosData.filter(p => {
+        const fechaPedido = new Date(p.fecha);
+        return esMismaFecha(fechaPedido, hoySoloFecha);
+      });
+
+      const pedidosSemana = pedidosData.filter(p => {
+        const fechaPedido = new Date(p.fecha);
+        return fechaPedido >= inicioSemana && fechaPedido <= hoy;
+      });
+
+      const pedidosMes = pedidosData.filter(p => {
+        const fechaPedido = new Date(p.fecha);
+        return fechaPedido >= inicioMes && fechaPedido <= hoy;
+      });
+
+      const ventasHoy = pedidosHoy.reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
+      const ventasSemana = pedidosSemana.reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
+      const ventasMes = pedidosMes.reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
+
+      console.log('💰 Ventas calculadas:');
+      console.log('   Hoy:', ventasHoy, `(${pedidosHoy.length} pedidos)`);
+      console.log('   Semana:', ventasSemana, `(${pedidosSemana.length} pedidos)`);
+      console.log('   Mes:', ventasMes, `(${pedidosMes.length} pedidos)`);
 
       // Pedidos del período actual
       let pedidosPeriodo = 0;
+      let pedidosFiltrados = [];
+      
       if (periodo === 'hoy') {
-        pedidosPeriodo = pedidosData.filter(p => {
-          const fechaPedido = new Date(p.fecha);
-          fechaPedido.setHours(0, 0, 0, 0);
-          return fechaPedido.getTime() === hoy.getTime();
-        }).length;
+        pedidosFiltrados = pedidosHoy;
+        pedidosPeriodo = pedidosHoy.length;
       } else if (periodo === 'semana') {
-        pedidosPeriodo = pedidosData.filter(p => new Date(p.fecha) >= inicioSemana).length;
+        pedidosFiltrados = pedidosSemana;
+        pedidosPeriodo = pedidosSemana.length;
       } else {
-        pedidosPeriodo = pedidosData.filter(p => new Date(p.fecha) >= inicioMes).length;
+        pedidosFiltrados = pedidosMes;
+        pedidosPeriodo = pedidosMes.length;
       }
 
-      // Producto más vendido
+      // ⭐ NUEVO: Calcular ventas por producto para la gráfica circular
       const productoContador = {};
-      pedidosData.forEach(pedido => {
+      const productoVentas = {};
+      
+      pedidosFiltrados.forEach(pedido => {
         if (pedido.detalles && Array.isArray(pedido.detalles)) {
           pedido.detalles.forEach(detalle => {
             const nombre = detalle.producto?.nombre || detalle.producto_nombre;
             if (nombre) {
               productoContador[nombre] = (productoContador[nombre] || 0) + detalle.cantidad;
+              productoVentas[nombre] = (productoVentas[nombre] || 0) + 
+                (parseFloat(detalle.producto?.precio || 0) * detalle.cantidad);
             }
           });
         }
       });
-      
+
+      // Producto más vendido
       const productoMasVendido = Object.keys(productoContador).length > 0
         ? Object.entries(productoContador).sort((a, b) => b[1] - a[1])[0][0]
         : 'N/A';
+
+      // ⭐ NUEVO: Preparar datos para gráfica circular (top 5 productos)
+      const productosPorVentas = Object.entries(productoContador)
+        .map(([nombre, cantidad]) => ({
+          nombre,
+          cantidad,
+          ventas: productoVentas[nombre] || 0
+        }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 5); // Top 5 productos
+
+      // Calcular totales para porcentajes
+      const totalCantidad = productosPorVentas.reduce((sum, p) => sum + p.cantidad, 0);
+      const totalVentasProductos = productosPorVentas.reduce((sum, p) => sum + p.ventas, 0);
+
+      // Agregar porcentajes
+      productosPorVentas.forEach(p => {
+        p.porcentaje = totalCantidad > 0 ? (p.cantidad / totalCantidad * 100) : 0;
+        p.porcentajeVentas = totalVentasProductos > 0 ? (p.ventas / totalVentasProductos * 100) : 0;
+      });
 
       // Promedio por venta
       const totalVentas = periodo === 'hoy' ? ventasHoy : periodo === 'semana' ? ventasSemana : ventasMes;
@@ -106,8 +157,9 @@ export default function AdminReports() {
         pedidosPeriodo,
         clientesActivos: (usuarios.data.results || usuarios.data).length,
         productoMasVendido,
-        ventasPorDia: generarVentasPorDia(pedidosData, periodo),
-        promedioVenta
+        ventasPorDia: generarVentasPorDia(pedidosFiltrados, periodo),
+        promedioVenta,
+        productosPorVentas
       });
     } catch (error) {
       console.error('Error cargando reportes:', error);
@@ -118,41 +170,29 @@ export default function AdminReports() {
   };
 
   const generarVentasPorDia = (pedidos, periodo) => {
-    const hoy = new Date();
     const dias = {};
     
-    // Definir el rango según el período
-    let fechaInicio;
-    if (periodo === 'hoy') {
-      fechaInicio = new Date(hoy);
-      fechaInicio.setHours(0, 0, 0, 0);
-    } else if (periodo === 'semana') {
-      fechaInicio = new Date(hoy);
-      fechaInicio.setDate(hoy.getDate() - 7);
-    } else {
-      fechaInicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    }
-
-    // Filtrar pedidos del período
-    const pedidosFiltrados = pedidos.filter(p => new Date(p.fecha) >= fechaInicio);
-
-    pedidosFiltrados.forEach(p => {
-      const fecha = new Date(p.fecha).toLocaleDateString('es-ES');
-      dias[fecha] = (dias[fecha] || 0) + parseFloat(p.total || 0);
+    pedidos.forEach(p => {
+      const fecha = new Date(p.fecha);
+      const fechaKey = fecha.toLocaleDateString('es-ES');
+      dias[fechaKey] = (dias[fechaKey] || 0) + parseFloat(p.total || 0);
     });
 
     return Object.entries(dias)
       .map(([fecha, total]) => ({ fecha, total }))
-      .sort((a, b) => new Date(a.fecha.split('/').reverse().join('-')) - new Date(b.fecha.split('/').reverse().join('-')));
+      .sort((a, b) => {
+        // Parsear fechas en formato dd/mm/yyyy
+        const [diaA, mesA, añoA] = a.fecha.split('/');
+        const [diaB, mesB, añoB] = b.fecha.split('/');
+        return new Date(añoA, mesA - 1, diaA) - new Date(añoB, mesB - 1, diaB);
+      });
   };
 
   const exportarPDF = () => {
     try {
-      // Datos del reporte según el período
       const totalVentas = periodo === 'hoy' ? stats.ventasHoy : periodo === 'semana' ? stats.ventasSemana : stats.ventasMes;
       const nombrePeriodo = periodo === 'hoy' ? 'Diario' : periodo === 'semana' ? 'Semanal' : 'Mensual';
       
-      // Crear contenido HTML para el PDF
       const contenidoHTML = `
         <!DOCTYPE html>
         <html>
@@ -279,6 +319,30 @@ export default function AdminReports() {
             </table>
           </div>
 
+          <div class="table-container">
+            <h2 style="color: #5D4037;">Top 5 Productos Más Vendidos</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Cantidad</th>
+                  <th>Ventas</th>
+                  <th>% del Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${stats.productosPorVentas.map(prod => `
+                  <tr>
+                    <td>${prod.nombre}</td>
+                    <td>${prod.cantidad} unidades</td>
+                    <td>₡${prod.ventas.toFixed(2)}</td>
+                    <td>${prod.porcentaje.toFixed(1)}%</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+
           <div class="footer">
             <p>Este reporte fue generado automáticamente por el sistema de Panadería Artesanal</p>
             <p>Para más información, contacte al administrador del sistema</p>
@@ -287,7 +351,6 @@ export default function AdminReports() {
         </html>
       `;
 
-      // Crear un blob y descargarlo
       const blob = new Blob([contenidoHTML], { type: 'text/html' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -298,12 +361,10 @@ export default function AdminReports() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      // Abrir en nueva ventana para imprimir como PDF
       const ventana = window.open('', '_blank');
       ventana.document.write(contenidoHTML);
       ventana.document.close();
       
-      // Esperar un poco y abrir el diálogo de impresión
       setTimeout(() => {
         ventana.print();
       }, 500);
@@ -318,13 +379,22 @@ export default function AdminReports() {
     }
   };
 
+  // ⭐ NUEVO: Colores para la gráfica circular
+  const coloresGrafica = [
+    'from-blue-500 to-blue-600',
+    'from-green-500 to-green-600',
+    'from-yellow-500 to-yellow-600',
+    'from-purple-500 to-purple-600',
+    'from-pink-500 to-pink-600'
+  ];
+
   const reportCards = [
     {
       title: 'Ventas Hoy',
       value: `₡${stats.ventasHoy.toFixed(2)}`,
       icon: FaDollarSign,
       color: 'from-green-500 to-emerald-600',
-      trend: '+12%',
+      trend: `${periodo === 'hoy' ? stats.pedidosPeriodo : '-'} pedidos`,
       active: periodo === 'hoy'
     },
     {
@@ -332,7 +402,7 @@ export default function AdminReports() {
       value: `₡${stats.ventasSemana.toFixed(2)}`,
       icon: FaChartLine,
       color: 'from-blue-500 to-blue-600',
-      trend: '+8%',
+      trend: `${periodo === 'semana' ? stats.pedidosPeriodo : '-'} pedidos`,
       active: periodo === 'semana'
     },
     {
@@ -340,7 +410,7 @@ export default function AdminReports() {
       value: `₡${stats.ventasMes.toFixed(2)}`,
       icon: FaChartBar,
       color: 'from-purple-500 to-purple-600',
-      trend: '+15%',
+      trend: `${periodo === 'mes' ? stats.pedidosPeriodo : '-'} pedidos`,
       active: periodo === 'mes'
     },
     {
@@ -348,7 +418,7 @@ export default function AdminReports() {
       value: stats.pedidosPeriodo,
       icon: FaShoppingCart,
       color: 'from-orange-500 to-red-600',
-      trend: `${stats.pedidosPeriodo} pedidos`
+      trend: `En ${periodo === 'hoy' ? 'el día' : periodo === 'semana' ? 'la semana' : 'el mes'}`
     },
     {
       title: 'Clientes Activos',
@@ -447,7 +517,7 @@ export default function AdminReports() {
         >
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <FaCalendar className="text-green-600" />
-            Ventas por Día ({periodo === 'hoy' ? 'Hoy' : periodo === 'semana' ? 'Últimos 7 días' : 'Este mes'})
+            Ventas por Día
           </h2>
           <div className="space-y-3 max-h-80 overflow-y-auto">
             {stats.ventasPorDia.length > 0 ? (
@@ -475,46 +545,98 @@ export default function AdminReports() {
           </div>
         </motion.div>
 
-        {/* Resumen */}
+        {/* ⭐ NUEVA: Gráfica Circular de Productos */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg p-6 border border-green-100"
+          transition={{ delay: 0.35 }}
+          className="bg-white rounded-xl shadow-lg p-6 border border-gray-100"
         >
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Resumen General
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <FaChartPie className="text-purple-600" />
+            Top 5 Productos Vendidos
           </h2>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
-              <span className="text-gray-600 font-medium">Promedio por pedido</span>
-              <span className="text-2xl font-bold text-green-700">
-                ₡{stats.promedioVenta.toFixed(2)}
-              </span>
+          {stats.productosPorVentas.length > 0 ? (
+            <div className="space-y-4">
+              {/* Gráfica de barras horizontal */}
+              {stats.productosPorVentas.map((producto, idx) => (
+                <div key={idx} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full bg-gradient-to-r ${coloresGrafica[idx]}`} />
+                      <span className="text-sm font-medium text-gray-700 truncate max-w-[150px]">
+                        {producto.nombre}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-gray-800">
+                        {producto.cantidad} un.
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {producto.porcentaje.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                  <div className="relative h-6 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full bg-gradient-to-r ${coloresGrafica[idx]} transition-all duration-500 flex items-center justify-end pr-2`}
+                      style={{ width: `${producto.porcentaje}%` }}
+                    >
+                      {producto.porcentaje > 15 && (
+                        <span className="text-xs text-white font-semibold">
+                          ₡{producto.ventas.toFixed(0)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
-              <span className="text-gray-600 font-medium">Pedidos completados</span>
-              <span className="text-2xl font-bold text-green-700">
-                {stats.pedidosPeriodo}
-              </span>
-            </div>
-            <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
-              <span className="text-gray-600 font-medium">Producto estrella</span>
-              <span className="text-xl font-bold text-green-700 truncate max-w-[150px]">
-                {stats.productoMasVendido}
-              </span>
-            </div>
-          </div>
-          
-          <button 
-            onClick={exportarPDF}
-            className="w-full mt-6 flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md transition-all hover:shadow-lg"
-          >
-            <FaDownload />
-            Exportar Reporte {periodo === 'hoy' ? 'Diario' : periodo === 'semana' ? 'Semanal' : 'Mensual'}
-          </button>
+          ) : (
+            <p className="text-center text-gray-500 py-8">No hay datos de productos</p>
+          )}
         </motion.div>
       </div>
+
+      {/* Resumen y Export */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg p-6 border border-green-100"
+      >
+        <h2 className="text-xl font-bold text-gray-800 mb-4">
+          Resumen General
+        </h2>
+        <div className="grid md:grid-cols-3 gap-4 mb-6">
+          <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-gray-600 font-medium">Promedio por pedido</span>
+            <span className="text-2xl font-bold text-green-700">
+              ₡{stats.promedioVenta.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-gray-600 font-medium">Pedidos completados</span>
+            <span className="text-2xl font-bold text-green-700">
+              {stats.pedidosPeriodo}
+            </span>
+          </div>
+          <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
+            <span className="text-gray-600 font-medium">Producto estrella</span>
+            <span className="text-xl font-bold text-green-700 truncate max-w-[150px]">
+              {stats.productoMasVendido}
+            </span>
+          </div>
+        </div>
+        
+        <button 
+          onClick={exportarPDF}
+          className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md transition-all hover:shadow-lg"
+        >
+          <FaDownload />
+          Exportar Reporte {periodo === 'hoy' ? 'Diario' : periodo === 'semana' ? 'Semanal' : 'Mensual'}
+        </button>
+      </motion.div>
     </div>
   );
 }

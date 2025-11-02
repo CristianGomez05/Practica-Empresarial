@@ -10,54 +10,85 @@ export default function CartPage() {
   const [error, setError] = useState(null);
 
   const handleCreateOrder = async () => {
-    if (!items.length) return;
+  if (!items.length) return;
 
-    // Verificar problemas de stock antes de crear el pedido
-    if (hasStockIssues()) {
-      setError("Hay productos sin stock o con cantidades no válidas. Por favor ajusta tu carrito.");
-      return;
-    }
+  // Verificar problemas de stock antes de crear el pedido
+  if (hasStockIssues()) {
+    setError("Hay productos sin stock o con cantidades no válidas. Por favor ajusta tu carrito.");
+    return;
+  }
 
-    setLoading(true);
-    setError(null);
-    try {
-      // Preparar items para el pedido
-      const orderItems = items.flatMap((item) => {
-        if (item.isOffer) {
-          // Si es una oferta, añadir todos sus productos
-          return item.productos.map((producto) => ({
+  setLoading(true);
+  setError(null);
+  
+  console.log('🛒 CREANDO PEDIDO');
+  console.log('📦 Items en carrito:', items);
+  
+  try {
+    // Preparar items para el pedido
+    const orderItems = items.flatMap((item) => {
+      console.log('🔍 Procesando item:', item);
+      
+      if (item.isOffer) {
+        // Si es una oferta, añadir todos sus productos
+        console.log('   🎁 Es una OFERTA con', item.productos?.length, 'productos');
+        
+        if (!item.productos || item.productos.length === 0) {
+          console.error('   ❌ Oferta sin productos');
+          throw new Error('Oferta sin productos válidos');
+        }
+        
+        return item.productos.map((producto) => {
+          const itemData = {
             producto: producto.id,
             cantidad: item.qty,
             precio_unitario: item.precio / item.productos.length, // Distribuir precio
-          }));
-        } else {
-          // Si es un producto individual
-          return [{
-            producto: item.id,
-            cantidad: item.qty,
-          }];
-        }
-      });
-
-      const body = {
-        items: orderItems,
-        total,
-      };
-      
-      const res = await api.post("/pedidos/", body);
-      clear();
-      window.location.href = `/dashboard/pedidos/${res.data.id}`;
-    } catch (err) {
-      console.error(err);
-      if (err.response?.data?.error) {
-        setError(err.response.data.error);
+          };
+          console.log('   ➕ Producto de oferta:', itemData);
+          return itemData;
+        });
       } else {
-        setError("No se pudo crear el pedido. Intenta nuevamente.");
+        // Si es un producto individual
+        const itemData = {
+          producto: item.id,
+          cantidad: item.qty,
+        };
+        console.log('   ➕ Producto individual:', itemData);
+        return [itemData];
       }
-    } finally {
-      setLoading(false);
+    });
+
+    console.log('📋 Items preparados para enviar:', orderItems);
+    console.log('💰 Total:', total);
+
+    const body = {
+      items: orderItems,
+      total,
+    };
+    
+    console.log('📤 Enviando al backend:', JSON.stringify(body, null, 2));
+    
+    const res = await api.post("/pedidos/", body);
+    
+    console.log('✅ Respuesta del servidor:', res.data);
+    
+    clear();
+    window.location.href = `/dashboard/pedidos/${res.data.id}`;
+  } catch (err) {
+    console.error('❌ Error al crear pedido:', err);
+    console.error('   Detalles:', err.response?.data);
+    
+    if (err.response?.data?.error) {
+      setError(err.response.data.error);
+    } else if (err.message) {
+      setError(err.message);
+    } else {
+      setError("No se pudo crear el pedido. Intenta nuevamente.");
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   if (!items.length) {
     return (

@@ -63,8 +63,26 @@ class ProductoSerializer(serializers.ModelSerializer):
         return None
     
     def get_esta_agotado(self, obj):
-        """Verifica si el producto está agotado"""
+        """
+        ⭐ IMPORTANTE: Verifica si el producto está agotado
+        Se usa en el frontend para mostrar el badge
+        """
         return obj.stock == 0
+    
+    def to_representation(self, instance):
+        """
+        Personaliza la representación para debugging
+        """
+        representation = super().to_representation(instance)
+        
+        # Log para ver qué se está enviando al frontend
+        if instance.stock == 0:
+            print(f"⚠️  Producto agotado en serializer: {instance.nombre}")
+            print(f"   Stock: {instance.stock}")
+            print(f"   Disponible: {instance.disponible}")
+            print(f"   Esta agotado: {representation['esta_agotado']}")
+        
+        return representation
 
 
 class OfertaSerializer(serializers.ModelSerializer):
