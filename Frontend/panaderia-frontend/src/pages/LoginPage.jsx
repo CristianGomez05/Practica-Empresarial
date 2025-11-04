@@ -96,14 +96,14 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-[#5C4033] mb-2">
-              Usuario
+              Usuario o correo
             </label>
             <input
               type="text"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-              placeholder="Ingresa tu usuario"
+              placeholder="Ingresa tu usuario o correo"
               required
               disabled={loading}
             />

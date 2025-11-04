@@ -8,7 +8,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
 from django.db import transaction
-from .emails import enviar_alerta_stock_agotado
+from .emails import enviar_alerta_sin_stock
 from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
 from .serializers import (
     UsuarioSerializer, 
@@ -30,18 +30,42 @@ def registro_usuario(request):
     """
     Endpoint para registrar nuevos usuarios
     POST /core/registro/
-    Body: {
-        "username": "usuario123",
-        "email": "usuario@example.com",
-        "password": "contraseña_segura",
-        "first_name": "Nombre",
-        "last_name": "Apellido"
-    }
     """
+    print("\n" + "="*60)
+    print("📝 REGISTRO DE USUARIO")
+    print("="*60)
+    print(f"Datos recibidos: {request.data}")
+    
     serializer = UsuarioRegistroSerializer(data=request.data)
     
     if serializer.is_valid():
+        print("✅ Datos válidos, creando usuario...")
         usuario = serializer.save()
+        
+        print(f"\n✅ Usuario creado exitosamente:")
+        print(f"   ID: {usuario.id}")
+        print(f"   Username: {usuario.username}")
+        print(f"   Email: {usuario.email}")
+        print(f"   Nombre: {usuario.first_name} {usuario.last_name}")
+        print(f"   Rol: {usuario.rol}")
+        print(f"   Activo: {usuario.is_active}")
+        print(f"   Password hash: {usuario.password[:30]}...")
+        print(f"   ¿Password válida?: {usuario.has_usable_password()}")
+        
+        # 🧪 PROBAR AUTENTICACIÓN INMEDIATAMENTE
+        from django.contrib.auth import authenticate
+        test_auth = authenticate(
+            username=usuario.username, 
+            password=request.data.get('password')
+        )
+        
+        if test_auth:
+            print(f"   ✅ TEST: Autenticación funciona correctamente")
+        else:
+            print(f"   ❌ TEST: Autenticación FALLÓ - La contraseña NO se guardó correctamente")
+        
+        print("="*60 + "\n")
+        
         return Response({
             'message': 'Usuario registrado exitosamente',
             'user': {
@@ -53,6 +77,9 @@ def registro_usuario(request):
                 'rol': usuario.rol
             }
         }, status=status.HTTP_201_CREATED)
+    
+    print(f"❌ Errores de validación: {serializer.errors}")
+    print("="*60 + "\n")
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -181,9 +208,6 @@ class ProductoViewSet(viewsets.ModelViewSet):
 class OfertaViewSet(viewsets.ModelViewSet):
     """
     ViewSet para ofertas
-    - Lectura pública
-    - CRUD completo para administradores
-    - Envío automático de notificaciones al crear
     """
     queryset = Oferta.objects.all()
     serializer_class = OfertaSerializer
@@ -194,15 +218,10 @@ class OfertaViewSet(viewsets.ModelViewSet):
         return [EsAdministrador()]
     
     def get_queryset(self):
-        # Usar prefetch_related porque ahora productos es ManyToMany
         return Oferta.objects.prefetch_related('productos').all()
     
     @action(detail=False, methods=['get'])
     def activas(self, request):
-        """
-        Obtiene solo las ofertas activas (vigentes)
-        GET /core/ofertas/activas/
-        """
         hoy = timezone.now().date()
         ofertas = Oferta.objects.filter(
             fecha_inicio__lte=hoy,
@@ -212,113 +231,37 @@ class OfertaViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def perform_create(self, serializer):
-        """
-        Al crear una oferta, se envía notificación automática
-        """
+        """Crear oferta y enviar correo DESPUÉS de asociar productos"""
+        print("\n🎉 Creando oferta...")
         oferta = serializer.save()
-        # El signal se encarga de enviar el correo automáticamente
-        return Response({
-            'message': 'Oferta creada y notificaciones enviadas',
-            'oferta': OfertaSerializer(oferta).data
-        }, status=status.HTTP_201_CREATED)
+        
+        # Esperar a que los productos estén asociados
+        print(f"✅ Oferta creada: {oferta.titulo}")
+        print(f"📦 Productos asociados: {oferta.productos.count()}")
+        
+        # ⭐ ENVIAR CORREO AHORA QUE YA TIENE PRODUCTOS
+        if oferta.productos.count() > 0:
+            print(f"📧 Enviando notificación de oferta...")
+            try:
+                from .emails import enviar_notificacion_oferta
+                enviar_notificacion_oferta(oferta.id)
+                print(f"✅ Notificación enviada exitosamente\n")
+            except Exception as e:
+                print(f"❌ Error al enviar notificación: {e}\n")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"⚠️ No se envió correo: oferta sin productos\n")
+    
+    def perform_update(self, serializer):
+        print("\n🔄 Actualizando oferta...")
+        oferta = serializer.save()
+        print(f"✅ Oferta actualizada: {oferta.titulo}\n")
     
     def perform_destroy(self, instance):
-        """
-        Eliminar oferta
-        """
+        print(f"\n🗑️  Eliminando oferta: {instance.titulo}")
         instance.delete()
-        return Response({
-            'message': 'Oferta eliminada exitosamente'
-        }, status=status.HTTP_204_NO_CONTENT)
-    
-    @transaction.atomic
-    def perform_create(self, serializer):
-        """
-        Crear pedido con detalles, calcular total y REDUCIR STOCK
-        """
-        items_data = self.request.data.get('items', [])
-        
-        if not items_data:
-            return Response({
-                'error': 'Debe incluir al menos un producto'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # VALIDACIÓN 1: Verificar que todos los productos existan y estén disponibles
-        for item in items_data:
-            try:
-                producto = Producto.objects.select_for_update().get(
-                    id=item['producto'], 
-                    disponible=True
-                )
-                
-                # VALIDACIÓN 2: Verificar que haya stock suficiente
-                if producto.stock < item['cantidad']:
-                    return Response({
-                        'error': f'Stock insuficiente para {producto.nombre}. '
-                                f'Disponible: {producto.stock}, Solicitado: {item["cantidad"]}'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                    
-            except Producto.DoesNotExist:
-                return Response({
-                    'error': f'Producto {item["producto"]} no disponible'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Crear el pedido
-        pedido = serializer.save(usuario=self.request.user)
-        
-        # Crear detalles, calcular total y REDUCIR STOCK
-        total = Decimal('0.00')
-        productos_agotados = []
-        
-        for item_data in items_data:
-            producto = Producto.objects.select_for_update().get(id=item_data['producto'])
-            cantidad = item_data['cantidad']
-            
-            # Usar precio personalizado si se proporciona (para ofertas)
-            if 'precio_unitario' in item_data:
-                precio_unitario = Decimal(str(item_data['precio_unitario']))
-            else:
-                precio_unitario = producto.precio
-            
-            # Crear detalle del pedido
-            DetallePedido.objects.create(
-                pedido=pedido,
-                producto=producto,
-                cantidad=cantidad
-            )
-            
-            # Calcular total
-            total += precio_unitario * cantidad
-            
-            # ⭐ REDUCIR STOCK
-            stock_anterior = producto.stock
-            producto.stock -= cantidad
-            
-            # Si el stock llega a 0, marcar como no disponible
-            if producto.stock == 0:
-                producto.disponible = False
-                productos_agotados.append(producto)
-                print(f"⚠️ Producto {producto.nombre} (ID: {producto.id}) se ha AGOTADO")
-            
-            producto.save(update_fields=['stock', 'disponible'])
-            
-            print(f"📦 Stock reducido: {producto.nombre} | "
-                  f"Anterior: {stock_anterior} | Nuevo: {producto.stock}")
-        
-        # Actualizar total del pedido
-        pedido.total = total
-        pedido.save(update_fields=['total'])
-        
-        # ⭐ ENVIAR ALERTAS DE STOCK AGOTADO
-        for producto_agotado in productos_agotados:
-            # Solo enviar si no se ha enviado antes
-            if not producto_agotado.alerta_stock_enviada:
-                try:
-                    enviar_alerta_stock_agotado(producto_agotado.id)
-                except Exception as e:
-                    print(f"❌ Error al enviar alerta para {producto_agotado.nombre}: {e}")
-        
-        return pedido
+        print("✅ Oferta eliminada\n")
 
 
 class PedidoViewSet(viewsets.ModelViewSet):
@@ -463,7 +406,7 @@ class PedidoViewSet(viewsets.ModelViewSet):
                 if not producto_agotado.alerta_stock_enviada:
                     try:
                         print(f"📧 Enviando alerta para: {producto_agotado.nombre}")
-                        enviar_alerta_stock_agotado(producto_agotado.id)
+                        enviar_alerta_sin_stock(producto_agotado.id)
                         print(f"   ✅ Alerta enviada\n")
                     except Exception as e:
                         print(f"   ❌ Error al enviar alerta: {e}\n")
@@ -471,6 +414,20 @@ class PedidoViewSet(viewsets.ModelViewSet):
         print(f"{'='*60}")
         print(f"✨ PEDIDO COMPLETADO EXITOSAMENTE")
         print(f"{'='*60}\n")
+        
+        # ⭐ ENVIAR CORREO DE CONFIRMACIÓN (AHORA QUE YA TIENE DETALLES)
+        print(f"{'='*60}")
+        print(f"📧 ENVIANDO CORREO DE CONFIRMACIÓN")
+        print(f"{'='*60}\n")
+        
+        try:
+            from .emails import enviar_confirmacion_pedido
+            enviar_confirmacion_pedido(pedido.id)
+            print(f"✅ Correos de confirmación enviados\n")
+        except Exception as e:
+            print(f"❌ Error al enviar correos: {e}\n")
+            import traceback
+            traceback.print_exc()
         
         return pedido
     

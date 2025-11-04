@@ -25,11 +25,11 @@ urlpatterns = [
     # --- Login personalizado ---
     path('auth/login/', LoginView.as_view(), name='custom_login'),
 
-    # --- JWT endpoints con serializer custom ---
+    # --- JWT endpoints con serializer custom (SOPORTA USERNAME O EMAIL) ---
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
-    # --- NUEVO: Registro de usuarios ---
+    # --- Registro de usuarios ---
     path('registro/', views.registro_usuario, name='registro'),
 
     # --- dj-rest-auth (para Google OAuth) ---

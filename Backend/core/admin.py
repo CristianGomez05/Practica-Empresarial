@@ -107,17 +107,18 @@ class ProductoAdmin(admin.ModelAdmin):
 @admin.register(Oferta)
 class OfertaAdmin(admin.ModelAdmin):
     list_display = (
-        'titulo', 'producto_link', 'estado_badge', 
+        'titulo', 'productos_list', 'precio_oferta', 'estado_badge',  # ← CAMBIO AQUÍ
         'fecha_inicio', 'fecha_fin', 'dias_restantes'
     )
     list_filter = ('fecha_inicio', 'fecha_fin')
-    search_fields = ('titulo', 'descripcion', 'producto__nombre')
+    search_fields = ('titulo', 'descripcion', 'productos__nombre')  # ← CAMBIO AQUÍ
     ordering = ('-fecha_inicio',)
     date_hierarchy = 'fecha_inicio'
+    filter_horizontal = ('productos',)  # ← NUEVO: Para seleccionar múltiples productos fácilmente
     
     fieldsets = (
         ('Información de la Oferta', {
-            'fields': ('titulo', 'descripcion', 'producto')
+            'fields': ('titulo', 'descripcion', 'precio_oferta', 'productos')  # ← CAMBIO AQUÍ
         }),
         ('Periodo de Vigencia', {
             'fields': ('fecha_inicio', 'fecha_fin'),
@@ -125,15 +126,24 @@ class OfertaAdmin(admin.ModelAdmin):
         }),
     )
     
-    def producto_link(self, obj):
-        """Link al producto relacionado"""
-        url = reverse('admin:core_producto_change', args=[obj.producto.id])
-        return format_html('<a href="{}">{}</a>', url, obj.producto.nombre)
-    producto_link.short_description = 'Producto'
+    def productos_list(self, obj):
+        """
+        Muestra la lista de productos asociados a la oferta
+        """
+        productos = obj.productos.all()
+        if productos.exists():
+            items = ', '.join([p.nombre for p in productos[:3]])  # Mostrar máximo 3
+            if productos.count() > 3:
+                items += f' y {productos.count() - 3} más...'
+            return items
+        return '-'
+    productos_list.short_description = 'Productos'
     
     def estado_badge(self, obj):
         """Muestra el estado de la oferta con color"""
+        from django.utils import timezone
         hoy = timezone.now().date()
+        
         if obj.fecha_inicio > hoy:
             return format_html(
                 '<span style="background-color: #3b82f6; color: white; padding: 3px 10px; '
@@ -153,7 +163,9 @@ class OfertaAdmin(admin.ModelAdmin):
     
     def dias_restantes(self, obj):
         """Calcula días restantes de la oferta"""
+        from django.utils import timezone
         hoy = timezone.now().date()
+        
         if obj.fecha_fin >= hoy:
             delta = obj.fecha_fin - hoy
             if delta.days == 0:
