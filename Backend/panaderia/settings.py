@@ -6,7 +6,7 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# SEGURIDAD: Usar variables de entorno
+# SEGURIDAD
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-(i1*wc&ymgx0xmea-%031v6&irm1-km%(2zg)7wof5z(m##_07')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
@@ -49,7 +49,7 @@ REST_FRAMEWORK = {
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # ← NUEVO para archivos estáticos
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -80,11 +80,13 @@ TEMPLATES = [
 WSGI_APPLICATION = 'panaderia.wsgi.application'
 
 # DATABASE CONFIGURATION
-if config('DATABASE_URL', default=None):
-    # Producción (Render)
+DATABASE_URL = config('DATABASE_URL', default=None)
+
+if DATABASE_URL:
+    # Producción (Railway/Render)
     DATABASES = {
         'default': dj_database_url.config(
-            default=config('DATABASE_URL'),
+            default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
         )
@@ -102,6 +104,13 @@ else:
         }
     }
 
+AUTH_PASSWORD_VALIDATORS = [
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+]
+
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
@@ -111,17 +120,12 @@ AUTH_USER_MODEL = 'core.Usuario'
 
 # CORS CONFIGURATION
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
-
-if DEBUG:
-    CORS_ALLOWED_ORIGINS = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
-else:
-    # En producción, permitir tu dominio de Hostinger
-    CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
-
+CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173', cast=Csv())
 CORS_ALLOW_CREDENTIALS = True
+
+# Permitir todos los orígenes en desarrollo
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 # CONFIGURACIÓN DE ARCHIVOS ESTÁTICOS
 STATIC_URL = '/static/'
@@ -150,7 +154,7 @@ EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='panaderiasantaclara01@gmail.com')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = f'Panadería Artesanal <{EMAIL_HOST_USER}>'
+DEFAULT_FROM_EMAIL = f'Panadería Santa Clara <{EMAIL_HOST_USER}>'
 SERVER_EMAIL = EMAIL_HOST_USER
 EMAIL_TIMEOUT = 30
 
@@ -166,6 +170,9 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
+# CSRF TRUSTED ORIGINS
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173', cast=Csv())
+
 LANGUAGE_CODE = 'es'
 TIME_ZONE = 'America/Costa_Rica'
 USE_I18N = True
@@ -173,8 +180,25 @@ USE_TZ = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Logging para producción
+if not DEBUG:
+    LOGGING = {
+        'version': 1,
+        'disable_existing_loggers': False,
+        'handlers': {
+            'console': {
+                'class': 'logging.StreamHandler',
+            },
+        },
+        'root': {
+            'handlers': ['console'],
+            'level': 'INFO',
+        },
+    }
+
 print(f"\n{'='*60}")
 print(f"🚀 MODO: {'DESARROLLO' if DEBUG else 'PRODUCCIÓN'}")
 print(f"📧 Email: {EMAIL_HOST_USER}")
 print(f"🌐 Frontend URL: {FRONTEND_URL}")
+print(f"🗄️  Database: {'PostgreSQL (Railway)' if DATABASE_URL else 'PostgreSQL (Local)'}")
 print(f"{'='*60}\n")
