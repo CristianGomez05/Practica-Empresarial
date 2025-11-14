@@ -19,7 +19,6 @@ from .serializers import (
     UsuarioRegistroSerializer  
 )
 from .permissions import EsAdministrador, EsClienteOAdmin
-from django.http import JsonResponse
 
 
 # ============================================================================
@@ -475,5 +474,3 @@ class DetallePedidoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DetallePedido.objects.select_related('producto', 'pedido').all()
     serializer_class = DetallePedidoSerializer
     permission_classes = [IsAuthenticated]
-
-
