@@ -1,11 +1,15 @@
 # panaderia/settings.py
 from pathlib import Path
 import os
+from decouple import config, Csv
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = 'django-insecure-(i1*wc&ymgx0xmea-%031v6&irm1-km%(2zg)7wof5z(m##_07'
-DEBUG = True
-ALLOWED_HOSTS = []
+
+# SEGURIDAD: Usar variables de entorno
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-(i1*wc&ymgx0xmea-%031v6&irm1-km%(2zg)7wof5z(m##_07')
+DEBUG = config('DEBUG', default=False, cast=bool)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -15,25 +19,17 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
-
-    # REST & Auth
     'rest_framework',
     'drf_yasg',
     'rest_framework.authtoken',
     'rest_framework_simplejwt',
     'corsheaders',
-
-    # Social Auth
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
-
-    # REST Auth
     'dj_rest_auth',
     'dj_rest_auth.registration',
-
-    # App principal
     'core',
 ]
 
@@ -53,6 +49,7 @@ REST_FRAMEWORK = {
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # ← NUEVO para archivos estáticos
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -82,16 +79,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'panaderia.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'panaderia_db',
-        'USER': 'postgres',
-        'PASSWORD': 'admin123',
-        'HOST': 'localhost',
-        'PORT': '5432',
+# DATABASE CONFIGURATION
+if config('DATABASE_URL', default=None):
+    # Producción (Render)
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=config('DATABASE_URL'),
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    # Desarrollo local
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME', default='panaderia_db'),
+            'USER': config('DB_USER', default='postgres'),
+            'PASSWORD': config('DB_PASSWORD', default='admin123'),
+            'HOST': config('DB_HOST', default='localhost'),
+            'PORT': config('DB_PORT', default='5432'),
+        }
+    }
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
@@ -100,87 +109,72 @@ AUTHENTICATION_BACKENDS = (
 
 AUTH_USER_MODEL = 'core.Usuario'
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-]
+# CORS CONFIGURATION
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+else:
+    # En producción, permitir tu dominio de Hostinger
+    CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', cast=Csv())
+
 CORS_ALLOW_CREDENTIALS = True
 
-ACCOUNT_ADAPTER = "core.adapters.FrontendRedirectAccountAdapter"
-SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
-SOCIALACCOUNT_LOGIN_ON_GET = True
-
-SOCIALACCOUNT_AUTO_SIGNUP = True
-ACCOUNT_EMAIL_REQUIRED = True
-SOCIALACCOUNT_QUERY_EMAIL = True
-
-LOGIN_REDIRECT_URL = "http://localhost:5173/dashboard"
-LOGOUT_REDIRECT_URL = "http://localhost:5173"
-
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
-USE_I18N = True
-USE_TZ = True
-
-STATIC_URL = 'static/'
+# CONFIGURACIÓN DE ARCHIVOS ESTÁTICOS
+STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# ==========================================
-# CONFIGURACIÓN DE EMAIL
-# ==========================================
+# ALLAUTH & SOCIAL AUTH
+ACCOUNT_ADAPTER = "core.adapters.FrontendRedirectAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
+SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_AUTO_SIGNUP = True
+ACCOUNT_EMAIL_REQUIRED = True
+SOCIALACCOUNT_QUERY_EMAIL = True
 
-# Para desarrollo: descomenta esta línea para ver emails en consola
-# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+LOGIN_REDIRECT_URL = f"{FRONTEND_URL}/dashboard"
+LOGOUT_REDIRECT_URL = FRONTEND_URL
 
-# Para producción con Gmail (RECOMENDADO)
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+# EMAIL CONFIGURATION
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_USE_SSL = False
-
-# ⭐ IMPORTANTE: Usar variables de entorno o configurar directamente
-# Opción 1: Variables de entorno (MÁS SEGURO)
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'panaderiasantaclara01@gmail.com')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'xzxk wtra ajnq wlja')
-
-# Opción 2: Configuración directa (para pruebas rápidas)
-# EMAIL_HOST_USER = 'tu-email@gmail.com'
-# EMAIL_HOST_PASSWORD = 'xxxx xxxx xxxx xxxx'  # Contraseña de aplicación de 16 dígitos
-
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='panaderiasantaclara01@gmail.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = f'Panadería Artesanal <{EMAIL_HOST_USER}>'
 SERVER_EMAIL = EMAIL_HOST_USER
+EMAIL_TIMEOUT = 30
 
-# Configuración adicional para debugging
-EMAIL_TIMEOUT = 30  # Timeout en segundos
+# CONFIGURACIONES DE SEGURIDAD PARA PRODUCCIÓN
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
-# ==========================================
-# ALTERNATIVA: Configuración para Outlook/Hotmail
-# ==========================================
-# Descomenta estas líneas si usas Outlook en lugar de Gmail:
+LANGUAGE_CODE = 'es'
+TIME_ZONE = 'America/Costa_Rica'
+USE_I18N = True
+USE_TZ = True
 
-# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-# EMAIL_HOST = 'smtp-mail.outlook.com'
-# EMAIL_PORT = 587
-# EMAIL_USE_TLS = True
-# EMAIL_USE_SSL = False
-# EMAIL_HOST_USER = 'tu-email@outlook.com'
-# EMAIL_HOST_PASSWORD = 'tu-contraseña'  # Contraseña normal de Outlook
-# DEFAULT_FROM_EMAIL = f'Panadería Artesanal <{EMAIL_HOST_USER}>'
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 print(f"\n{'='*60}")
-print(f"📧 CONFIGURACIÓN DE EMAIL")
-print(f"{'='*60}")
-print(f"Backend: {EMAIL_BACKEND}")
-print(f"Host: {EMAIL_HOST}")
-print(f"Port: {EMAIL_PORT}")
-print(f"Usuario: {EMAIL_HOST_USER}")
-print(f"From Email: {DEFAULT_FROM_EMAIL}")
+print(f"🚀 MODO: {'DESARROLLO' if DEBUG else 'PRODUCCIÓN'}")
+print(f"📧 Email: {EMAIL_HOST_USER}")
+print(f"🌐 Frontend URL: {FRONTEND_URL}")
 print(f"{'='*60}\n")
-
-# URL del frontend para enlaces en correos
-FRONTEND_URL = 'http://localhost:5173'
