@@ -6,15 +6,30 @@ from decimal import Decimal
 from django.utils.html import strip_tags
 from .models import Usuario, Oferta, Pedido, Producto
 
+# ==========================================
+# 🔗 CONFIGURACIÓN DE URLs DEL FRONTEND
+# ==========================================
+FRONTEND_URL = "http://localhost:5173"
+
+# URLs para clientes (requieren login de cliente)
+URL_PRODUCTOS_CLIENTE = f"{FRONTEND_URL}/dashboard/productos"
+URL_OFERTAS_CLIENTE = f"{FRONTEND_URL}/dashboard/ofertas"
+URL_PEDIDOS_CLIENTE = f"{FRONTEND_URL}/dashboard/pedidos"
+
+# URLs para admin (requieren login de admin)
+URL_ADMIN_PRODUCTOS = f"{FRONTEND_URL}/admin/productos"
+URL_ADMIN_OFERTAS = f"{FRONTEND_URL}/admin/ofertas"
+URL_ADMIN_PEDIDOS = f"{FRONTEND_URL}/admin/pedidos"
+
 
 def enviar_notificacion_nuevo_producto(producto_id):
     """
     Envía correo a todos los clientes cuando se crea un nuevo producto
+    ✅ Botón: Redirige a DashboardProducts.jsx (requiere login de cliente)
     """
     try:
         producto = Producto.objects.get(id=producto_id)
         
-        # Obtener todos los clientes activos con email
         clientes = Usuario.objects.filter(
             rol='cliente',
             is_active=True,
@@ -27,10 +42,8 @@ def enviar_notificacion_nuevo_producto(producto_id):
             print("⚠️ No hay clientes con correos válidos")
             return False
         
-        # Asunto del correo
         asunto = f"🥐 Nuevo Producto: {producto.nombre}"
         
-        # Contenido HTML
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -68,15 +81,32 @@ def enviar_notificacion_nuevo_producto(producto_id):
                 }}
                 .button {{ 
                     display: inline-block; 
-                    padding: 12px 30px; 
+                    padding: 14px 32px; 
                     background: #f59e0b; 
-                    color: white; 
+                    color: white !important; 
                     text-decoration: none; 
-                    border-radius: 5px; 
+                    border-radius: 8px; 
                     margin-top: 20px;
                     font-weight: bold;
+                    font-size: 16px;
+                    box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);
+                    transition: all 0.3s;
                 }}
-                .button:hover {{ background: #d97706; }}
+                .button:hover {{ 
+                    background: #d97706; 
+                    box-shadow: 0 6px 8px rgba(245, 158, 11, 0.4);
+                    transform: translateY(-2px);
+                }}
+                .security-note {{
+                    background: #eff6ff;
+                    border: 1px solid #3b82f6;
+                    padding: 12px;
+                    border-radius: 6px;
+                    margin-top: 15px;
+                    font-size: 13px;
+                    color: #1e40af;
+                    text-align: center;
+                }}
                 .footer {{ 
                     text-align: center; 
                     margin-top: 20px; 
@@ -104,7 +134,12 @@ def enviar_notificacion_nuevo_producto(producto_id):
                         ¡No te lo pierdas! Este nuevo producto ya está disponible para ordenar.
                     </p>
                     <div style="text-align: center;">
-                        <a href="http://localhost:5173/productos" class="button">Ver Todos los Productos</a>
+                        <a href="{URL_PRODUCTOS_CLIENTE}" class="button">
+                            🛒 Ver Todos los Productos
+                        </a>
+                        <div class="security-note">
+                            🔒 Necesitas iniciar sesión para ver los productos
+                        </div>
                     </div>
                 </div>
                 <div class="footer">
@@ -117,7 +152,6 @@ def enviar_notificacion_nuevo_producto(producto_id):
         </html>
         """
         
-        # Contenido de texto plano (fallback)
         text_content = f"""
         ¡Nuevo Producto Disponible!
         
@@ -129,13 +163,14 @@ def enviar_notificacion_nuevo_producto(producto_id):
         Estado: Disponible
         
         ¡Visita nuestra tienda para ordenar!
-        http://localhost:5173/productos
+        {URL_PRODUCTOS_CLIENTE}
+        
+        🔒 Recuerda: Necesitas iniciar sesión primero
         
         ---
         Panadería Artesanal
         """
         
-        # Crear y enviar el correo
         email = EmailMultiAlternatives(
             subject=asunto,
             body=text_content,
@@ -161,14 +196,13 @@ def enviar_notificacion_nuevo_producto(producto_id):
 def enviar_notificacion_oferta(oferta_id):
     """
     Envía correo a todos los clientes cuando se crea una nueva oferta
-    Muestra todos los productos incluidos con sus precios y descuentos
+    ✅ Botón: Redirige a DashboardOffers.jsx (requiere login de cliente)
     """
     from decimal import Decimal
     
     try:
         oferta = Oferta.objects.prefetch_related('productos').get(id=oferta_id)
         
-        # Obtener todos los clientes activos con email
         clientes = Usuario.objects.filter(
             rol='cliente',
             is_active=True,
@@ -181,7 +215,6 @@ def enviar_notificacion_oferta(oferta_id):
             print("⚠️ No hay clientes con correos válidos")
             return False
         
-        # Construir tabla de productos con precios y descuentos
         productos_html = ""
         productos_text = ""
         total_productos = oferta.productos.count()
@@ -194,7 +227,6 @@ def enviar_notificacion_oferta(oferta_id):
             ahorro_total += ahorro
             descuento_porcentaje = ((ahorro / precio_original) * 100) if precio_original > 0 else 0
             
-            # Fila de tabla HTML
             productos_html += f"""
             <tr>
                 <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
@@ -229,7 +261,6 @@ def enviar_notificacion_oferta(oferta_id):
             </tr>
             """
             
-            # Texto plano
             productos_text += f"""
 • {producto.nombre}
   Precio regular: ₡{precio_original:,.2f}
@@ -238,10 +269,8 @@ def enviar_notificacion_oferta(oferta_id):
 
 """
         
-        # Asunto del correo
         asunto = f"🎉 ¡Nueva Oferta! {oferta.titulo}"
         
-        # Calcular días restantes
         from django.utils import timezone
         dias_restantes = (oferta.fecha_fin - timezone.now().date()).days
         mensaje_urgencia = ""
@@ -250,7 +279,6 @@ def enviar_notificacion_oferta(oferta_id):
         elif dias_restantes <= 7:
             mensaje_urgencia = f'<div style="background: #fffbeb; border: 2px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;"><span style="color: #d97706; font-weight: bold; font-size: 16px;">⏰ ¡Apresúrate! Válido por {dias_restantes} días</span></div>'
         
-        # Contenido HTML
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -293,17 +321,6 @@ def enviar_notificacion_oferta(oferta_id):
                     border-left: 4px solid #f59e0b;
                     margin: 25px 0;
                 }}
-                .offer-description h2 {{
-                    color: #92400e;
-                    margin: 0 0 10px 0;
-                    font-size: 20px;
-                }}
-                .offer-description p {{
-                    margin: 0;
-                    color: #78350f;
-                    font-size: 15px;
-                    line-height: 1.6;
-                }}
                 .products-section {{
                     margin: 30px 0;
                 }}
@@ -330,20 +347,6 @@ def enviar_notificacion_oferta(oferta_id):
                     margin: 30px 0;
                     text-align: center;
                 }}
-                .stats-box .stat {{
-                    display: inline-block;
-                    margin: 0 20px;
-                }}
-                .stats-box .stat-number {{
-                    font-size: 32px;
-                    font-weight: bold;
-                    display: block;
-                    margin-bottom: 5px;
-                }}
-                .stats-box .stat-label {{
-                    font-size: 14px;
-                    opacity: 0.9;
-                }}
                 .button {{ 
                     display: inline-block; 
                     padding: 16px 40px; 
@@ -357,17 +360,26 @@ def enviar_notificacion_oferta(oferta_id):
                     box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
                     transition: all 0.3s;
                 }}
+                .button:hover {{
+                    background: #b91c1c;
+                    transform: translateY(-2px);
+                }}
+                .security-note {{
+                    background: #eff6ff;
+                    border: 1px solid #3b82f6;
+                    padding: 12px;
+                    border-radius: 6px;
+                    margin-top: 15px;
+                    font-size: 13px;
+                    color: #1e40af;
+                    text-align: center;
+                }}
                 .validity {{
                     background: #f3f4f6;
                     padding: 20px;
                     border-radius: 8px;
                     text-align: center;
                     margin: 25px 0;
-                }}
-                .validity .date {{
-                    color: #374151;
-                    font-size: 16px;
-                    font-weight: 600;
                 }}
                 .footer {{ 
                     text-align: center; 
@@ -377,7 +389,6 @@ def enviar_notificacion_oferta(oferta_id):
                     background: #f9fafb;
                     border-top: 1px solid #e5e7eb;
                 }}
-                .footer p {{ margin: 8px 0; }}
             </style>
         </head>
         <body>
@@ -392,18 +403,18 @@ def enviar_notificacion_oferta(oferta_id):
                     {mensaje_urgencia}
                     
                     <div class="offer-description">
-                        <h2>{oferta.titulo}</h2>
-                        <p>{oferta.descripcion}</p>
+                        <h2 style="color: #92400e; margin: 0 0 10px 0; font-size: 20px;">{oferta.titulo}</h2>
+                        <p style="margin: 0; color: #78350f; font-size: 15px; line-height: 1.6;">{oferta.descripcion}</p>
                     </div>
                     
                     <div class="stats-box">
-                        <div class="stat">
-                            <span class="stat-number">{total_productos}</span>
-                            <span class="stat-label">Productos en oferta</span>
+                        <div style="display: inline-block; margin: 0 20px;">
+                            <span style="font-size: 32px; font-weight: bold; display: block; margin-bottom: 5px;">{total_productos}</span>
+                            <span style="font-size: 14px; opacity: 0.9;">Productos en oferta</span>
                         </div>
-                        <div class="stat">
-                            <span class="stat-number">₡{ahorro_total:,.0f}</span>
-                            <span class="stat-label">Ahorro total</span>
+                        <div style="display: inline-block; margin: 0 20px;">
+                            <span style="font-size: 32px; font-weight: bold; display: block; margin-bottom: 5px;">₡{ahorro_total:,.0f}</span>
+                            <span style="font-size: 14px; opacity: 0.9;">Ahorro total</span>
                         </div>
                     </div>
                     
@@ -418,13 +429,16 @@ def enviar_notificacion_oferta(oferta_id):
                     
                     <div class="validity">
                         <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Válido desde</p>
-                        <p class="date">📅 {oferta.fecha_inicio.strftime('%d de %B, %Y')} - {oferta.fecha_fin.strftime('%d de %B, %Y')}</p>
+                        <p style="color: #374151; font-size: 16px; font-weight: 600; margin: 0;">📅 {oferta.fecha_inicio.strftime('%d de %B, %Y')} - {oferta.fecha_fin.strftime('%d de %B, %Y')}</p>
                     </div>
                     
                     <div style="text-align: center; margin-top: 35px;">
-                        <a href="http://localhost:5173/productos" class="button">
-                            🛒 APROVECHAR OFERTA AHORA
+                        <a href="{URL_OFERTAS_CLIENTE}" class="button">
+                            🛒 VER OFERTAS AHORA
                         </a>
+                        <div class="security-note">
+                            🔒 Necesitas iniciar sesión para ver las ofertas
+                        </div>
                         <p style="color: #6b7280; font-size: 14px; margin-top: 15px;">
                             ¡No dejes pasar esta increíble oportunidad!
                         </p>
@@ -435,14 +449,12 @@ def enviar_notificacion_oferta(oferta_id):
                     <p style="font-weight: 600; color: #374151;">🥐 Panadería Artesanal</p>
                     <p>Este correo fue enviado automáticamente. Por favor no responder.</p>
                     <p>© 2025 Panadería Artesanal. Todos los derechos reservados.</p>
-                    <p style="margin-top: 15px; font-size: 12px;">Si deseas dejar de recibir promociones, <a href="#" style="color: #3b82f6;">haz clic aquí</a></p>
                 </div>
             </div>
         </body>
         </html>
         """
         
-        # Texto plano mejorado
         text_content = f"""
 ╔════════════════════════════════════════════════════════════╗
 ║            🎉 ¡NUEVA OFERTA ESPECIAL! 🎉                  ║
@@ -451,8 +463,6 @@ def enviar_notificacion_oferta(oferta_id):
 {oferta.titulo}
 
 {oferta.descripcion}
-
-{'⏰ ¡ÚLTIMOS DÍAS! Solo quedan ' + str(dias_restantes) + ' día(s)' if dias_restantes <= 3 else ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 RESUMEN DE LA OFERTA
@@ -471,17 +481,16 @@ def enviar_notificacion_oferta(oferta_id):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🛒 ¡Visita nuestra tienda ahora!
-👉 http://localhost:5173/productos
+👉 {URL_OFERTAS_CLIENTE}
+
+🔒 Recuerda: Necesitas iniciar sesión primero
 
 ¡No dejes pasar esta increíble oportunidad!
 
 ---
 🥐 Panadería Artesanal
-Este correo fue enviado automáticamente.
-© 2025 Todos los derechos reservados.
         """
         
-        # Enviar correo
         email = EmailMultiAlternatives(
             subject=asunto,
             body=text_content,
@@ -492,8 +501,6 @@ Este correo fue enviado automáticamente.
         email.send()
         
         print(f"✅ Notificación de oferta enviada a {len(destinatarios)} clientes")
-        print(f"   📦 {total_productos} productos incluidos")
-        print(f"   💰 Ahorro total: ₡{ahorro_total:,.2f}")
         return True
         
     except Oferta.DoesNotExist:
@@ -509,43 +516,24 @@ Este correo fue enviado automáticamente.
 def enviar_confirmacion_pedido(pedido_id):
     """
     Envía correo de confirmación al cliente Y notifica a los administradores
-    Detecta si el pedido incluye ofertas
+    ✅ Cliente: Botón a DashboardOrders.jsx (requiere login de cliente)
+    ✅ Admin: Botón a AdminOrders.jsx (requiere login de admin)
     """
     try:
         pedido = Pedido.objects.select_related('usuario').prefetch_related(
             'detalles__producto__ofertas'
         ).get(id=pedido_id)
         
-        # ⭐ CONSTRUIR LISTADO DE PRODUCTOS CON DETECCIÓN DE OFERTAS
         productos_html = ""
         productos_text = ""
         tiene_ofertas = False
         
         detalles = pedido.detalles.all()
         
-        # Debug detallado
-        print(f"📊 Pedido #{pedido.id} - Total: ₡{pedido.total}")
-        print(f"📊 Cantidad de detalles: {detalles.count()}")
-        print(f"📊 Detalles query: {detalles.query}")
-        
-        if not detalles.exists():
-            print(f"⚠️ ADVERTENCIA: Pedido #{pedido.id} no tiene detalles")
-            print(f"⚠️ Usuario: {pedido.usuario.username}")
-            print(f"⚠️ Estado: {pedido.estado}")
-            print(f"⚠️ Fecha: {pedido.fecha}")
-            
-            # Intentar obtener detalles de otras formas
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT * FROM core_detallepedido WHERE pedido_id = %s", [pedido.id])
-                rows = cursor.fetchall()
-                print(f"⚠️ Detalles en BD (raw): {rows}")
-        
         for detalle in detalles:
             producto = detalle.producto
             cantidad = detalle.cantidad
             
-            # Verificar si el producto tiene ofertas activas
             from django.utils import timezone
             ofertas_activas = producto.ofertas.filter(
                 fecha_inicio__lte=timezone.now().date(),
@@ -553,7 +541,6 @@ def enviar_confirmacion_pedido(pedido_id):
             )
             
             if ofertas_activas.exists():
-                # Producto en oferta
                 tiene_ofertas = True
                 oferta = ofertas_activas.first()
                 precio_original = producto.precio
@@ -561,9 +548,6 @@ def enviar_confirmacion_pedido(pedido_id):
                 descuento_porcentaje = ((precio_original - precio_unitario) / precio_original * 100)
                 subtotal = precio_unitario * cantidad
                 
-                print(f"  🎉 {producto.nombre}: {cantidad} x ₡{precio_unitario} (OFERTA) = ₡{subtotal}")
-                
-                # HTML con indicador de oferta
                 productos_html += f"""
                 <tr>
                     <td style="padding: 10px; border-bottom: 1px solid #eee;">
@@ -590,17 +574,11 @@ def enviar_confirmacion_pedido(pedido_id):
                 </tr>
                 """
                 
-                # Texto plano
                 productos_text += f"🎉 {producto.nombre} x{cantidad} = ₡{subtotal:,.2f} (OFERTA: {oferta.titulo})\n"
-                productos_text += f"   Precio regular: ₡{precio_original:,.2f} → Precio oferta: ₡{precio_unitario:,.2f}\n"
             else:
-                # Producto normal (sin oferta)
                 precio_unitario = producto.precio
                 subtotal = precio_unitario * cantidad
                 
-                print(f"  - {producto.nombre}: {cantidad} x ₡{precio_unitario} = ₡{subtotal}")
-                
-                # HTML normal
                 productos_html += f"""
                 <tr>
                     <td style="padding: 10px; border-bottom: 1px solid #eee;">{producto.nombre}</td>
@@ -610,10 +588,8 @@ def enviar_confirmacion_pedido(pedido_id):
                 </tr>
                 """
                 
-                # Texto plano
                 productos_text += f"- {producto.nombre} x{cantidad} = ₡{subtotal:,.2f}\n"
         
-        # Verificar que se generó contenido
         if not productos_html:
             productos_html = """
             <tr>
@@ -624,17 +600,6 @@ def enviar_confirmacion_pedido(pedido_id):
             """
             productos_text = "No hay productos en este pedido\n"
         
-        # Mensaje especial si hay ofertas
-        mensaje_ofertas = ""
-        if tiene_ofertas:
-            mensaje_ofertas = """
-            <div style="background: #fef3c7; border: 2px solid #f59e0b; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
-                <span style="font-size: 24px;">🎉</span>
-                <p style="margin: 10px 0 0 0; color: #92400e; font-weight: bold;">
-                    ¡Has aprovechado ofertas especiales en este pedido!
-                </p>
-            </div>
-            """
         
         # ===== CORREO AL CLIENTE =====
         if pedido.usuario.email:
@@ -671,6 +636,29 @@ def enviar_confirmacion_pedido(pedido_id):
                         text-align: right; 
                         padding: 20px 0; 
                         border-top: 2px solid #10b981; 
+                    }}
+                    .button {{ 
+                        display: inline-block; 
+                        padding: 14px 32px; 
+                        background: #10b981; 
+                        color: white !important; 
+                        text-decoration: none; 
+                        border-radius: 8px; 
+                        font-weight: bold;
+                        font-size: 16px;
+                        box-shadow: 0 4px 6px rgba(16, 185, 129, 0.3);
+                        margin-top: 20px;
+                    }}
+                    .button:hover {{ background: #059669; }}
+                    .security-note {{
+                        background: #eff6ff;
+                        border: 1px solid #3b82f6;
+                        padding: 12px;
+                        border-radius: 6px;
+                        margin-top: 15px;
+                        font-size: 13px;
+                        color: #1e40af;
+                        text-align: center;
                     }}
                 </style>
             </head>
@@ -710,6 +698,14 @@ def enviar_confirmacion_pedido(pedido_id):
                         <p style="text-align: center;">
                             Tu pedido está siendo preparado. Te notificaremos cuando esté listo para recoger.
                         </p>
+                        <div style="text-align: center;">
+                            <a href="{URL_PEDIDOS_CLIENTE}" class="button">
+                                📋 Ver Estado del Pedido
+                            </a>
+                            <div class="security-note">
+                                🔒 Necesitas iniciar sesión para ver tus pedidos
+                            </div>
+                        </div>
                     </div>
                 </div>
             </body>
@@ -732,6 +728,9 @@ def enviar_confirmacion_pedido(pedido_id):
             {productos_text}
             
             Total: ₡{pedido.total:,.2f}
+            
+            Ver estado del pedido: {URL_PEDIDOS_CLIENTE}
+            🔒 Recuerda: Necesitas iniciar sesión primero
             
             Te notificaremos cuando tu pedido esté listo.
             """
@@ -801,6 +800,28 @@ def enviar_confirmacion_pedido(pedido_id):
                         text-align: right; 
                         padding: 20px 0; 
                     }}
+                    .button {{ 
+                        display: inline-block; 
+                        padding: 14px 32px; 
+                        background: #3b82f6; 
+                        color: white !important; 
+                        text-decoration: none; 
+                        border-radius: 8px; 
+                        font-weight: bold;
+                        font-size: 16px;
+                        box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+                    }}
+                    .button:hover {{ background: #2563eb; }}
+                    .security-note {{
+                        background: #fef3c7;
+                        border: 1px solid #f59e0b;
+                        padding: 12px;
+                        border-radius: 6px;
+                        margin-top: 15px;
+                        font-size: 13px;
+                        color: #92400e;
+                        text-align: center;
+                    }}
                 </style>
             </head>
             <body>
@@ -844,12 +865,13 @@ def enviar_confirmacion_pedido(pedido_id):
                         </div>
                         
                         <p style="text-align: center; margin-top: 30px;">
-                            <a href="http://localhost:8000/admin/core/pedido/{pedido.id}/change/" 
-                               style="display: inline-block; padding: 12px 30px; background: #3b82f6; 
-                                      color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                                Ver en Panel Admin
+                            <a href="{URL_ADMIN_PEDIDOS}" class="button">
+                                📋 Gestionar Pedido
                             </a>
                         </p>
+                        <div class="security-note">
+                            🔐 Requiere inicio de sesión como administrador
+                        </div>
                     </div>
                 </div>
             </body>
@@ -878,7 +900,8 @@ def enviar_confirmacion_pedido(pedido_id):
             Total: ₡{pedido.total:,.2f}
             
             ---
-            Ver en admin: http://localhost:8000/admin/core/pedido/{pedido.id}/change/
+            Gestionar pedido: {URL_ADMIN_PEDIDOS}
+            🔐 Requiere inicio de sesión como administrador
             """
             
             email_admin = EmailMultiAlternatives(
@@ -906,11 +929,11 @@ def enviar_confirmacion_pedido(pedido_id):
 def enviar_alerta_sin_stock(producto_id):
     """
     Notifica a los administradores cuando un producto se queda sin stock
+    ✅ Botón: Redirige a AdminProducts.jsx (requiere login de admin)
     """
     try:
         producto = Producto.objects.get(id=producto_id)
         
-        # Obtener administradores activos con email
         administradores = Usuario.objects.filter(
             rol='administrador',
             is_active=True,
@@ -949,13 +972,26 @@ def enviar_alerta_sin_stock(producto_id):
                 }}
                 .button {{ 
                     display: inline-block; 
-                    padding: 12px 30px; 
+                    padding: 14px 32px; 
                     background: #dc2626; 
-                    color: white; 
+                    color: white !important; 
                     text-decoration: none; 
-                    border-radius: 5px; 
+                    border-radius: 8px; 
                     font-weight: bold;
+                    font-size: 16px;
                     margin-top: 20px;
+                    box-shadow: 0 4px 6px rgba(220, 38, 38, 0.3);
+                }}
+                .button:hover {{ background: #b91c1c; }}
+                .security-note {{
+                    background: #fef3c7;
+                    border: 1px solid #f59e0b;
+                    padding: 12px;
+                    border-radius: 6px;
+                    margin-top: 15px;
+                    font-size: 13px;
+                    color: #92400e;
+                    text-align: center;
                 }}
             </style>
         </head>
@@ -981,9 +1017,12 @@ def enviar_alerta_sin_stock(producto_id):
                     </p>
                     
                     <div style="text-align: center;">
-                        <a href="http://localhost:8000/admin/core/producto/{producto.id}/change/" class="button">
-                            Gestionar Producto
+                        <a href="{URL_ADMIN_PRODUCTOS}" class="button">
+                            📦 Gestionar Inventario
                         </a>
+                        <div class="security-note">
+                            🔐 Requiere inicio de sesión como administrador
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1005,7 +1044,8 @@ def enviar_alerta_sin_stock(producto_id):
         Este producto ha sido marcado como no disponible.
         Considera actualizar el inventario o desactivarlo temporalmente.
         
-        Gestionar en: http://localhost:8000/admin/core/producto/{producto.id}/change/
+        Gestionar inventario: {URL_ADMIN_PRODUCTOS}
+        🔐 Requiere inicio de sesión como administrador
         
         ---
         Sistema de Panadería Artesanal
@@ -1036,6 +1076,7 @@ def enviar_alerta_sin_stock(producto_id):
 def enviar_actualizacion_estado(pedido_id):
     """
     Notifica al usuario cuando cambia el estado de su pedido
+    ✅ Botón: Redirige a DashboardOrders.jsx (requiere login de cliente)
     """
     try:
         pedido = Pedido.objects.select_related('usuario').get(id=pedido_id)
@@ -1079,6 +1120,27 @@ def enviar_actualizacion_estado(pedido_id):
                     border-radius: 8px; 
                     border-left: 4px solid {color};
                 }}
+                .button {{ 
+                    display: inline-block; 
+                    padding: 14px 32px; 
+                    background: {color}; 
+                    color: white !important; 
+                    text-decoration: none; 
+                    border-radius: 8px; 
+                    font-weight: bold;
+                    font-size: 16px;
+                    margin-top: 20px;
+                }}
+                .security-note {{
+                    background: #eff6ff;
+                    border: 1px solid #3b82f6;
+                    padding: 12px;
+                    border-radius: 6px;
+                    margin-top: 15px;
+                    font-size: 13px;
+                    color: #1e40af;
+                    text-align: center;
+                }}
             </style>
         </head>
         <body>
@@ -1096,6 +1158,14 @@ def enviar_actualizacion_estado(pedido_id):
                         <p><strong>Total:</strong> ₡{pedido.total:,.2f}</p>
                     </div>
                     <p>Gracias por tu preferencia.</p>
+                    <div style="text-align: center;">
+                        <a href="{URL_PEDIDOS_CLIENTE}" class="button">
+                            📋 Ver Mis Pedidos
+                        </a>
+                        <div class="security-note">
+                            🔒 Necesitas iniciar sesión para ver tus pedidos
+                        </div>
+                    </div>
                 </div>
             </div>
         </body>
@@ -1110,6 +1180,9 @@ def enviar_actualizacion_estado(pedido_id):
         Pedido: #{pedido.id}
         Estado: {pedido.get_estado_display()}
         Total: ₡{pedido.total:,.2f}
+        
+        Ver tus pedidos: {URL_PEDIDOS_CLIENTE}
+        🔒 Recuerda: Necesitas iniciar sesión primero
         
         Gracias por tu preferencia.
         """

@@ -1,6 +1,6 @@
 // src/pages/admin/AdminProducts.jsx
 import { useState, useEffect } from 'react';
-import { FaPlus, FaEdit, FaTrash, FaBox, FaExclamationTriangle } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaBox, FaExclamationTriangle, FaUpload, FaImage, FaTimes } from 'react-icons/fa';
 import api from '../../services/api';
 import { useSnackbar } from 'notistack';
 
@@ -17,6 +17,9 @@ const AdminProducts = () => {
     disponible: true,
     imagen: ''
   });
+  const [archivoImagen, setArchivoImagen] = useState(null);
+  const [previewImagen, setPreviewImagen] = useState(null);
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
 
   const { enqueueSnackbar } = useSnackbar();
 
@@ -37,21 +40,73 @@ const AdminProducts = () => {
     }
   };
 
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validar que sea imagen
+    if (!file.type.startsWith('image/')) {
+      enqueueSnackbar('Por favor selecciona un archivo de imagen válido', { variant: 'error' });
+      return;
+    }
+
+    // Validar tamaño (máximo 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      enqueueSnackbar('La imagen no debe superar los 5MB', { variant: 'error' });
+      return;
+    }
+
+    setArchivoImagen(file);
+
+    // Crear preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviewImagen(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const eliminarImagen = () => {
+    setArchivoImagen(null);
+    setPreviewImagen(null);
+    setFormData({ ...formData, imagen: '' });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
-      const dataToSend = {
-        ...formData,
-        precio: parseFloat(formData.precio),
-        stock: parseInt(formData.stock) || 0
-      };
+      setSubiendoImagen(true);
+
+      // Crear FormData para enviar archivos
+      const formDataToSend = new FormData();
+      formDataToSend.append('nombre', formData.nombre);
+      formDataToSend.append('descripcion', formData.descripcion || '');
+      formDataToSend.append('precio', parseFloat(formData.precio));
+      formDataToSend.append('stock', parseInt(formData.stock) || 0);
+      formDataToSend.append('disponible', formData.disponible);
+
+      // Si hay archivo de imagen nuevo, agregarlo
+      if (archivoImagen) {
+        formDataToSend.append('imagen', archivoImagen);
+      } else if (formData.imagen) {
+        // Si hay URL de imagen existente (al editar sin cambiar imagen)
+        formDataToSend.append('imagen_url', formData.imagen);
+      }
 
       if (editando) {
-        await api.put(`/productos/${editando.id}/`, dataToSend);
+        await api.put(`/productos/${editando.id}/`, formDataToSend, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
         enqueueSnackbar('Producto actualizado exitosamente', { variant: 'success' });
       } else {
-        await api.post('/productos/', dataToSend);
+        await api.post('/productos/', formDataToSend, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
         enqueueSnackbar('Producto creado exitosamente', { variant: 'success' });
       }
 
@@ -59,7 +114,9 @@ const AdminProducts = () => {
       cerrarModal();
     } catch (error) {
       enqueueSnackbar('Error al guardar producto', { variant: 'error' });
-      console.error(error);
+      console.error('Error detallado:', error.response?.data || error);
+    } finally {
+      setSubiendoImagen(false);
     }
   };
 
@@ -86,6 +143,8 @@ const AdminProducts = () => {
       disponible: true,
       imagen: ''
     });
+    setArchivoImagen(null);
+    setPreviewImagen(null);
     setModalOpen(true);
   };
 
@@ -99,12 +158,16 @@ const AdminProducts = () => {
       disponible: producto.disponible,
       imagen: producto.imagen || ''
     });
+    setArchivoImagen(null);
+    setPreviewImagen(producto.imagen || null);
     setModalOpen(true);
   };
 
   const cerrarModal = () => {
     setModalOpen(false);
     setEditando(null);
+    setArchivoImagen(null);
+    setPreviewImagen(null);
   };
 
   // Estadísticas
@@ -238,7 +301,7 @@ const AdminProducts = () => {
                       {estaAgotado ? (
                         <span className="flex items-center gap-2 text-red-600 font-semibold">
                           <FaExclamationTriangle size={16} />
-                          Agotado de momento
+                          Agotado
                         </span>
                       ) : stockBajo ? (
                         <span className="flex items-center gap-2 text-orange-600 font-semibold">
@@ -301,12 +364,66 @@ const AdminProducts = () => {
       {/* Modal de Crear/Editar */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold text-[#5D4037] mb-6">
               {editando ? 'Editar Producto' : 'Nuevo Producto'}
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Sección de Imagen */}
+              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border-2 border-dashed border-amber-300">
+                <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <FaImage className="text-amber-600" />
+                  Imagen del Producto
+                </label>
+                
+                {previewImagen ? (
+                  <div className="relative">
+                    <img
+                      src={previewImagen}
+                      alt="Preview"
+                      className="w-full h-48 object-cover rounded-lg shadow-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={eliminarImagen}
+                      className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-all hover:scale-110"
+                      title="Eliminar imagen"
+                    >
+                      <FaTimes size={16} />
+                    </button>
+                    <div className="mt-3 text-center">
+                      <label className="cursor-pointer inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg transition-colors">
+                        <FaUpload />
+                        Cambiar imagen
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-amber-400 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                    <FaUpload className="text-4xl text-amber-600 mb-2" />
+                    <span className="text-sm text-gray-600 font-medium">
+                      Click para subir imagen
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1">
+                      PNG, JPG, WEBP (máx. 5MB)
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre del Producto *
@@ -367,31 +484,6 @@ const AdminProducts = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  URL de Imagen
-                </label>
-                <input
-                  type="url"
-                  value={formData.imagen}
-                  onChange={(e) => setFormData({ ...formData, imagen: e.target.value })}
-                  placeholder="https://ejemplo.com/imagen.jpg"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                />
-                {formData.imagen && (
-                  <div className="mt-2">
-                    <img
-                      src={formData.imagen}
-                      alt="Preview"
-                      className="h-20 w-20 object-cover rounded-lg"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
               <div className="flex items-center bg-gray-50 p-3 rounded-lg">
                 <input
                   type="checkbox"
@@ -409,15 +501,24 @@ const AdminProducts = () => {
                 <button
                   type="button"
                   onClick={cerrarModal}
-                  className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+                  disabled={subiendoImagen}
+                  className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors shadow-md"
+                  disabled={subiendoImagen}
+                  className="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {editando ? 'Actualizar' : 'Crear Producto'}
+                  {subiendoImagen ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Guardando...
+                    </>
+                  ) : (
+                    editando ? 'Actualizar Producto' : 'Crear Producto'
+                  )}
                 </button>
               </div>
             </form>

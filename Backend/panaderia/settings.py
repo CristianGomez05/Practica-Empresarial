@@ -123,7 +123,11 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # ==========================================
 # CONFIGURACIÓN DE EMAIL
@@ -177,3 +181,6 @@ print(f"Port: {EMAIL_PORT}")
 print(f"Usuario: {EMAIL_HOST_USER}")
 print(f"From Email: {DEFAULT_FROM_EMAIL}")
 print(f"{'='*60}\n")
+
+# URL del frontend para enlaces en correos
+FRONTEND_URL = 'http://localhost:5173'

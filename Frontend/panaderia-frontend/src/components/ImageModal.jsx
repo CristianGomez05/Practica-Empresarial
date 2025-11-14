@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import { FaShoppingCart, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaTag, FaClock, FaFire, FaBox } from "react-icons/fa";
+import ImageModal from "../components/ImageModal";
+import { FaShoppingCart, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaTag, FaClock, FaFire } from "react-icons/fa";
 import api from "../services/api";
 import { useAuth } from "../components/auth/AuthContext";
 
@@ -35,8 +36,8 @@ const Landing = () => {
       const ofertasActivas = (ofertasRes.data.results || ofertasRes.data)
         .filter(o => o.fecha_inicio <= hoy && o.fecha_fin >= hoy);
 
-      setProductos(productosDisponibles); // MOSTRAR TODOS LOS PRODUCTOS (sin límite)
-      setOfertas(ofertasActivas); // MOSTRAR TODAS LAS OFERTAS (sin límite)
+      setProductos(productosDisponibles.slice(0, 8)); // Mostrar máximo 8 productos
+      setOfertas(ofertasActivas.slice(0, 3)); // Mostrar máximo 3 ofertas
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
@@ -45,15 +46,9 @@ const Landing = () => {
   };
 
   const openModal = (item) => {
-    console.log('=== DEBUG MODAL ===');
-    console.log('1. Función openModal llamada');
-    console.log('2. Datos recibidos:', item);
-    console.log('3. isOffer:', item?.isOffer);
-    console.log('4. offerProducts:', item?.offerProducts);
-    console.log('==================');
+    console.log('Abriendo modal con datos:', item); // Debug
     setSelectedItem(item);
     setModalOpen(true);
-    console.log('5. Modal abierto, modalOpen:', true);
   };
 
   const closeModal = () => {
@@ -189,6 +184,10 @@ const Landing = () => {
         ) : productos.length > 0 ? (
           <div className="grid md:grid-cols-4 sm:grid-cols-2 grid-cols-1 gap-8">
             {productos.map((producto, i) => {
+              const descuentoPorcentaje = producto.tiene_oferta && producto.oferta_activa
+                ? Math.round(((producto.precio - producto.oferta_activa.precio_oferta) / producto.precio) * 100)
+                : 0;
+
               return (
                 <motion.div
                   key={producto.id}
@@ -202,9 +201,9 @@ const Landing = () => {
                       title: producto.nombre,
                       description: producto.descripcion,
                       price: producto.precio,
-                      offerPrice: null,
+                      offerPrice: producto.tiene_oferta && producto.oferta_activa ? producto.oferta_activa.precio_oferta : null,
                       stock: producto.stock,
-                      isOffer: false
+                      isOffer: false // Es un producto individual
                     })}
                     className="relative h-56 overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50 cursor-pointer hover:opacity-90 transition-opacity"
                   >
@@ -220,7 +219,15 @@ const Landing = () => {
                       </div>
                     )}
 
-                    {/* Badge de stock bajo */}
+                    {producto.tiene_oferta && descuentoPorcentaje > 0 && (
+                      <div className="absolute top-3 right-3">
+                        <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-2 rounded-xl shadow-2xl animate-pulse">
+                          <p className="text-xs font-bold">OFERTA</p>
+                          <p className="text-xl font-black leading-none">-{descuentoPorcentaje}%</p>
+                        </div>
+                      </div>
+                    )}
+
                     {producto.stock > 0 && producto.stock <= 5 && (
                       <div className="absolute top-3 left-3 bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
                         ¡Últimos {producto.stock}!
@@ -228,32 +235,65 @@ const Landing = () => {
                     )}
                   </div>
 
-                  {/* Contenido */}
                   <div className="p-6">
                     <h3 className="text-xl font-bold text-[#5D4037] mb-2 group-hover:text-amber-700 transition-colors line-clamp-1">
                       {producto.nombre}
                     </h3>
 
                     {producto.descripcion && (
-                      <p className="text-sm text-[#8D6E63] mb-4 line-clamp-2 min-h-[40px]">
+                      <p className="text-sm text-[#8D6E63] mb-4 line-clamp-2">
                         {producto.descripcion}
                       </p>
                     )}
 
+                    {producto.tiene_oferta && producto.oferta_activa && (
+                      <div className="mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        <p className="text-xs text-red-700 font-semibold flex items-center gap-1">
+                          <FaTag className="text-xs" />
+                          {producto.oferta_activa.titulo}
+                        </p>
+                        <p className="text-xs text-red-600 mt-1 line-clamp-1">
+                          {producto.oferta_activa.descripcion}
+                        </p>
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center">
                       <div>
-                        <p className="text-sm text-gray-600 mb-1">Precio</p>
-                        <p className="text-2xl font-bold text-amber-700">
-                          ₡{Number(producto.precio).toLocaleString('es-CR')}
-                        </p>
+                        {producto.tiene_oferta && producto.oferta_activa ? (
+                          <div>
+                            <p className="text-sm text-gray-400 line-through">
+                              ₡{Number(producto.precio).toLocaleString('es-CR')}
+                            </p>
+                            <div className="flex items-baseline gap-2">
+                              <p className="text-2xl font-bold text-red-600">
+                                ₡{Number(producto.oferta_activa.precio_oferta).toLocaleString('es-CR')}
+                              </p>
+                              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">
+                                Oferta
+                              </span>
+                            </div>
+                            <p className="text-xs text-green-600 font-semibold mt-1">
+                              Ahorras ₡{(Number(producto.precio) - Number(producto.oferta_activa.precio_oferta)).toLocaleString('es-CR')}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-2xl font-bold text-amber-700">
+                            ₡{Number(producto.precio).toLocaleString('es-CR')}
+                          </p>
+                        )}
                       </div>
 
                       <button
                         onClick={() => handleAddToCart(producto)}
                         className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white p-3 rounded-xl transition-all hover:scale-110 shadow-lg group-hover:shadow-xl"
-                        title="Agregar al carrito"
+                        title={producto.tiene_oferta ? "Ver oferta completa" : "Agregar al carrito"}
                       >
-                        <FaShoppingCart className="text-lg" />
+                        {producto.tiene_oferta ? (
+                          <FaTag className="text-lg" />
+                        ) : (
+                          <FaShoppingCart className="text-lg" />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -265,6 +305,17 @@ const Landing = () => {
           <div className="text-center py-20">
             <p className="text-gray-500 text-lg">No hay productos disponibles en este momento</p>
           </div>
+        )}
+
+        {productos.length > 0 && (
+          <motion.div {...fadeUp(0.3)} className="text-center mt-12">
+            <button
+              onClick={() => navigate(user ? '/dashboard/inicio' : '/login')}
+              className="bg-white border-2 border-amber-600 text-amber-700 hover:bg-amber-600 hover:text-white px-8 py-4 rounded-xl font-semibold transition-all hover:scale-105 shadow-lg"
+            >
+              Ver Catálogo Completo
+            </button>
+          </motion.div>
         )}
       </section>
 
@@ -297,14 +348,6 @@ const Landing = () => {
                 const diasRestantes = getDiasRestantes(oferta.fecha_fin);
                 const productos = oferta.productos || [];
                 const primerProducto = productos[0];
-                
-                // Calcular precio total regular y porcentaje de descuento
-                const precioTotalRegular = productos.reduce((sum, p) => sum + Number(p.precio || 0), 0);
-                const precioOferta = Number(oferta.precio_oferta || 0);
-                const porcentajeDescuento = precioTotalRegular > 0 
-                  ? Math.round(((precioTotalRegular - precioOferta) / precioTotalRegular) * 100) 
-                  : 0;
-                const ahorro = precioTotalRegular - precioOferta;
 
                 return (
                   <motion.div
@@ -344,17 +387,8 @@ const Landing = () => {
                         </div>
                       )}
 
-                      {/* Badge de días restantes con descuento */}
-                      <div className="absolute top-3 right-3 space-y-2">
-                        {porcentajeDescuento > 0 && (
-                          <div className="bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-2 rounded-xl shadow-lg animate-pulse">
-                            <p className="text-xs font-bold text-center">DESCUENTO</p>
-                            <p className="text-2xl font-black leading-none text-center">-{porcentajeDescuento}%</p>
-                          </div>
-                        )}
-                        <div className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
-                          {diasRestantes > 0 ? `${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}` : 'Último día'}
-                        </div>
+                      <div className="absolute top-3 right-3 bg-gradient-to-r from-red-500 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg animate-pulse">
+                        {diasRestantes > 0 ? `${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}` : 'Último día'}
                       </div>
                     </div>
 
@@ -529,248 +563,20 @@ const Landing = () => {
         </motion.button>
       )}
 
-      {/* Image Modal - Versión Mejorada */}
-      {console.log('Renderizando Landing, modalOpen:', modalOpen, 'selectedItem:', selectedItem)}
-      
-      {/* Modal con Framer Motion */}
-      {modalOpen && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={closeModal}
-          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 backdrop-blur-sm z-[9999]"
-        >
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            transition={{ type: "spring", duration: 0.5 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden relative"
-          >
-            {/* Botón Cerrar */}
-            <button 
-              onClick={closeModal}
-              className="absolute top-4 right-4 z-10 bg-white hover:bg-red-50 text-gray-700 hover:text-red-600 rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all hover:scale-110 hover:rotate-90"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <div className="flex flex-col md:flex-row max-h-[95vh]">
-              {/* Sección Izquierda - Imagen */}
-              <div className="md:w-1/2 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-8 flex items-center justify-center relative overflow-hidden">
-                {/* Decoración de fondo */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-orange-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-                
-                {selectedItem?.image && (
-                  <motion.img 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    src={selectedItem.image} 
-                    alt={selectedItem.title}
-                    className="relative z-10 max-w-full max-h-[50vh] md:max-h-[70vh] object-contain rounded-2xl shadow-2xl"
-                  />
-                )}
-                
-                {/* Badges sobre la imagen */}
-                {selectedItem?.offerPrice && (
-                  <motion.div 
-                    initial={{ x: -50, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="absolute top-6 left-6 bg-gradient-to-r from-red-500 to-orange-500 text-white px-5 py-3 rounded-2xl shadow-xl"
-                  >
-                    <p className="text-xs font-bold">OFERTA</p>
-                    <p className="text-3xl font-black leading-none">
-                      -{Math.round(((
-                        (selectedItem.price || selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0) || 0) - 
-                        selectedItem.offerPrice
-                      ) / (selectedItem.price || selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0) || 1)) * 100)}%
-                    </p>
-                  </motion.div>
-                )}
-                
-                {selectedItem?.isOffer && selectedItem?.offerProducts?.length > 1 && (
-                  <motion.div 
-                    initial={{ x: 50, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="absolute bottom-6 left-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-5 py-3 rounded-2xl shadow-xl"
-                  >
-                    <p className="text-sm font-bold">{selectedItem.offerProducts.length} PRODUCTOS</p>
-                    <p className="text-xs">Incluidos</p>
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Sección Derecha - Información */}
-              <div className="md:w-1/2 overflow-y-auto">
-                <div className="p-8 space-y-6">
-                  {/* Header */}
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    {selectedItem?.isOffer && (
-                      <span className="inline-flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-full text-sm font-bold mb-3">
-                        <FaTag /> OFERTA ESPECIAL
-                      </span>
-                    )}
-                    <h2 className="text-4xl font-black text-[#5D4037] mb-3 leading-tight">
-                      {selectedItem?.title || 'Sin título'}
-                    </h2>
-                    {selectedItem?.description && (
-                      <p className="text-lg text-[#8D6E63] leading-relaxed">
-                        {selectedItem.description}
-                      </p>
-                    )}
-                  </motion.div>
-
-                  {/* Productos de la Oferta */}
-                  {selectedItem?.isOffer && selectedItem?.offerProducts?.length > 0 && (
-                    <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                      className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-amber-200"
-                    >
-                      <h3 className="text-xl font-bold text-[#5D4037] mb-4 flex items-center gap-2">
-                        <FaBox className="text-amber-600" />
-                        Productos incluidos en esta oferta:
-                      </h3>
-                      <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                        {selectedItem.offerProducts.map((prod, idx) => (
-                          <motion.div 
-                            key={idx}
-                            initial={{ x: -20, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            transition={{ delay: 0.3 + (idx * 0.1) }}
-                            className="flex items-center gap-4 bg-white rounded-xl p-3 shadow-md hover:shadow-lg transition-all group"
-                          >
-                            {prod.imagen && (
-                              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 group-hover:scale-110 transition-transform">
-                                <img 
-                                  src={prod.imagen} 
-                                  alt={prod.nombre}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-[#5D4037] truncate">{prod.nombre}</p>
-                              {prod.descripcion && (
-                                <p className="text-sm text-[#8D6E63] line-clamp-1">
-                                  {prod.descripcion}
-                                </p>
-                              )}
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-sm text-gray-400 line-through">
-                                ₡{Number(prod.precio).toLocaleString('es-CR')}
-                              </p>
-                              <span className="text-xs text-green-600 font-semibold">En oferta</span>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Stock - Solo para productos individuales */}
-                  {!selectedItem?.isOffer && selectedItem?.stock !== undefined && selectedItem?.stock !== null && (
-                    <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.3 }}
-                      className={`rounded-2xl p-5 border-2 ${
-                        selectedItem.stock === 0 
-                          ? 'bg-red-50 border-red-200' 
-                          : selectedItem.stock <= 5 
-                          ? 'bg-orange-50 border-orange-200' 
-                          : 'bg-green-50 border-green-200'
-                      }`}
-                    >
-                      <p className="text-sm font-semibold mb-2" style={{ color: selectedItem.stock === 0 ? '#d32f2f' : selectedItem.stock <= 5 ? '#f57c00' : '#388e3c' }}>
-                        Disponibilidad
-                      </p>
-                      <p className={`text-xl font-bold flex items-center gap-2 ${
-                        selectedItem.stock === 0 ? 'text-red-600' : selectedItem.stock <= 5 ? 'text-orange-600' : 'text-green-600'
-                      }`}>
-                        <span className="text-2xl">
-                          {selectedItem.stock === 0 ? '❌' : selectedItem.stock <= 5 ? '⚠️' : '✓'}
-                        </span>
-                        {selectedItem.stock === 0 
-                          ? 'Sin existencias' 
-                          : selectedItem.stock <= 5 
-                          ? `Quedan solo ${selectedItem.stock} unidades` 
-                          : `${selectedItem.stock} unidades disponibles`}
-                      </p>
-                    </motion.div>
-                  )}
-
-                  {/* Precio */}
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6 border-2 border-yellow-300 shadow-lg"
-                  >
-                    {selectedItem?.offerPrice ? (
-                      <div>
-                        <p className="text-sm text-gray-500 mb-2">Precio regular</p>
-                        <p className="text-2xl text-gray-400 line-through mb-4">
-                          ₡{selectedItem.price 
-                            ? Number(selectedItem.price).toLocaleString('es-CR') 
-                            : selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0).toLocaleString('es-CR')}
-                        </p>
-                        <div className="flex items-center gap-2 mb-3">
-                          <FaTag className="text-red-600 text-2xl" />
-                          <p className="text-base font-bold text-red-700">Precio de oferta</p>
-                        </div>
-                        <p className="text-5xl font-black text-red-600 mb-4">
-                          ₡{Number(selectedItem.offerPrice).toLocaleString('es-CR')}
-                        </p>
-                        <div className="bg-green-100 border-2 border-green-300 rounded-xl p-4">
-                          <p className="text-green-800 font-bold text-lg flex items-center gap-2">
-                            <FaFire className="text-2xl" />
-                            Ahorras ₡{(
-                              (selectedItem.price || selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0) || 0) - 
-                              selectedItem.offerPrice
-                            ).toLocaleString('es-CR')}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-gray-600 mb-2">Precio</p>
-                        <p className="text-5xl font-black text-amber-700">
-                          ₡{selectedItem?.price ? Number(selectedItem.price).toLocaleString('es-CR') : '0'}
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
-
-                  {/* Botón Cerrar */}
-                  <motion.button
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                    onClick={closeModal}
-                    className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all hover:scale-105"
-                  >
-                    Cerrar
-                  </motion.button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
+      {/* Image Modal */}
+      {modalOpen && selectedItem && (
+        <ImageModal
+          isOpen={modalOpen}
+          onClose={closeModal}
+          image={selectedItem.image}
+          title={selectedItem.title}
+          description={selectedItem.description}
+          price={selectedItem.price}
+          offerPrice={selectedItem.offerPrice}
+          stock={selectedItem.stock}
+          isOffer={selectedItem.isOffer}
+          offerProducts={selectedItem.offerProducts}
+        />
       )}
     </div>
   );

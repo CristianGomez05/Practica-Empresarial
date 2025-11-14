@@ -2,11 +2,14 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../../services/api";
+import ImageModal from "../../components/ImageModal";
 import { FaClipboardList, FaClock, FaCheckCircle, FaTruck, FaBox, FaTag, FaPercentage } from "react-icons/fa";
 
 export default function DashboardOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
 
   useEffect(() => {
     async function fetchOrders() {
@@ -24,6 +27,16 @@ export default function DashboardOrders() {
     }
     fetchOrders();
   }, []);
+
+  const openModal = (product) => {
+    setSelectedProduct(product);
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setSelectedProduct(null);
+  };
 
   const getStatusInfo = (status) => {
     const statuses = {
@@ -209,7 +222,7 @@ export default function DashboardOrders() {
                 {/* Descuento Info */}
                 {tieneOferta && (
                   <div className="bg-green-100 border border-green-300 rounded-lg p-3 mb-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <FaPercentage className="text-green-700" />
                         <span className="font-semibold text-green-800">
@@ -251,7 +264,17 @@ export default function DashboardOrders() {
                           className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                            {/* IMAGEN CLICKEABLE PARA ABRIR MODAL */}
+                            <div 
+                              onClick={() => openModal({
+                                imagen: item.producto?.imagen,
+                                nombre: item.producto?.nombre,
+                                descripcion: item.producto?.descripcion,
+                                precio: item.producto?.precio
+                              })}
+                              className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer hover:ring-2 hover:ring-amber-400 transition-all transform hover:scale-105"
+                              title="Click para ver en grande"
+                            >
                               <img
                                 src={
                                   item.producto?.imagen ||
@@ -300,6 +323,18 @@ export default function DashboardOrders() {
           );
         })}
       </div>
+
+      {/* Image Modal */}
+      {modalOpen && selectedProduct && (
+        <ImageModal
+          isOpen={modalOpen}
+          onClose={closeModal}
+          image={selectedProduct.imagen}
+          title={selectedProduct.nombre}
+          description={selectedProduct.descripcion}
+          price={selectedProduct.precio}
+        />
+      )}
     </div>
   );
 }

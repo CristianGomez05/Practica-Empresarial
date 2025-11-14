@@ -28,11 +28,7 @@ class ProductoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Producto
-        fields = [
-            'id', 'nombre', 'descripcion', 'precio', 
-            'disponible', 'imagen', 'stock', 'esta_agotado',
-            'tiene_oferta', 'oferta_activa'
-        ]
+        fields = '__all__'  # 👈 CORREGIDO: era ['__all__'] y debe ser '__all__'
         read_only_fields = ['alerta_stock_enviada']
     
     def get_tiene_oferta(self, obj):

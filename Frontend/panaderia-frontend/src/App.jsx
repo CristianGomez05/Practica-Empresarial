@@ -55,18 +55,18 @@ function App() {
         }>
           <Route path="inicio" element={<DashboardHome />} />
           <Route path="productos" element={<DashboardProducts />} />
-          <Route path="ofertas" element={<DashboardOffers />} />
+          <Route path="ofertas" element={<DashboardOffers />} /> {/* ✅ Esta es la ruta para CLIENTES */}
           <Route path="carrito" element={<DashboardCart />} />
           <Route path="pedidos" element={<DashboardOrders />} />
           <Route path="perfil" element={<DashboardProfile />} />
           <Route path="pedido-confirmado/:id" element={<OrderConfirmation />} />
           
-          {/* Ruta de admin dentro del dashboard cliente (para compatibilidad) */}
-          <Route path="admin/ofertas" element={
+          {/* ❌ ELIMINAR ESTA RUTA - Ya no debe estar aquí */}
+          {/* <Route path="admin/ofertas" element={
             <AdminRoute>
               <AdminOffersPanel />
             </AdminRoute>
-          } />
+          } /> */}
         </Route>
 
         {/* ==================== PANEL DE ADMINISTRADOR (Solo Admin) ==================== */}
@@ -77,7 +77,7 @@ function App() {
         }>
           <Route index element={<AdminDashboard />} />
           <Route path="productos" element={<AdminProducts />} />
-          <Route path="ofertas" element={<AdminOffersPanel />} />
+          <Route path="ofertas" element={<AdminOffersPanel />} /> {/* ✅ Esta es la ruta para ADMIN */}
           <Route path="pedidos" element={<AdminOrders />} />
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="reportes" element={<AdminReports />} />
