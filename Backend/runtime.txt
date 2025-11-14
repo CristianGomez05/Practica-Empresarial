@@ -1,8 +1,1 @@
 python-3.11.0
-```
-
-### 4. **Crear archivo `Procfile`**
-
-En la raíz del `Backend`:
-```
-web: gunicorn panaderia.wsgi --log-file -
