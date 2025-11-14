@@ -1,43 +1,39 @@
 # panaderia/urls.py
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
-from drf_yasg.views import get_schema_view
-from drf_yasg import openapi
-from rest_framework import permissions
 from django.conf import settings
 from django.conf.urls.static import static
+from rest_framework import permissions
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
 
-# Swagger config (opcional)
+# Swagger configuration
 schema_view = get_schema_view(
     openapi.Info(
-        title="API Panadería",
+        title="Panadería Santa Clara API",
         default_version='v1',
-        description="Documentación interactiva de la API de la panadería",
+        description="API para gestión de panadería",
+        contact=openapi.Contact(email="contacto@santaclara.com"),
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
 )
 
 urlpatterns = [
+    # Admin panel
     path('admin/', admin.site.urls),
-
-    # App principal
-    path('core/', include('core.urls')),
-
-    # Autenticación social (Google)
+    
+    # API Documentation (Swagger)
+    path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    
+    # API endpoints (core app)
+    path('api/', include('core.urls')),
+    
+    # Authentication (Google OAuth)
     path('accounts/', include('allauth.urls')),
-
-    # JWT principal (opcional, lo tienes también en core/)
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
-    # Swagger
-    path('docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-
 ]
+
+# Servir archivos media en desarrollo
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
