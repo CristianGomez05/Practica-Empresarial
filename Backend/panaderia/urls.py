@@ -6,6 +6,7 @@ from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+from core.views import home  
 
 # Swagger configuration
 schema_view = get_schema_view(
@@ -22,7 +23,7 @@ schema_view = get_schema_view(
 urlpatterns = [
     # Página de inicio
     path('', home, name='home'),
-    
+
     # Admin panel
     path('admin/', admin.site.urls),
     
