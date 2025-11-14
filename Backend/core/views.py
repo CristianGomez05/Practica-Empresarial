@@ -19,6 +19,7 @@ from .serializers import (
     UsuarioRegistroSerializer  
 )
 from .permissions import EsAdministrador, EsClienteOAdmin
+from django.http import JsonResponse
 
 
 # ============================================================================
@@ -474,3 +475,20 @@ class DetallePedidoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DetallePedido.objects.select_related('producto', 'pedido').all()
     serializer_class = DetallePedidoSerializer
     permission_classes = [IsAuthenticated]
+
+
+def home(request):
+    """Vista de bienvenida para la raíz del API"""
+    return JsonResponse({
+        'mensaje': '¡Bienvenido a la API de Panadería Santa Clara!',
+        'version': '1.0',
+        'endpoints': {
+            'documentacion': '/api/docs/',
+            'admin': '/admin/',
+            'api': '/api/',
+            'productos': '/api/productos/',
+            'usuarios': '/api/usuarios/',
+            'pedidos': '/api/pedidos/',
+        },
+        'estado': 'operativo'
+    })
