@@ -20,8 +20,6 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    # Página de inicio
-    path('', home, name='home'),
 
     # Admin panel
     path('admin/', admin.site.urls),
