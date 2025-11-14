@@ -160,15 +160,25 @@ EMAIL_TIMEOUT = 30
 
 # CONFIGURACIONES DE SEGURIDAD PARA PRODUCCIÓN
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
+    # Detectar si estamos en Railway
+    IS_RAILWAY = config('RAILWAY_ENVIRONMENT', default=None) is not None
+    
+    if IS_RAILWAY:
+        # Railway ya maneja SSL/TLS
+        SECURE_SSL_REDIRECT = False
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    else:
+        # Otros servicios
+        SECURE_SSL_REDIRECT = True
+    
+    # Cookies seguras
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    
+    # Headers de seguridad
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
 
 # CSRF TRUSTED ORIGINS
 CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173', cast=Csv())
