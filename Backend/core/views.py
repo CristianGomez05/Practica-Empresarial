@@ -477,18 +477,3 @@ class DetallePedidoViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
 
 
-def home(request):
-    """Vista de bienvenida para la raíz del API"""
-    return JsonResponse({
-        'mensaje': '¡Bienvenido a la API de Panadería Santa Clara!',
-        'version': '1.0',
-        'endpoints': {
-            'documentacion': '/api/docs/',
-            'admin': '/admin/',
-            'api': '/api/',
-            'productos': '/api/productos/',
-            'usuarios': '/api/usuarios/',
-            'pedidos': '/api/pedidos/',
-        },
-        'estado': 'operativo'
-    })
