@@ -4,13 +4,13 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 const api = axios.create({
-  baseURL: `${API_URL}/core`,  // Base URL apunta a /core
+  baseURL: `${API_URL}/api`,  // ✅ CAMBIAR /core por /api
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Interceptor para autorizar requests si tienes token en localStorage
+// Interceptor para autorizar requests si tienes token
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('access') || sessionStorage.getItem('access');
   if (token) {
