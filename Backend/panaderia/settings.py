@@ -17,6 +17,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'cloudinary_storage',  
+    'cloudinary', 
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'rest_framework',
@@ -132,8 +134,36 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# ============================================================================
+# CONFIGURACIÓN DE ARCHIVOS MEDIA (IMÁGENES)
+# ============================================================================
+
+USE_CLOUDINARY = config('USE_CLOUDINARY', default=not DEBUG, cast=bool)
+
+if USE_CLOUDINARY:
+    # PRODUCCIÓN: Usar Cloudinary
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.api
+
+    cloudinary.config(
+        cloud_name=config('CLOUDINARY_CLOUD_NAME', default=''),
+        api_key=config('CLOUDINARY_API_KEY', default=''),
+        api_secret=config('CLOUDINARY_API_SECRET', default=''),
+        secure=True
+    )
+
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    
+    MEDIA_URL = '/media/'  # URL base para acceder a las imágenes
+    
+    print(f"☁️  Usando Cloudinary para almacenamiento de imágenes")
+    print(f"☁️  Cloud Name: {config('CLOUDINARY_CLOUD_NAME', default='No configurado')}")
+else:
+    # DESARROLLO: Usar almacenamiento local
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+    print(f"💾 Usando almacenamiento local para imágenes: {MEDIA_ROOT}")
 
 # ALLAUTH & SOCIAL AUTH
 ACCOUNT_ADAPTER = "core.adapters.FrontendRedirectAccountAdapter"
@@ -211,4 +241,84 @@ print(f"🚀 MODO: {'DESARROLLO' if DEBUG else 'PRODUCCIÓN'}")
 print(f"📧 Email: {EMAIL_HOST_USER}")
 print(f"🌐 Frontend URL: {FRONTEND_URL}")
 print(f"🗄️  Database: {'PostgreSQL (Railway)' if DATABASE_URL else 'PostgreSQL (Local)'}")
+print(f"{'='*60}\n")
+
+# JWT CONFIGURATION
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # Era 5 minutos, ahora 24 horas
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),   # 7 días
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
+
+# EMAIL CONFIGURATION CON LOGGING
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_USE_SSL = False
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='panaderiasantaclara01@gmail.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = f'Panadería Santa Clara <{EMAIL_HOST_USER}>'
+SERVER_EMAIL = EMAIL_HOST_USER
+EMAIL_TIMEOUT = 30
+
+# Si EMAIL_HOST_PASSWORD está vacío, usar console backend en desarrollo
+if not EMAIL_HOST_PASSWORD and DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    print("⚠️ EMAIL_HOST_PASSWORD no configurado, usando console backend")
+
+# Logging mejorado para emails
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'mail_admins': {
+            'level': 'ERROR',
+            'class': 'django.utils.log.AdminEmailHandler',
+        }
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': config('DJANGO_LOG_LEVEL', default='INFO'),
+            'propagate': False,
+        },
+        'django.core.mail': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'core.emails': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+}
+
+print(f"\n{'='*60}")
+print(f"📧 Email Backend: {EMAIL_BACKEND}")
+print(f"📧 Email Host: {EMAIL_HOST}:{EMAIL_PORT}")
+print(f"📧 Email User: {EMAIL_HOST_USER}")
+print(f"📧 Email Password Configured: {'✅ Yes' if EMAIL_HOST_PASSWORD else '❌ No'}")
 print(f"{'='*60}\n")
