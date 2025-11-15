@@ -9,9 +9,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         email = os.environ.get('ADMIN_EMAIL', 'admin@santaclara.com')
         password = os.environ.get('ADMIN_PASSWORD', 'Admin123456!')
-        username = 'admin'  # Username fijo para el admin
+        username = 'admin'
         
-        # Verificar si ya existe el usuario por email o username
+        # Verificar si ya existe
         if Usuario.objects.filter(email=email).exists():
             self.stdout.write(self.style.WARNING(f'⚠️ Usuario con email {email} ya existe'))
             return
@@ -21,15 +21,19 @@ class Command(BaseCommand):
             return
         
         try:
-            # Crear superusuario con username
-            Usuario.objects.create_superuser(
+            # Crear superusuario sin nombre y apellido primero
+            user = Usuario.objects.create_superuser(
                 username=username,
                 email=email,
-                password=password,
-                nombre='Admin',
-                apellido='Santa Clara'
+                password=password
             )
-            self.stdout.write(self.style.SUCCESS(f'✅ Superusuario creado exitosamente'))
+            
+            # Agregar nombre y apellido después
+            user.nombre = 'Admin'
+            user.apellido = 'Santa Clara'
+            user.save()
+            
+            self.stdout.write(self.style.SUCCESS('✅ Superusuario creado exitosamente'))
             self.stdout.write(self.style.SUCCESS(f'   Username: {username}'))
             self.stdout.write(self.style.SUCCESS(f'   Email: {email}'))
         except Exception as e:
