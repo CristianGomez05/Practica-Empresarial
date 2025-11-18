@@ -246,6 +246,50 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class OfertaViewSet(viewsets.ModelViewSet):
+    # ⭐ CRÍTICO: Definir queryset como atributo de clase
+    queryset = Oferta.objects.all()
+    serializer_class = OfertaSerializer
+    
+    def get_permissions(self):
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return [AllowAny()]
+        return [EsAdministrador()]
+    
+    def get_queryset(self):
+        # ⭐ Optimizar con prefetch
+        return Oferta.objects.prefetch_related(
+            Prefetch('productos', queryset=Producto.objects.all())
+        ).all()
+    
+    @action(detail=False, methods=['get'])
+    def activas(self, request):
+        from django.utils import timezone
+        hoy = timezone.now().date()
+        ofertas = self.get_queryset().filter(
+            fecha_inicio__lte=hoy,
+            fecha_fin__gte=hoy
+        )
+        serializer = self.get_serializer(ofertas, many=True)
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        print("\n🎉 Creando oferta...")
+        oferta = serializer.save()
+        
+        print(f"✅ Oferta creada: {oferta.titulo}")
+        print(f"📦 Productos asociados: {oferta.productos.count()}")
+        
+        if oferta.productos.count() > 0:
+            print(f"📧 Enviando notificación...")
+            try:
+                from .emails import enviar_notificacion_oferta
+                enviar_notificacion_oferta(oferta.id)
+                print(f"✅ Notificación enviada\n")
+            except Exception as e:
+                print(f"❌ Error: {e}\n")
+
+
 class PedidoViewSet(viewsets.ModelViewSet):
     serializer_class = PedidoSerializer
     permission_classes = [IsAuthenticated, EsClienteOAdmin]
