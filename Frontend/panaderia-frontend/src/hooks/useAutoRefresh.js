@@ -1,148 +1,93 @@
-// src/hooks/useAutoRefresh.js
+// Frontend/src/hooks/useAutoRefresh.js
 import { useEffect, useRef, useCallback } from 'react';
 
-// Funciones helper (copiar del api.js actualizado)
-const isTokenExpiringSoon = () => {
-  const token = localStorage.getItem('access') || sessionStorage.getItem('access');
-  if (!token) return true;
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const exp = payload.exp * 1000;
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000;
-    return (exp - now) < fiveMinutes;
-  } catch (error) {
-    return true;
-  }
-};
-
-const refreshTokenProactively = async () => {
-  const refreshToken = localStorage.getItem('refresh') || sessionStorage.getItem('refresh');
-  if (!refreshToken) return false;
-  try {
-    const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
-    const response = await fetch(`${API_URL}/api/token/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh: refreshToken })
-    });
-    if (!response.ok) return false;
-    const data = await response.json();
-    const storage = localStorage.getItem('refresh') ? localStorage : sessionStorage;
-    storage.setItem('access', data.access);
-    if (data.refresh) storage.setItem('refresh', data.refresh);
-    return true;
-  } catch (error) {
-    return false;
-  }
-};
-
 /**
- * Hook personalizado para refrescar datos automáticamente
- * @param {Function} refreshFunction - Función que se ejecutará para refrescar los datos
- * @param {number} interval - Intervalo en milisegundos (default: 30000 = 30 segundos)
- * @param {boolean} enabled - Si el auto-refresh está habilitado
+ * Hook personalizado para auto-refresh inteligente de datos
+ * @param {Function} fetchFunction - Función a ejecutar periódicamente
+ * @param {Object} options - Opciones de configuración
+ * @param {number} options.interval - Intervalo en ms (default: 30000 = 30s)
+ * @param {boolean} options.enabled - Habilitar/deshabilitar refresh (default: true)
+ * @param {boolean} options.refreshOnFocus - Refresh al volver a la pestaña (default: true)
  */
-export default function useAutoRefresh(refreshFunction, interval = 30000, enabled = true) {
-  const intervalRef = useRef(null);
-  const lastRefreshRef = useRef(Date.now());
-
-  const refresh = useCallback(async () => {
-    try {
-      // Verificar si el token está por expirar y refrescarlo proactivamente
-      if (isTokenExpiringSoon()) {
-        console.log('🔄 Token expirando pronto, refrescando...');
-        await refreshTokenProactively();
-      }
-
-      // Ejecutar la función de refresh
-      await refreshFunction();
-      lastRefreshRef.current = Date.now();
-    } catch (error) {
-      console.error('Error en auto-refresh:', error);
-    }
-  }, [refreshFunction]);
-
-  useEffect(() => {
-    if (!enabled) {
-      // Limpiar intervalo si está deshabilitado
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      return;
-    }
-
-    // Configurar intervalo
-    intervalRef.current = setInterval(refresh, interval);
-
-    // Refrescar token al montar si está expirando
-    if (isTokenExpiringSoon()) {
-      refreshTokenProactively();
-    }
-
-    // Limpiar al desmontar
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [refresh, interval, enabled]);
-
-  return { lastRefresh: lastRefreshRef.current, refresh };
-}
-
-
-/**
- * Hook específico para refrescar datos cuando la ventana vuelve a tener foco
- * Útil para cuando el usuario vuelve a la pestaña después de un tiempo
- */
-export function useRefreshOnFocus(refreshFunction) {
-  const lastRefreshRef = useRef(Date.now());
-  const MIN_REFRESH_INTERVAL = 5000; // Mínimo 5 segundos entre refreshes
-
-  useEffect(() => {
-    const handleFocus = async () => {
-      const now = Date.now();
-      const timeSinceLastRefresh = now - lastRefreshRef.current;
-
-      // Solo refrescar si han pasado al menos 5 segundos
-      if (timeSinceLastRefresh >= MIN_REFRESH_INTERVAL) {
-        try {
-          // Verificar token
-          if (isTokenExpiringSoon()) {
-            await refreshTokenProactively();
-          }
-
-          await refreshFunction();
-          lastRefreshRef.current = now;
-        } catch (error) {
-          console.error('Error refrescando al recuperar foco:', error);
-        }
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [refreshFunction]);
-}
-
-
-/**
- * Hook combinado: auto-refresh + refresh on focus
- */
-export function useSmartRefresh(refreshFunction, options = {}) {
+export default function useSmartRefresh(fetchFunction, options = {}) {
   const {
-    interval = 30000,
+    interval = 30000, // 30 segundos por defecto
     enabled = true,
     refreshOnFocus = true
   } = options;
 
-  const autoRefresh = useAutoRefresh(refreshFunction, interval, enabled);
-  
-  if (refreshOnFocus) {
-    useRefreshOnFocus(refreshFunction);
-  }
+  const intervalRef = useRef(null);
+  const isMountedRef = useRef(true);
+  const isLoadingRef = useRef(false);
+  const lastFetchTimeRef = useRef(Date.now());
 
-  return autoRefresh;
+  const safeFetch = useCallback(async () => {
+    // Evitar llamadas simultáneas
+    if (isLoadingRef.current || !isMountedRef.current || !enabled) {
+      console.log('⏭️ Skipping fetch - already loading, unmounted, or disabled');
+      return;
+    }
+
+    try {
+      isLoadingRef.current = true;
+      console.log('🔄 Auto-refresh ejecutando...');
+      await fetchFunction();
+      lastFetchTimeRef.current = Date.now();
+      console.log('✅ Auto-refresh completado');
+    } catch (error) {
+      console.error('❌ Auto-refresh error:', error.message);
+    } finally {
+      isLoadingRef.current = false;
+    }
+  }, [fetchFunction, enabled]);
+
+  // Manejar refresh al volver a la pestaña
+  useEffect(() => {
+    if (!refreshOnFocus || !enabled) return;
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current;
+        // Solo refrescar si han pasado más de 5 segundos desde el último fetch
+        if (timeSinceLastFetch > 5000) {
+          console.log('👁️ Tab visible - refreshing data');
+          safeFetch();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [refreshOnFocus, enabled, safeFetch]);
+
+  // Auto-refresh periódico
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    if (!enabled) {
+      console.log('🛑 Auto-refresh deshabilitado');
+      return;
+    }
+
+    // Configurar intervalo
+    console.log(`⏰ Auto-refresh configurado cada ${interval / 1000}s`);
+    intervalRef.current = setInterval(safeFetch, interval);
+
+    return () => {
+      console.log('🛑 Auto-refresh detenido');
+      isMountedRef.current = false;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [safeFetch, interval, enabled]);
+
+  return {
+    refresh: safeFetch,
+    isRefreshing: isLoadingRef.current
+  };
 }

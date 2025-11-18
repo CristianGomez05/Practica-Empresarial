@@ -1,4 +1,4 @@
-# panaderia/settings.py
+# Backend/panaderia/settings.py - CONFIGURACIÓN PARA RAILWAY
 from pathlib import Path
 import os
 from decouple import config, Csv
@@ -7,38 +7,51 @@ from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# ============================================================================
 # SEGURIDAD
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-(i1*wc&ymgx0xmea-%031v6&irm1-km%(2zg)7wof5z(m##_07')
+# ============================================================================
+SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='.railway.app,localhost', cast=Csv())
 
+# ============================================================================
+# APLICACIONES
+# ============================================================================
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'cloudinary_storage',  
-    'cloudinary', 
+    'cloudinary_storage',  # Debe estar ANTES de staticfiles
+    'cloudinary',           # Cloudinary
     'django.contrib.staticfiles',
     'django.contrib.sites',
+    
+    # Third Party
     'rest_framework',
     'drf_yasg',
     'rest_framework.authtoken',
     'rest_framework_simplejwt',
     'corsheaders',
+    
+    # AllAuth
     'allauth',
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.google',
     'dj_rest_auth',
     'dj_rest_auth.registration',
+    
+    # Local
     'core',
 ]
 
 SITE_ID = 1
 
+# ============================================================================
 # JWT CONFIGURATION
+# ============================================================================
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
@@ -49,6 +62,9 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
+# ============================================================================
+# REST FRAMEWORK
+# ============================================================================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -58,8 +74,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.AllowAny',
     ),
+    'DEFAULT_PARSER_CLASSES': (
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.FormParser',
+        'rest_framework.parsers.MultiPartParser',
+    ),
 }
 
+# ============================================================================
+# MIDDLEWARE
+# ============================================================================
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -75,6 +99,9 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'panaderia.urls'
 
+# ============================================================================
+# TEMPLATES
+# ============================================================================
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -93,7 +120,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'panaderia.wsgi.application'
 
-# DATABASE CONFIGURATION
+# ============================================================================
+# DATABASE (Railway PostgreSQL)
+# ============================================================================
 DATABASE_URL = config('DATABASE_URL', default=None)
 
 if DATABASE_URL:
@@ -102,9 +131,12 @@ if DATABASE_URL:
             default=DATABASE_URL,
             conn_max_age=600,
             conn_health_checks=True,
+            ssl_require=True  # Railway requiere SSL
         )
     }
+    print("✅ Usando PostgreSQL de Railway")
 else:
+    # Fallback para desarrollo local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -115,7 +147,11 @@ else:
             'PORT': config('DB_PORT', default='5432'),
         }
     }
+    print("✅ Usando PostgreSQL Local")
 
+# ============================================================================
+# PASSWORD VALIDATION
+# ============================================================================
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -123,6 +159,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
@@ -130,57 +169,93 @@ AUTHENTICATION_BACKENDS = (
 
 AUTH_USER_MODEL = 'core.Usuario'
 
+# ============================================================================
 # CORS CONFIGURATION
+# ============================================================================
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS', 
-    default='http://localhost:5173,http://127.0.0.1:5173', 
-    cast=Csv()
-)
-CORS_ALLOW_CREDENTIALS = True
 
-# ⭐ En desarrollo, permitir todos los orígenes
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
     print("⚠️ CORS: Permitiendo todos los orígenes (DEBUG=True)")
+else:
+    CORS_ALLOWED_ORIGINS = config(
+        'CORS_ALLOWED_ORIGINS', 
+        default='http://localhost:5173', 
+        cast=Csv()
+    )
+    print(f"✅ CORS configurado para: {CORS_ALLOWED_ORIGINS}")
 
-# CSRF TRUSTED ORIGINS
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# ============================================================================
+# CSRF CONFIGURATION
+# ============================================================================
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS', 
-    default='http://localhost:5173,http://127.0.0.1:5173', 
+    default='http://localhost:5173', 
     cast=Csv()
 )
 
-# CONFIGURACIÓN DE ARCHIVOS ESTÁTICOS
+# ============================================================================
+# STATIC FILES
+# ============================================================================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# CONFIGURACIÓN DE ARCHIVOS MEDIA (IMÁGENES)
-USE_CLOUDINARY = config('USE_CLOUDINARY', default=not DEBUG, cast=bool)
+# ============================================================================
+# CLOUDINARY CONFIGURATION (OBLIGATORIO PARA RAILWAY)
+# ============================================================================
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
-if USE_CLOUDINARY:
-    import cloudinary
-    import cloudinary.uploader
-    import cloudinary.api
+CLOUDINARY_CLOUD_NAME = config('CLOUDINARY_CLOUD_NAME')
+CLOUDINARY_API_KEY = config('CLOUDINARY_API_KEY')
+CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET')
 
-    cloudinary.config(
-        cloud_name=config('CLOUDINARY_CLOUD_NAME', default=''),
-        api_key=config('CLOUDINARY_API_KEY', default=''),
-        api_secret=config('CLOUDINARY_API_SECRET', default=''),
-        secure=True
-    )
+cloudinary.config(
+    cloud_name=CLOUDINARY_CLOUD_NAME,
+    api_key=CLOUDINARY_API_KEY,
+    api_secret=CLOUDINARY_API_SECRET,
+    secure=True
+)
 
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-    MEDIA_URL = '/media/'
-    
-    print(f"☁️  Usando Cloudinary: {config('CLOUDINARY_CLOUD_NAME', default='No configurado')}")
-else:
-    MEDIA_URL = '/media/'
-    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-    print(f"💾 Almacenamiento local: {MEDIA_ROOT}")
+# Configurar Cloudinary como storage por defecto
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+MEDIA_URL = '/media/'
 
+print(f"☁️  Cloudinary configurado: {CLOUDINARY_CLOUD_NAME}")
+
+# Configuración de tamaño máximo de archivos (5MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880
+
+# ============================================================================
+# CLOUDINARY STORAGE SETTINGS
+# ============================================================================
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+    'API_KEY': CLOUDINARY_API_KEY,
+    'API_SECRET': CLOUDINARY_API_SECRET,
+    'SECURE': True,
+}
+
+# ============================================================================
 # ALLAUTH & SOCIAL AUTH
+# ============================================================================
 ACCOUNT_ADAPTER = "core.adapters.FrontendRedirectAccountAdapter"
 SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
 SOCIALACCOUNT_LOGIN_ON_GET = True
@@ -191,24 +266,27 @@ SOCIALACCOUNT_QUERY_EMAIL = True
 LOGIN_REDIRECT_URL = f"{FRONTEND_URL}/dashboard"
 LOGOUT_REDIRECT_URL = FRONTEND_URL
 
+# ============================================================================
 # EMAIL CONFIGURATION
+# ============================================================================
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_USE_SSL = False
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='panaderiasantaclara01@gmail.com')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
 DEFAULT_FROM_EMAIL = f'Panadería Santa Clara <{EMAIL_HOST_USER}>'
 SERVER_EMAIL = EMAIL_HOST_USER
 EMAIL_TIMEOUT = 30
 
-# Si no hay password, usar console backend en desarrollo
 if not EMAIL_HOST_PASSWORD and DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    print("⚠️ EMAIL: Usando console backend (sin password configurado)")
+    print("⚠️ EMAIL: Usando console backend")
 
+# ============================================================================
 # LOGGING
+# ============================================================================
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -230,12 +308,7 @@ LOGGING = {
             'level': config('DJANGO_LOG_LEVEL', default='INFO'),
             'propagate': False,
         },
-        'django.core.mail': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'core.emails': {
+        'cloudinary': {
             'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
@@ -247,22 +320,25 @@ LOGGING = {
     },
 }
 
-# CONFIGURACIONES DE SEGURIDAD PARA PRODUCCIÓN
+# ============================================================================
+# SEGURIDAD EN PRODUCCIÓN
+# ============================================================================
 if not DEBUG:
-    IS_RAILWAY = config('RAILWAY_ENVIRONMENT', default=None) is not None
-    
-    if IS_RAILWAY:
-        SECURE_SSL_REDIRECT = False
-        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    else:
-        SECURE_SSL_REDIRECT = True
+    # Railway específico
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = False  # Railway maneja SSL
     
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
+    
+    print("✅ Configuración de seguridad en producción activada")
 
+# ============================================================================
+# INTERNACIONALIZACIÓN
+# ============================================================================
 LANGUAGE_CODE = 'es'
 TIME_ZONE = 'America/Costa_Rica'
 USE_I18N = True
@@ -270,12 +346,13 @@ USE_TZ = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ============================================================================
 # RESUMEN DE CONFIGURACIÓN
+# ============================================================================
 print(f"\n{'='*60}")
 print(f"🚀 MODO: {'DESARROLLO' if DEBUG else 'PRODUCCIÓN'}")
+print(f"☁️  Cloudinary: {CLOUDINARY_CLOUD_NAME}")
 print(f"📧 Email: {EMAIL_HOST_USER}")
-print(f"📧 Password: {'✅ Configurado' if EMAIL_HOST_PASSWORD else '❌ No configurado'}")
 print(f"🌐 Frontend: {FRONTEND_URL}")
-print(f"🗄️  Database: {'PostgreSQL (Railway)' if DATABASE_URL else 'PostgreSQL (Local)'}")
-print(f"☁️  Cloudinary: {'✅ Habilitado' if USE_CLOUDINARY else '❌ Deshabilitado'}")
+print(f"🗄️  Database: {'Railway PostgreSQL' if DATABASE_URL else 'PostgreSQL Local'}")
 print(f"{'='*60}\n")

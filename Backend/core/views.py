@@ -7,6 +7,7 @@ from django.db.models import Q, Prefetch
 from django.db import transaction
 from django.core.cache import cache
 from .emails import enviar_alerta_sin_stock
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
 from .serializers import (
     UsuarioSerializer, 
@@ -72,84 +73,177 @@ class UsuarioViewSet(viewsets.ModelViewSet):
 
 
 class ProductoViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestionar productos con soporte de imágenes en Cloudinary
+    """
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
     
+    # ⭐ CRÍTICO: Agregar parsers para multipart/form-data
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    
     def get_queryset(self):
+        """Retorna todos los productos ordenados por ID descendente"""
         return Producto.objects.all().order_by('-id')
     
     def get_permissions(self):
+        """
+        GET: Cualquiera puede ver
+        POST/PUT/DELETE: Solo administradores
+        """
         if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
             return [AllowAny()]
         return [EsAdministrador()]
     
-    def perform_create(self, serializer):
-        cache.delete('productos_list')
-        producto = serializer.save()
+    def create(self, request, *args, **kwargs):
+        """
+        Crear producto con imagen
+        POST /api/productos/
+        """
+        print(f"\n{'='*60}")
+        print(f"📥 POST /api/productos/ - Creando producto")
+        print(f"📋 Content-Type: {request.content_type}")
+        print(f"📋 Data keys: {list(request.data.keys())}")
+        
+        # Log de datos recibidos
+        if 'imagen' in request.FILES:
+            imagen = request.FILES['imagen']
+            print(f"📸 Imagen recibida: {imagen.name}")
+            print(f"📸 Tamaño: {imagen.size} bytes ({imagen.size / 1024:.2f} KB)")
+            print(f"📸 Content Type: {imagen.content_type}")
+        else:
+            print(f"⚠️  No se recibió imagen")
+        
+        # Usar el serializer
+        serializer = self.get_serializer(data=request.data)
         
         try:
-            from .emails import enviar_notificacion_nuevo_producto
-            enviar_notificacion_nuevo_producto(producto.id)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            
+            print(f"✅ Producto creado exitosamente")
+            print(f"{'='*60}\n")
+            
+            headers = self.get_success_headers(serializer.data)
+            return Response(
+                serializer.data, 
+                status=status.HTTP_201_CREATED, 
+                headers=headers
+            )
         except Exception as e:
-            print(f"❌ Error enviando notificación: {e}")
+            print(f"❌ Error creando producto: {str(e)}")
+            print(f"❌ Validation errors: {serializer.errors if hasattr(serializer, 'errors') else 'N/A'}")
+            print(f"{'='*60}\n")
+            raise
+    
+    def update(self, request, *args, **kwargs):
+        """
+        Actualizar producto con o sin imagen
+        PUT /api/productos/{id}/
+        """
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        print(f"\n{'='*60}")
+        print(f"🔄 PUT /api/productos/{instance.id}/ - Actualizando producto")
+        print(f"📋 Content-Type: {request.content_type}")
+        print(f"📋 Data keys: {list(request.data.keys())}")
+        
+        if 'imagen' in request.FILES:
+            imagen = request.FILES['imagen']
+            print(f"📸 Nueva imagen: {imagen.name} ({imagen.size / 1024:.2f} KB)")
+        else:
+            print(f"📸 Sin nueva imagen - manteniendo existente")
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            if getattr(instance, '_prefetched_objects_cache', None):
+                instance._prefetched_objects_cache = {}
+            
+            print(f"✅ Producto actualizado exitosamente")
+            print(f"{'='*60}\n")
+            
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"❌ Error actualizando producto: {str(e)}")
+            print(f"❌ Validation errors: {serializer.errors if hasattr(serializer, 'errors') else 'N/A'}")
+            print(f"{'='*60}\n")
+            raise
+    
+    def perform_create(self, serializer):
+        """
+        Ejecutar después de validar al crear producto
+        """
+        # Limpiar cache
+        cache.delete('productos_list')
+        
+        # Guardar producto (Cloudinary se encarga de la imagen automáticamente)
+        producto = serializer.save()
+        
+        print(f"💾 Producto guardado en DB con ID: {producto.id}")
+        
+        # Enviar notificación por email
+        try:
+            from .emails import enviar_notificacion_nuevo_producto
+            print(f"📧 Enviando notificación de nuevo producto...")
+            enviar_notificacion_nuevo_producto(producto.id)
+            print(f"✅ Notificación enviada")
+        except Exception as e:
+            print(f"⚠️  Error enviando notificación: {e}")
     
     def perform_update(self, serializer):
+        """
+        Ejecutar después de validar al actualizar producto
+        """
         cache.delete('productos_list')
         serializer.save()
+        print(f"💾 Producto actualizado en DB")
     
     def perform_destroy(self, instance):
+        """
+        Ejecutar al eliminar producto
+        """
+        print(f"\n🗑️  Eliminando producto ID: {instance.id}")
+        
+        # Eliminar imagen de Cloudinary si existe
+        if instance.imagen:
+            try:
+                import cloudinary.uploader
+                if hasattr(instance.imagen, 'public_id'):
+                    public_id = instance.imagen.public_id
+                    print(f"🗑️  Eliminando imagen de Cloudinary: {public_id}")
+                    cloudinary.uploader.destroy(public_id)
+                    print(f"✅ Imagen eliminada de Cloudinary")
+            except Exception as e:
+                print(f"⚠️  Error eliminando imagen: {e}")
+        
         cache.delete('productos_list')
         instance.delete()
+        print(f"✅ Producto eliminado de DB\n")
     
     @action(detail=False, methods=['get'])
     def disponibles(self, request):
-        productos = Producto.objects.filter(stock__gt=0).order_by('nombre')
+        """
+        Endpoint para obtener solo productos disponibles
+        GET /api/productos/disponibles/
+        """
+        productos = Producto.objects.filter(stock__gt=0, disponible=True).order_by('nombre')
         serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
-
-
-class OfertaViewSet(viewsets.ModelViewSet):
-    # ⭐ CRÍTICO: Definir queryset como atributo de clase
-    queryset = Oferta.objects.all()
-    serializer_class = OfertaSerializer
-    
-    def get_permissions(self):
-        if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
-            return [AllowAny()]
-        return [EsAdministrador()]
-    
-    def get_queryset(self):
-        # ⭐ Optimizar con prefetch
-        return Oferta.objects.prefetch_related(
-            Prefetch('productos', queryset=Producto.objects.all())
-        ).all()
     
     @action(detail=False, methods=['get'])
-    def activas(self, request):
-        from django.utils import timezone
-        hoy = timezone.now().date()
-        ofertas = self.get_queryset().filter(
-            fecha_inicio__lte=hoy,
-            fecha_fin__gte=hoy
-        )
-        serializer = self.get_serializer(ofertas, many=True)
+    def agotados(self, request):
+        """
+        Endpoint para obtener productos agotados
+        GET /api/productos/agotados/
+        """
+        productos = Producto.objects.filter(stock=0).order_by('nombre')
+        serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
-    
-    def perform_create(self, serializer):
-        print("\n🎉 Creando oferta...")
-        oferta = serializer.save()
-        
-        print(f"✅ Oferta creada: {oferta.titulo}")
-        print(f"📦 Productos asociados: {oferta.productos.count()}")
-        
-        if oferta.productos.count() > 0:
-            print(f"📧 Enviando notificación...")
-            try:
-                from .emails import enviar_notificacion_oferta
-                enviar_notificacion_oferta(oferta.id)
-                print(f"✅ Notificación enviada\n")
-            except Exception as e:
-                print(f"❌ Error: {e}\n")
 
 
 class PedidoViewSet(viewsets.ModelViewSet):

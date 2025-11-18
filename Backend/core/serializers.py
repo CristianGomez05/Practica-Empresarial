@@ -5,6 +5,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
 from django.utils import timezone
 from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
+import cloudinary.uploader
 
 
 # ============================================================================
@@ -111,9 +112,9 @@ class UsuarioRegistroSerializer(serializers.ModelSerializer):
 
 class ProductoSerializer(serializers.ModelSerializer):
     """
-    Serializer para productos con soporte para Cloudinary
+    Serializer para productos con soporte completo para Cloudinary
     """
-    # Campo de solo lectura para la URL completa de la imagen
+    # Campo de solo lectura para la URL de la imagen
     imagen_url = serializers.SerializerMethodField(read_only=True)
     
     # Campos adicionales
@@ -131,20 +132,18 @@ class ProductoSerializer(serializers.ModelSerializer):
     
     def get_imagen_url(self, obj):
         """
-        Retorna la URL completa de la imagen
-        - En Cloudinary: URL completa desde Cloudinary
-        - En local: URL completa con MEDIA_URL
+        Retorna la URL completa de la imagen desde Cloudinary
         """
         if obj.imagen:
-            if hasattr(obj.imagen, 'url'):
-                # Cloudinary retorna URL completa automáticamente
-                return obj.imagen.url
-            else:
-                # Fallback para almacenamiento local
-                request = self.context.get('request')
-                if request:
-                    return request.build_absolute_uri(settings.MEDIA_URL + str(obj.imagen))
-                return settings.MEDIA_URL + str(obj.imagen)
+            try:
+                # Cloudinary devuelve la URL completa automáticamente
+                if hasattr(obj.imagen, 'url'):
+                    return obj.imagen.url
+                # Fallback si es string
+                return str(obj.imagen)
+            except Exception as e:
+                print(f"❌ Error obteniendo URL de imagen: {e}")
+                return None
         return None
     
     def get_tiene_oferta(self, obj):
@@ -178,61 +177,94 @@ class ProductoSerializer(serializers.ModelSerializer):
         """Verifica si el producto está agotado"""
         return obj.stock == 0
     
+    def validate_imagen(self, value):
+        """
+        Valida la imagen subida
+        """
+        if value:
+            # Validar tamaño (5MB máximo)
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError(
+                    "La imagen no debe superar los 5MB"
+                )
+            
+            # Validar tipo de archivo
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+            if hasattr(value, 'content_type') and value.content_type not in allowed_types:
+                raise serializers.ValidationError(
+                    "Solo se permiten imágenes JPG, PNG o WEBP"
+                )
+        
+        return value
+    
     def to_representation(self, instance):
         """
-        Personalizar la representación para incluir imagen_url
+        Personalizar la representación para devolver imagen_url en lugar de imagen
         """
         representation = super().to_representation(instance)
         
         # Reemplazar el campo 'imagen' con la URL completa
-        representation['imagen'] = representation.pop('imagen_url', None)
+        imagen_url = representation.pop('imagen_url', None)
+        representation['imagen'] = imagen_url
         
-        # Log para debugging de productos agotados
+        # Log para debugging
         if instance.stock == 0:
-            print(f"⚠️  Producto agotado: {instance.nombre} (Stock: {instance.stock})")
+            print(f"⚠️  Producto agotado: {instance.nombre}")
         
         return representation
     
     def create(self, validated_data):
-        """Crear producto con imagen"""
-        print(f"\n📦 Creando producto: {validated_data.get('nombre')}")
+        """
+        Crear producto y subir imagen a Cloudinary
+        """
+        print(f"\n{'='*60}")
+        print(f"📦 Creando producto: {validated_data.get('nombre')}")
         
         imagen = validated_data.get('imagen')
         if imagen:
             print(f"📸 Imagen recibida: {imagen.name} ({imagen.size} bytes)")
+            print(f"📸 Content Type: {getattr(imagen, 'content_type', 'unknown')}")
         
+        # Django-cloudinary-storage se encarga de subir automáticamente
         producto = Producto.objects.create(**validated_data)
         
         if producto.imagen:
-            print(f"✅ Imagen guardada: {producto.imagen.url}")
+            print(f"✅ Imagen subida a Cloudinary: {producto.imagen.url}")
         else:
-            print(f"⚠️ Sin imagen")
+            print(f"⚠️  Producto creado sin imagen")
+        
+        print(f"✅ Producto creado con ID: {producto.id}")
+        print(f"{'='*60}\n")
         
         return producto
     
     def update(self, instance, validated_data):
-        """Actualizar producto preservando imagen si no se envía nueva"""
-        print(f"\n🔄 Actualizando producto: {instance.nombre}")
+        """
+        Actualizar producto y manejar imagen
+        """
+        print(f"\n{'='*60}")
+        print(f"🔄 Actualizando producto: {instance.nombre} (ID: {instance.id})")
         
-        # Si no se envía imagen nueva, mantener la existente
-        if 'imagen' not in validated_data and instance.imagen:
+        # Verificar si hay nueva imagen
+        nueva_imagen = validated_data.get('imagen')
+        imagen_anterior = instance.imagen
+        
+        if nueva_imagen:
+            print(f"📸 Nueva imagen recibida: {nueva_imagen.name} ({nueva_imagen.size} bytes)")
+            
+            # Si hay imagen anterior en Cloudinary, eliminarla
+            if imagen_anterior and hasattr(settings, 'CLOUDINARY_CLOUD_NAME'):
+                try:
+                    # Extraer public_id de la URL de Cloudinary
+                    if hasattr(imagen_anterior, 'public_id'):
+                        public_id = imagen_anterior.public_id
+                        print(f"🗑️  Eliminando imagen anterior: {public_id}")
+                        cloudinary.uploader.destroy(public_id)
+                        print(f"✅ Imagen anterior eliminada de Cloudinary")
+                except Exception as e:
+                    print(f"⚠️  Error eliminando imagen anterior: {e}")
+        else:
             print(f"📸 Manteniendo imagen existente")
-        elif 'imagen' in validated_data:
-            nueva_imagen = validated_data.get('imagen')
-            if nueva_imagen:
-                print(f"📸 Nueva imagen: {nueva_imagen.name} ({nueva_imagen.size} bytes)")
-                
-                # Eliminar imagen anterior de Cloudinary si existe
-                if instance.imagen and hasattr(settings, 'USE_CLOUDINARY') and settings.USE_CLOUDINARY:
-                    try:
-                        import cloudinary.uploader
-                        # Extraer public_id de la URL
-                        public_id = instance.imagen.public_id if hasattr(instance.imagen, 'public_id') else None
-                        if public_id:
-                            cloudinary.uploader.destroy(public_id)
-                            print(f"🗑️ Imagen anterior eliminada de Cloudinary")
-                    except Exception as e:
-                        print(f"⚠️ Error eliminando imagen anterior: {e}")
         
         # Actualizar campos
         for attr, value in validated_data.items():
@@ -242,6 +274,9 @@ class ProductoSerializer(serializers.ModelSerializer):
         
         if instance.imagen:
             print(f"✅ Imagen actualizada: {instance.imagen.url}")
+        
+        print(f"✅ Producto actualizado exitosamente")
+        print(f"{'='*60}\n")
         
         return instance
 
