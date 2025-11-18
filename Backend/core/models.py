@@ -1,8 +1,12 @@
 # Backend/core/models.py
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from cloudinary.models import CloudinaryField
 
-# Usuario personalizado
+# ============================================================================
+# USUARIO
+# ============================================================================
 class Usuario(AbstractUser):
     ROLES = [
         ('cliente', 'Cliente'),
@@ -14,14 +18,39 @@ class Usuario(AbstractUser):
         return f"{self.username} ({self.rol})"
 
 
+# ============================================================================
+# PRODUCTO (CON CLOUDINARY)
+# ============================================================================
 class Producto(models.Model):
     nombre = models.CharField(max_length=100)
     descripcion = models.TextField(blank=True, null=True)
     precio = models.DecimalField(max_digits=10, decimal_places=2)
     disponible = models.BooleanField(default=True)
-    imagen = models.ImageField(upload_to='productos/', blank=True, null=True)
-    stock = models.PositiveIntegerField(default=0, help_text='Cantidad disponible en inventario')
-    alerta_stock_enviada = models.BooleanField(default=False, help_text='Indica si ya se envió la notificación de stock agotado')
+    stock = models.PositiveIntegerField(
+        default=0, 
+        help_text='Cantidad disponible en inventario'
+    )
+    alerta_stock_enviada = models.BooleanField(
+        default=False, 
+        help_text='Indica si ya se envió la notificación de stock agotado'
+    )
+    
+    # ⭐⭐⭐ USAR CloudinaryField en lugar de ImageField ⭐⭐⭐
+    imagen = CloudinaryField(
+        'imagen',
+        blank=True,
+        null=True,
+        folder='productos/',  # Carpeta en Cloudinary
+        transformation={
+            'quality': 'auto',
+            'fetch_format': 'auto'
+        }
+    )
+
+    class Meta:
+        verbose_name = 'Producto'
+        verbose_name_plural = 'Productos'
+        ordering = ['-id']
 
     def __str__(self):
         return self.nombre
@@ -42,6 +71,9 @@ class Producto(models.Model):
         return False
 
 
+# ============================================================================
+# OFERTA
+# ============================================================================
 class Oferta(models.Model):
     titulo = models.CharField(max_length=100)
     descripcion = models.TextField()
@@ -49,6 +81,11 @@ class Oferta(models.Model):
     fecha_fin = models.DateField()
     precio_oferta = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     productos = models.ManyToManyField(Producto, related_name="ofertas")
+
+    class Meta:
+        verbose_name = 'Oferta'
+        verbose_name_plural = 'Ofertas'
+        ordering = ['-fecha_inicio']
 
     def __str__(self):
         return f"{self.titulo}"
@@ -59,6 +96,9 @@ class Oferta(models.Model):
         return self.productos.filter(stock__gt=0)
 
 
+# ============================================================================
+# PEDIDO
+# ============================================================================
 class Pedido(models.Model):
     ESTADOS = [
         ('recibido', 'Recibido'),
@@ -71,14 +111,26 @@ class Pedido(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADOS, default='recibido')
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
+    class Meta:
+        verbose_name = 'Pedido'
+        verbose_name_plural = 'Pedidos'
+        ordering = ['-fecha']
+
     def __str__(self):
         return f"Pedido {self.id} - {self.usuario.username}"
 
 
+# ============================================================================
+# DETALLE PEDIDO
+# ============================================================================
 class DetallePedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="detalles")
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
     cantidad = models.PositiveIntegerField()
+
+    class Meta:
+        verbose_name = 'Detalle de Pedido'
+        verbose_name_plural = 'Detalles de Pedidos'
 
     def __str__(self):
         return f"{self.cantidad} x {self.producto.nombre} (Pedido {self.pedido.id})"

@@ -218,30 +218,38 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # ============================================================================
 # CLOUDINARY CONFIGURATION (OBLIGATORIO PARA RAILWAY)
 # ============================================================================
-import cloudinary
-import cloudinary.uploader
-import cloudinary.api
+USE_CLOUDINARY = config('USE_CLOUDINARY', default=True, cast=bool)
 
-CLOUDINARY_CLOUD_NAME = config('CLOUDINARY_CLOUD_NAME')
-CLOUDINARY_API_KEY = config('CLOUDINARY_API_KEY')
-CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET')
+if USE_CLOUDINARY:
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.api
 
-cloudinary.config(
-    cloud_name=CLOUDINARY_CLOUD_NAME,
-    api_key=CLOUDINARY_API_KEY,
-    api_secret=CLOUDINARY_API_SECRET,
-    secure=True
-)
+    # ✅ CORRECTO - Lee desde .env
+    CLOUDINARY_CLOUD_NAME = config('CLOUDINARY_CLOUD_NAME')
+    CLOUDINARY_API_KEY = config('CLOUDINARY_API_KEY')
+    CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET')
 
-# Configurar Cloudinary como storage por defecto
-DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-MEDIA_URL = '/media/'
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True
+    )
 
-print(f"☁️  Cloudinary configurado: {CLOUDINARY_CLOUD_NAME}")
+    # Configurar Cloudinary como storage por defecto
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    MEDIA_URL = '/media/'
+    
+    # Configuración de tamaño máximo de archivos (5MB)
+    DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880
+    FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880
 
-# Configuración de tamaño máximo de archivos (5MB)
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880
+    print(f"\n{'='*60}")
+    print(f"☁️  CLOUDINARY CONFIGURADO")
+    print(f"   Cloud Name: {CLOUDINARY_CLOUD_NAME}")
+    print(f"   Storage: {DEFAULT_FILE_STORAGE}")
+    print(f"{'='*60}\n")
 
 # ============================================================================
 # CLOUDINARY STORAGE SETTINGS
