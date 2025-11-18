@@ -31,6 +31,7 @@ const AdminProducts = () => {
     try {
       const response = await api.get('/productos/');
       const data = response.data.results || response.data;
+      console.log('📦 Productos cargados:', data);
       setProductos(data);
     } catch (error) {
       enqueueSnackbar('Error al cargar productos', { variant: 'error' });
@@ -44,13 +45,11 @@ const AdminProducts = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validar que sea imagen
     if (!file.type.startsWith('image/')) {
       enqueueSnackbar('Por favor selecciona un archivo de imagen válido', { variant: 'error' });
       return;
     }
 
-    // Validar tamaño (máximo 5MB)
     if (file.size > 5 * 1024 * 1024) {
       enqueueSnackbar('La imagen no debe superar los 5MB', { variant: 'error' });
       return;
@@ -58,7 +57,6 @@ const AdminProducts = () => {
 
     setArchivoImagen(file);
 
-    // Crear preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreviewImagen(reader.result);
@@ -69,52 +67,87 @@ const AdminProducts = () => {
   const eliminarImagen = () => {
     setArchivoImagen(null);
     setPreviewImagen(null);
-    setFormData({ ...formData, imagen: '' });
+    // ⭐ Si estamos editando, mantener la URL de la imagen existente
+    if (!editando) {
+      setFormData({ ...formData, imagen: '' });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validaciones
+    if (!formData.nombre.trim()) {
+      enqueueSnackbar('El nombre es requerido', { variant: 'warning' });
+      return;
+    }
+    if (!formData.precio || parseFloat(formData.precio) <= 0) {
+      enqueueSnackbar('El precio debe ser mayor a 0', { variant: 'warning' });
+      return;
+    }
+    if (formData.stock === '' || parseInt(formData.stock) < 0) {
+      enqueueSnackbar('El stock no puede ser negativo', { variant: 'warning' });
+      return;
+    }
+    
     try {
       setSubiendoImagen(true);
 
-      // Crear FormData para enviar archivos
       const formDataToSend = new FormData();
-      formDataToSend.append('nombre', formData.nombre);
-      formDataToSend.append('descripcion', formData.descripcion || '');
+      formDataToSend.append('nombre', formData.nombre.trim());
+      formDataToSend.append('descripcion', formData.descripcion.trim() || '');
       formDataToSend.append('precio', parseFloat(formData.precio));
       formDataToSend.append('stock', parseInt(formData.stock) || 0);
       formDataToSend.append('disponible', formData.disponible);
 
-      // Si hay archivo de imagen nuevo, agregarlo
+      // ⭐ SOLO agregar imagen si hay archivo nuevo
       if (archivoImagen) {
+        console.log('📸 Subiendo nueva imagen:', archivoImagen.name);
         formDataToSend.append('imagen', archivoImagen);
-      } else if (formData.imagen) {
-        // Si hay URL de imagen existente (al editar sin cambiar imagen)
-        formDataToSend.append('imagen_url', formData.imagen);
       }
+      // Si estamos editando y NO hay nueva imagen, Django mantendrá la existente
+
+      // Log para debug
+      console.log('📤 Enviando datos:', {
+        nombre: formData.nombre,
+        precio: formData.precio,
+        stock: formData.stock,
+        tiene_nueva_imagen: !!archivoImagen,
+        editando: !!editando
+      });
 
       if (editando) {
-        await api.put(`/productos/${editando.id}/`, formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+        console.log('🔄 Actualizando producto ID:', editando.id);
+        const response = await api.put(`/productos/${editando.id}/`, formDataToSend, {
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
-        enqueueSnackbar('Producto actualizado exitosamente', { variant: 'success' });
+        console.log('✅ Respuesta del servidor:', response.data);
+        enqueueSnackbar('✅ Producto actualizado exitosamente', { variant: 'success' });
       } else {
-        await api.post('/productos/', formDataToSend, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
+        console.log('➕ Creando nuevo producto');
+        const response = await api.post('/productos/', formDataToSend, {
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
-        enqueueSnackbar('Producto creado exitosamente', { variant: 'success' });
+        console.log('✅ Respuesta del servidor:', response.data);
+        enqueueSnackbar('✅ Producto creado y notificación enviada', { 
+          variant: 'success',
+          autoHideDuration: 4000 
+        });
       }
 
-      cargarProductos();
+      // ⭐ IMPORTANTE: Recargar productos después de guardar
+      await cargarProductos();
       cerrarModal();
     } catch (error) {
-      enqueueSnackbar('Error al guardar producto', { variant: 'error' });
-      console.error('Error detallado:', error.response?.data || error);
+      console.error('❌ Error completo:', error);
+      console.error('❌ Response:', error.response?.data);
+      
+      const errorMsg = error.response?.data?.error 
+        || error.response?.data?.detail
+        || error.response?.data?.imagen?.[0]
+        || 'Error al guardar producto';
+      
+      enqueueSnackbar(errorMsg, { variant: 'error', autoHideDuration: 5000 });
     } finally {
       setSubiendoImagen(false);
     }
@@ -149,6 +182,7 @@ const AdminProducts = () => {
   };
 
   const abrirModalEditar = (producto) => {
+    console.log('📝 Editando producto:', producto);
     setEditando(producto);
     setFormData({
       nombre: producto.nombre,
@@ -156,10 +190,10 @@ const AdminProducts = () => {
       precio: producto.precio,
       stock: producto.stock,
       disponible: producto.disponible,
-      imagen: producto.imagen || ''
+      imagen: producto.imagen || '' // ⭐ Guardar URL de imagen existente
     });
-    setArchivoImagen(null);
-    setPreviewImagen(producto.imagen || null);
+    setArchivoImagen(null); // ⭐ No hay archivo nuevo
+    setPreviewImagen(producto.imagen || null); // ⭐ Mostrar imagen existente
     setModalOpen(true);
   };
 
@@ -277,9 +311,13 @@ const AdminProducts = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <img
-                        src={producto.imagen || 'https://via.placeholder.com/50'}
+                        src={producto.imagen || 'https://via.placeholder.com/50?text=Sin+Imagen'}
                         alt={producto.nombre}
                         className="h-10 w-10 rounded-lg object-cover"
+                        onError={(e) => {
+                          console.error('❌ Error cargando imagen:', producto.imagen);
+                          e.target.src = 'https://via.placeholder.com/50?text=Error';
+                        }}
                       />
                       <div className="ml-4">
                         <div className="text-sm font-medium text-gray-900">
