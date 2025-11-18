@@ -1,14 +1,18 @@
 # Backend/core/serializers.py
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
+from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
 from django.utils import timezone
+from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
 
+
+# ============================================================================
+# USUARIO SERIALIZERS
+# ============================================================================
 
 class UsuarioSerializer(serializers.ModelSerializer):
-    """
-    Serializer para usuarios con información completa
-    """
+    """Serializer para usuarios con información completa"""
     class Meta:
         model = Usuario
         fields = [
@@ -18,18 +22,130 @@ class UsuarioSerializer(serializers.ModelSerializer):
         read_only_fields = ['date_joined', 'is_active']
 
 
+class UsuarioRegistroSerializer(serializers.ModelSerializer):
+    """Serializer para el registro de nuevos usuarios"""
+    password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+        style={'input_type': 'password'},
+        help_text="La contraseña debe tener al menos 8 caracteres"
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        style={'input_type': 'password'},
+        help_text="Repite la contraseña"
+    )
+
+    class Meta:
+        model = Usuario
+        fields = [
+            'username', 'email', 'password', 'password_confirm',
+            'first_name', 'last_name'
+        ]
+        extra_kwargs = {
+            'email': {'required': True},
+            'first_name': {'required': True},
+            'last_name': {'required': True}
+        }
+
+    def validate_username(self, value):
+        """Validar que el username sea único"""
+        if Usuario.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Este nombre de usuario ya está en uso")
+        return value
+
+    def validate_email(self, value):
+        """Validar que el email sea único y válido"""
+        if Usuario.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Este correo electrónico ya está registrado")
+        
+        if '@' not in value or '.' not in value.split('@')[-1]:
+            raise serializers.ValidationError("Ingresa un correo electrónico válido")
+        
+        return value.lower()
+
+    def validate(self, data):
+        """Validar que las contraseñas coincidan"""
+        if data['password'] != data['password_confirm']:
+            raise serializers.ValidationError({
+                'password_confirm': 'Las contraseñas no coinciden'
+            })
+        
+        password = data['password']
+        if len(password) < 8:
+            raise serializers.ValidationError({
+                'password': 'La contraseña debe tener al menos 8 caracteres'
+            })
+        
+        if not any(c.isalpha() for c in password):
+            raise serializers.ValidationError({
+                'password': 'La contraseña debe contener al menos una letra'
+            })
+        
+        if not any(c.isdigit() for c in password):
+            raise serializers.ValidationError({
+                'password': 'La contraseña debe contener al menos un número'
+            })
+        
+        return data
+
+    def create(self, validated_data):
+        """Crear el usuario con la contraseña hasheada"""
+        validated_data.pop('password_confirm')
+        
+        usuario = Usuario.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name'],
+            rol='cliente'
+        )
+        
+        return usuario
+
+
+# ============================================================================
+# PRODUCTO SERIALIZER CON CLOUDINARY
+# ============================================================================
+
 class ProductoSerializer(serializers.ModelSerializer):
     """
-    Serializer para productos con información adicional incluyendo stock
+    Serializer para productos con soporte para Cloudinary
     """
+    # Campo de solo lectura para la URL completa de la imagen
+    imagen_url = serializers.SerializerMethodField(read_only=True)
+    
+    # Campos adicionales
     tiene_oferta = serializers.SerializerMethodField()
     oferta_activa = serializers.SerializerMethodField()
     esta_agotado = serializers.SerializerMethodField()
     
     class Meta:
         model = Producto
-        fields = '__all__'  # 👈 CORREGIDO: era ['__all__'] y debe ser '__all__'
+        fields = [
+            'id', 'nombre', 'descripcion', 'precio', 'disponible', 'stock', 
+            'imagen', 'imagen_url', 'tiene_oferta', 'oferta_activa', 'esta_agotado'
+        ]
         read_only_fields = ['alerta_stock_enviada']
+    
+    def get_imagen_url(self, obj):
+        """
+        Retorna la URL completa de la imagen
+        - En Cloudinary: URL completa desde Cloudinary
+        - En local: URL completa con MEDIA_URL
+        """
+        if obj.imagen:
+            if hasattr(obj.imagen, 'url'):
+                # Cloudinary retorna URL completa automáticamente
+                return obj.imagen.url
+            else:
+                # Fallback para almacenamiento local
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(settings.MEDIA_URL + str(obj.imagen))
+                return settings.MEDIA_URL + str(obj.imagen)
+        return None
     
     def get_tiene_oferta(self, obj):
         """Verifica si el producto tiene una oferta activa"""
@@ -59,32 +175,83 @@ class ProductoSerializer(serializers.ModelSerializer):
         return None
     
     def get_esta_agotado(self, obj):
-        """
-        ⭐ IMPORTANTE: Verifica si el producto está agotado
-        Se usa en el frontend para mostrar el badge
-        """
+        """Verifica si el producto está agotado"""
         return obj.stock == 0
     
     def to_representation(self, instance):
         """
-        Personaliza la representación para debugging
+        Personalizar la representación para incluir imagen_url
         """
         representation = super().to_representation(instance)
         
-        # Log para ver qué se está enviando al frontend
+        # Reemplazar el campo 'imagen' con la URL completa
+        representation['imagen'] = representation.pop('imagen_url', None)
+        
+        # Log para debugging de productos agotados
         if instance.stock == 0:
-            print(f"⚠️  Producto agotado en serializer: {instance.nombre}")
-            print(f"   Stock: {instance.stock}")
-            print(f"   Disponible: {instance.disponible}")
-            print(f"   Esta agotado: {representation['esta_agotado']}")
+            print(f"⚠️  Producto agotado: {instance.nombre} (Stock: {instance.stock})")
         
         return representation
+    
+    def create(self, validated_data):
+        """Crear producto con imagen"""
+        print(f"\n📦 Creando producto: {validated_data.get('nombre')}")
+        
+        imagen = validated_data.get('imagen')
+        if imagen:
+            print(f"📸 Imagen recibida: {imagen.name} ({imagen.size} bytes)")
+        
+        producto = Producto.objects.create(**validated_data)
+        
+        if producto.imagen:
+            print(f"✅ Imagen guardada: {producto.imagen.url}")
+        else:
+            print(f"⚠️ Sin imagen")
+        
+        return producto
+    
+    def update(self, instance, validated_data):
+        """Actualizar producto preservando imagen si no se envía nueva"""
+        print(f"\n🔄 Actualizando producto: {instance.nombre}")
+        
+        # Si no se envía imagen nueva, mantener la existente
+        if 'imagen' not in validated_data and instance.imagen:
+            print(f"📸 Manteniendo imagen existente")
+        elif 'imagen' in validated_data:
+            nueva_imagen = validated_data.get('imagen')
+            if nueva_imagen:
+                print(f"📸 Nueva imagen: {nueva_imagen.name} ({nueva_imagen.size} bytes)")
+                
+                # Eliminar imagen anterior de Cloudinary si existe
+                if instance.imagen and hasattr(settings, 'USE_CLOUDINARY') and settings.USE_CLOUDINARY:
+                    try:
+                        import cloudinary.uploader
+                        # Extraer public_id de la URL
+                        public_id = instance.imagen.public_id if hasattr(instance.imagen, 'public_id') else None
+                        if public_id:
+                            cloudinary.uploader.destroy(public_id)
+                            print(f"🗑️ Imagen anterior eliminada de Cloudinary")
+                    except Exception as e:
+                        print(f"⚠️ Error eliminando imagen anterior: {e}")
+        
+        # Actualizar campos
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        instance.save()
+        
+        if instance.imagen:
+            print(f"✅ Imagen actualizada: {instance.imagen.url}")
+        
+        return instance
 
+
+# ============================================================================
+# OFERTA SERIALIZER
+# ============================================================================
 
 class OfertaSerializer(serializers.ModelSerializer):
-    """
-    Serializer para ofertas con soporte para múltiples productos
-    """
+    """Serializer para ofertas con soporte para múltiples productos"""
     productos = ProductoSerializer(many=True, read_only=True)
     productos_ids = serializers.ListField(
         child=serializers.IntegerField(),
@@ -103,10 +270,7 @@ class OfertaSerializer(serializers.ModelSerializer):
         ]
     
     def get_dias_restantes(self, obj):
-        """
-        Calcula los días restantes de la oferta
-        """
-        # ⭐ PROTEGER: Solo calcular si obj es una instancia, no un dict
+        """Calcula los días restantes de la oferta"""
         if isinstance(obj, dict):
             return None
         
@@ -120,10 +284,7 @@ class OfertaSerializer(serializers.ModelSerializer):
             return None
     
     def get_esta_activa(self, obj):
-        """
-        Verifica si la oferta está activa
-        """
-        # ⭐ PROTEGER: Solo calcular si obj es una instancia, no un dict
+        """Verifica si la oferta está activa"""
         if isinstance(obj, dict):
             return None
         
@@ -134,13 +295,10 @@ class OfertaSerializer(serializers.ModelSerializer):
             return None
     
     def validate_productos_ids(self, value):
-        """
-        Valida que los IDs de productos existan
-        """
+        """Valida que los IDs de productos existan"""
         if not value:
             raise serializers.ValidationError("Debe seleccionar al menos un producto")
         
-        # Verificar que todos los productos existan y estén disponibles
         for prod_id in value:
             if not Producto.objects.filter(id=prod_id).exists():
                 raise serializers.ValidationError(
@@ -150,9 +308,7 @@ class OfertaSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
-        """
-        Validaciones personalizadas
-        """
+        """Validaciones personalizadas"""
         fecha_inicio = data.get('fecha_inicio')
         fecha_fin = data.get('fecha_fin')
         
@@ -162,7 +318,6 @@ class OfertaSerializer(serializers.ModelSerializer):
                     'fecha_fin': 'La fecha de fin debe ser posterior a la fecha de inicio'
                 })
         
-        # Validar que el precio de oferta sea válido
         precio_oferta = data.get('precio_oferta')
         if precio_oferta is not None and precio_oferta <= 0:
             raise serializers.ValidationError({
@@ -172,16 +327,22 @@ class OfertaSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        """
-        Crea la oferta y asocia los productos
-        """
+        """Crea la oferta y asocia los productos"""
         print(f"\n{'='*60}")
         print("🎉 CREANDO NUEVA OFERTA")
         print(f"{'='*60}")
-        print(f"Datos validados: {validated_data}")
         
         productos_ids = validated_data.pop('productos_ids')
         print(f"Productos IDs: {productos_ids}")
+        
+        # Validar que los productos tengan stock
+        productos = Producto.objects.filter(id__in=productos_ids)
+        productos_sin_stock = [p.nombre for p in productos if p.stock == 0]
+        
+        if productos_sin_stock:
+            raise serializers.ValidationError({
+                'error': f'No puedes crear una oferta con productos agotados: {", ".join(productos_sin_stock)}'
+            })
         
         oferta = Oferta.objects.create(**validated_data)
         print(f"✅ Oferta creada: {oferta.titulo} (ID: {oferta.id})")
@@ -193,9 +354,7 @@ class OfertaSerializer(serializers.ModelSerializer):
         return oferta
     
     def update(self, instance, validated_data):
-        """
-        Actualiza la oferta y sus productos
-        """
+        """Actualiza la oferta y sus productos"""
         productos_ids = validated_data.pop('productos_ids', None)
         
         # Actualizar campos básicos
@@ -205,21 +364,25 @@ class OfertaSerializer(serializers.ModelSerializer):
         
         # Actualizar productos si se proporcionaron
         if productos_ids is not None:
+            productos = Producto.objects.filter(id__in=productos_ids)
+            productos_sin_stock = [p.nombre for p in productos if p.stock == 0]
+            
+            if productos_sin_stock:
+                raise serializers.ValidationError({
+                    'error': f'No puedes actualizar con productos agotados: {", ".join(productos_sin_stock)}'
+                })
+            
             instance.productos.set(productos_ids)
         
         return instance
     
     def to_representation(self, instance):
-        """
-        Personaliza la representación para incluir productos_ids
-        """
-        # ⭐ PROTEGER: Solo si instance es un objeto del modelo
+        """Personaliza la representación para incluir productos_ids"""
         if isinstance(instance, dict):
             return instance
         
         representation = super().to_representation(instance)
         
-        # Agregar lista de IDs para facilitar edición en frontend
         try:
             representation['productos_ids'] = list(
                 instance.productos.values_list('id', flat=True)
@@ -230,10 +393,12 @@ class OfertaSerializer(serializers.ModelSerializer):
         return representation
 
 
+# ============================================================================
+# PEDIDO SERIALIZERS
+# ============================================================================
+
 class DetallePedidoSerializer(serializers.ModelSerializer):
-    """
-    Serializer para detalles de pedido con información del producto
-    """
+    """Serializer para detalles de pedido con información del producto"""
     producto = ProductoSerializer(read_only=True)
     producto_id = serializers.PrimaryKeyRelatedField(
         queryset=Producto.objects.all(), 
@@ -248,27 +413,23 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         decimal_places=2
     )
     precio_total = serializers.SerializerMethodField()
-    es_oferta = serializers.SerializerMethodField()  # NUEVO
+    es_oferta = serializers.SerializerMethodField()
 
     class Meta:
         model = DetallePedido
         fields = [
             'id', 'pedido', 'producto', 'producto_id', 
             'producto_nombre', 'cantidad', 'precio_unitario', 'precio_total',
-            'es_oferta'  # NUEVO
+            'es_oferta'
         ]
         read_only_fields = ['id', 'pedido']
     
     def get_precio_total(self, obj):
-        """
-        Calcula el precio total del detalle
-        """
+        """Calcula el precio total del detalle"""
         return obj.producto.precio * obj.cantidad
     
     def get_es_oferta(self, obj):
-        """
-        Verifica si el producto tiene una oferta activa
-        """
+        """Verifica si el producto tiene una oferta activa"""
         hoy = timezone.now().date()
         return obj.producto.ofertas.filter(
             fecha_inicio__lte=hoy,
@@ -277,36 +438,30 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
 
 
 class PedidoSerializer(serializers.ModelSerializer):
-    """
-    Serializer para pedidos con detalles completos (SOLO LECTURA)
-    """
+    """Serializer para pedidos con detalles completos (SOLO LECTURA)"""
     detalles = DetallePedidoSerializer(many=True, read_only=True)
     usuario = UsuarioSerializer(read_only=True)
     usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
     cantidad_items = serializers.SerializerMethodField()
     tiempo_transcurrido = serializers.SerializerMethodField()
-    es_oferta = serializers.SerializerMethodField()  # NUEVO
+    es_oferta = serializers.SerializerMethodField()
 
     class Meta:
         model = Pedido
         fields = [
             'id', 'usuario', 'usuario_nombre', 'fecha', 'estado', 
             'estado_display', 'detalles', 'total', 
-            'cantidad_items', 'tiempo_transcurrido', 'es_oferta'  # NUEVO
+            'cantidad_items', 'tiempo_transcurrido', 'es_oferta'
         ]
         read_only_fields = ['id', 'fecha', 'usuario', 'total']
     
     def get_cantidad_items(self, obj):
-        """
-        Cuenta la cantidad total de items en el pedido
-        """
+        """Cuenta la cantidad total de items en el pedido"""
         return sum(detalle.cantidad for detalle in obj.detalles.all())
     
     def get_tiempo_transcurrido(self, obj):
-        """
-        Calcula el tiempo transcurrido desde que se hizo el pedido
-        """
+        """Calcula el tiempo transcurrido desde que se hizo el pedido"""
         ahora = timezone.now()
         delta = ahora - obj.fecha
         
@@ -322,9 +477,7 @@ class PedidoSerializer(serializers.ModelSerializer):
             return "Hace un momento"
     
     def get_es_oferta(self, obj):
-        """
-        Verifica si el pedido contiene al menos un producto de oferta
-        """
+        """Verifica si el pedido contiene al menos un producto de oferta"""
         hoy = timezone.now().date()
         for detalle in obj.detalles.all():
             if detalle.producto.ofertas.filter(
@@ -336,9 +489,7 @@ class PedidoSerializer(serializers.ModelSerializer):
 
 
 class PedidoCreateSerializer(serializers.Serializer):
-    """
-    Serializer específico para crear pedidos desde el frontend
-    """
+    """Serializer específico para crear pedidos desde el frontend"""
     items = serializers.ListField(
         child=serializers.DictField(),
         allow_empty=False,
@@ -346,9 +497,7 @@ class PedidoCreateSerializer(serializers.Serializer):
     )
     
     def validate_items(self, items):
-        """
-        Valida la estructura de los items
-        """
+        """Valida la estructura de los items"""
         if not items:
             raise serializers.ValidationError("Debe incluir al menos un producto")
             
@@ -361,7 +510,6 @@ class PedidoCreateSerializer(serializers.Serializer):
             if not isinstance(item['cantidad'], int) or item['cantidad'] < 1:
                 raise serializers.ValidationError("La cantidad debe ser un entero mayor a 0")
             
-            # Validar que el producto existe y está disponible
             try:
                 producto = Producto.objects.get(id=item['producto'])
                 if not producto.disponible:
@@ -376,20 +524,16 @@ class PedidoCreateSerializer(serializers.Serializer):
         return items
     
     def create(self, validated_data):
-        """
-        Crea el pedido con sus detalles
-        """
+        """Crea el pedido con sus detalles"""
         items_data = validated_data.pop('items')
         usuario = self.context['request'].user
         
-        # Crear pedido
         pedido = Pedido.objects.create(
             usuario=usuario,
             estado='recibido',
-            total=0  # Se calculará después
+            total=0
         )
         
-        # Crear detalles y calcular total
         total = 0
         for item in items_data:
             producto = Producto.objects.get(id=item['producto'])
@@ -403,133 +547,23 @@ class PedidoCreateSerializer(serializers.Serializer):
             
             total += producto.precio * cantidad
         
-        # Actualizar total
         pedido.total = total
         pedido.save()
         
         return pedido
     
     def to_representation(self, instance):
-        """
-        Retorna la representación completa del pedido creado
-        """
+        """Retorna la representación completa del pedido creado"""
         return PedidoSerializer(instance, context=self.context).data
-    
 
-class UsuarioRegistroSerializer(serializers.ModelSerializer):
-    """
-    Serializer para el registro de nuevos usuarios
-    """
-    password = serializers.CharField(
-        write_only=True,
-        min_length=8,
-        style={'input_type': 'password'},
-        help_text="La contraseña debe tener al menos 8 caracteres"
-    )
-    password_confirm = serializers.CharField(
-        write_only=True,
-        style={'input_type': 'password'},
-        help_text="Repite la contraseña"
-    )
 
-    class Meta:
-        model = Usuario
-        fields = [
-            'username', 'email', 'password', 'password_confirm',
-            'first_name', 'last_name'
-        ]
-        extra_kwargs = {
-            'email': {'required': True},
-            'first_name': {'required': True},
-            'last_name': {'required': True}
-        }
-
-    def validate_username(self, value):
-        """
-        Validar que el username sea único
-        """
-        if Usuario.objects.filter(username=value).exists():
-            raise serializers.ValidationError(
-                "Este nombre de usuario ya está en uso"
-            )
-        return value
-
-    def validate_email(self, value):
-        """
-        Validar que el email sea único y válido
-        """
-        if Usuario.objects.filter(email=value).exists():
-            raise serializers.ValidationError(
-                "Este correo electrónico ya está registrado"
-            )
-        
-        # Validación adicional del formato de email
-        if '@' not in value or '.' not in value.split('@')[-1]:
-            raise serializers.ValidationError(
-                "Ingresa un correo electrónico válido"
-            )
-        
-        return value.lower()
-
-    def validate(self, data):
-        """
-        Validar que las contraseñas coincidan
-        """
-        if data['password'] != data['password_confirm']:
-            raise serializers.ValidationError({
-                'password_confirm': 'Las contraseñas no coinciden'
-            })
-        
-        # Validación adicional de contraseña
-        password = data['password']
-        if len(password) < 8:
-            raise serializers.ValidationError({
-                'password': 'La contraseña debe tener al menos 8 caracteres'
-            })
-        
-        # Verificar que tenga al menos una letra y un número
-        if not any(c.isalpha() for c in password):
-            raise serializers.ValidationError({
-                'password': 'La contraseña debe contener al menos una letra'
-            })
-        
-        if not any(c.isdigit() for c in password):
-            raise serializers.ValidationError({
-                'password': 'La contraseña debe contener al menos un número'
-            })
-        
-        return data
-
-    def create(self, validated_data):
-        """
-        Crear el usuario con la contraseña hasheada
-        """
-        # Remover password_confirm
-        validated_data.pop('password_confirm')
-        
-        # Crear usuario
-        usuario = Usuario.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name'],
-            rol='cliente'  # Por defecto todos los registrados son clientes
-        )
-        
-        return usuario
-    
-
-    
 # ============================================================================
-# CUSTOM JWT SERIALIZER - DEBE IR AL FINAL
+# CUSTOM JWT SERIALIZER
 # ============================================================================
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """
-    Serializer personalizado que permite login con username O email
-    """
-    username_field = 'username'  # Campo que espera el frontend
+    """Serializer personalizado que permite login con username O email"""
+    username_field = 'username'
     
     @classmethod
     def get_token(cls, user):
@@ -545,25 +579,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
     
     def validate(self, attrs):
-        """
-        Permite autenticación con username o email
-        """
-        from core.models import Usuario
+        """Permite autenticación con username o email"""
         from django.contrib.auth import authenticate
         
-        # El frontend envía el campo como 'username'
         username_or_email = attrs.get('username')
         password = attrs.get('password')
         
         print(f"\n{'='*60}")
-        print(f"🔐 INTENTO DE LOGIN")
+        print(f"🔐 INTENTO DE LOGIN: {username_or_email}")
         print(f"{'='*60}")
-        print(f"Username/Email recibido: {username_or_email}")
         
-        # Intentar encontrar el usuario
-        user = None
-        
-        # Primero intentar por username
+        # Intentar por username
         user = authenticate(
             request=self.context.get('request'),
             username=username_or_email,
@@ -573,12 +599,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if user:
             print(f"✅ Login exitoso por USERNAME: {user.username}")
         
-        # Si no funciona, intentar buscar por email
+        # Si no funciona, intentar por email
         if not user:
             try:
                 print(f"🔍 Buscando por email...")
                 usuario_obj = Usuario.objects.get(email=username_or_email.lower())
-                print(f"✅ Usuario encontrado por email: {usuario_obj.username}")
+                print(f"✅ Usuario encontrado: {usuario_obj.username}")
                 
                 user = authenticate(
                     request=self.context.get('request'),
@@ -594,7 +620,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             except Usuario.DoesNotExist:
                 print(f"❌ No existe usuario con email: {username_or_email}")
         
-        # Si aún no hay usuario, error
         if not user:
             print(f"❌ Login fallido")
             print(f"{'='*60}\n")
@@ -603,7 +628,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 code='authorization'
             )
         
-        # Verificar que el usuario esté activo
         if not user.is_active:
             print(f"⚠️ Usuario inactivo: {user.username}")
             print(f"{'='*60}\n")
@@ -612,14 +636,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 code='authorization'
             )
         
-        print(f"✅ Login completado exitosamente")
-        print(f"   ID: {user.id}")
-        print(f"   Username: {user.username}")
-        print(f"   Email: {user.email}")
-        print(f"   Rol: {user.rol}")
+        print(f"✅ Login completado: {user.username} (Rol: {user.rol})")
         print(f"{'='*60}\n")
         
-        # Generar tokens usando el método padre
         refresh = self.get_token(user)
         
         data = {

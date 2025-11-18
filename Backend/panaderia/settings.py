@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 from decouple import config, Csv
 import dj_database_url
+from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -36,6 +37,17 @@ INSTALLED_APPS = [
 ]
 
 SITE_ID = 1
+
+# JWT CONFIGURATION
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -85,7 +97,6 @@ WSGI_APPLICATION = 'panaderia.wsgi.application'
 DATABASE_URL = config('DATABASE_URL', default=None)
 
 if DATABASE_URL:
-    # Producción (Railway/Render)
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
@@ -94,7 +105,6 @@ if DATABASE_URL:
         )
     }
 else:
-    # Desarrollo local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -122,26 +132,34 @@ AUTH_USER_MODEL = 'core.Usuario'
 
 # CORS CONFIGURATION
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:5173,http://127.0.0.1:5173', cast=Csv())
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS', 
+    default='http://localhost:5173,http://127.0.0.1:5173', 
+    cast=Csv()
+)
 CORS_ALLOW_CREDENTIALS = True
 
-# Permitir todos los orígenes en desarrollo
+# ⭐ En desarrollo, permitir todos los orígenes
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
+    print("⚠️ CORS: Permitiendo todos los orígenes (DEBUG=True)")
+
+# CSRF TRUSTED ORIGINS
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS', 
+    default='http://localhost:5173,http://127.0.0.1:5173', 
+    cast=Csv()
+)
 
 # CONFIGURACIÓN DE ARCHIVOS ESTÁTICOS
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# ============================================================================
 # CONFIGURACIÓN DE ARCHIVOS MEDIA (IMÁGENES)
-# ============================================================================
-
 USE_CLOUDINARY = config('USE_CLOUDINARY', default=not DEBUG, cast=bool)
 
 if USE_CLOUDINARY:
-    # PRODUCCIÓN: Usar Cloudinary
     import cloudinary
     import cloudinary.uploader
     import cloudinary.api
@@ -154,16 +172,13 @@ if USE_CLOUDINARY:
     )
 
     DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    MEDIA_URL = '/media/'
     
-    MEDIA_URL = '/media/'  # URL base para acceder a las imágenes
-    
-    print(f"☁️  Usando Cloudinary para almacenamiento de imágenes")
-    print(f"☁️  Cloud Name: {config('CLOUDINARY_CLOUD_NAME', default='No configurado')}")
+    print(f"☁️  Usando Cloudinary: {config('CLOUDINARY_CLOUD_NAME', default='No configurado')}")
 else:
-    # DESARROLLO: Usar almacenamiento local
     MEDIA_URL = '/media/'
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-    print(f"💾 Usando almacenamiento local para imágenes: {MEDIA_ROOT}")
+    print(f"💾 Almacenamiento local: {MEDIA_ROOT}")
 
 # ALLAUTH & SOCIAL AUTH
 ACCOUNT_ADAPTER = "core.adapters.FrontendRedirectAccountAdapter"
@@ -188,92 +203,12 @@ DEFAULT_FROM_EMAIL = f'Panadería Santa Clara <{EMAIL_HOST_USER}>'
 SERVER_EMAIL = EMAIL_HOST_USER
 EMAIL_TIMEOUT = 30
 
-# CONFIGURACIONES DE SEGURIDAD PARA PRODUCCIÓN
-if not DEBUG:
-    # Detectar si estamos en Railway
-    IS_RAILWAY = config('RAILWAY_ENVIRONMENT', default=None) is not None
-    
-    if IS_RAILWAY:
-        # Railway ya maneja SSL/TLS
-        SECURE_SSL_REDIRECT = False
-        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-    else:
-        # Otros servicios
-        SECURE_SSL_REDIRECT = True
-    
-    # Cookies seguras
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    
-    # Headers de seguridad
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
-
-# CSRF TRUSTED ORIGINS
-CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='http://localhost:5173', cast=Csv())
-
-LANGUAGE_CODE = 'es'
-TIME_ZONE = 'America/Costa_Rica'
-USE_I18N = True
-USE_TZ = True
-
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Logging para producción
-if not DEBUG:
-    LOGGING = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'handlers': {
-            'console': {
-                'class': 'logging.StreamHandler',
-            },
-        },
-        'root': {
-            'handlers': ['console'],
-            'level': 'INFO',
-        },
-    }
-
-print(f"\n{'='*60}")
-print(f"🚀 MODO: {'DESARROLLO' if DEBUG else 'PRODUCCIÓN'}")
-print(f"📧 Email: {EMAIL_HOST_USER}")
-print(f"🌐 Frontend URL: {FRONTEND_URL}")
-print(f"🗄️  Database: {'PostgreSQL (Railway)' if DATABASE_URL else 'PostgreSQL (Local)'}")
-print(f"{'='*60}\n")
-
-# JWT CONFIGURATION
-from datetime import timedelta
-
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # Era 5 minutos, ahora 24 horas
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),   # 7 días
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-}
-
-# EMAIL CONFIGURATION CON LOGGING
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_USE_SSL = False
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='panaderiasantaclara01@gmail.com')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = f'Panadería Santa Clara <{EMAIL_HOST_USER}>'
-SERVER_EMAIL = EMAIL_HOST_USER
-EMAIL_TIMEOUT = 30
-
-# Si EMAIL_HOST_PASSWORD está vacío, usar console backend en desarrollo
+# Si no hay password, usar console backend en desarrollo
 if not EMAIL_HOST_PASSWORD and DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    print("⚠️ EMAIL_HOST_PASSWORD no configurado, usando console backend")
+    print("⚠️ EMAIL: Usando console backend (sin password configurado)")
 
-# Logging mejorado para emails
+# LOGGING
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -288,10 +223,6 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
-        'mail_admins': {
-            'level': 'ERROR',
-            'class': 'django.utils.log.AdminEmailHandler',
-        }
     },
     'loggers': {
         'django': {
@@ -316,9 +247,35 @@ LOGGING = {
     },
 }
 
+# CONFIGURACIONES DE SEGURIDAD PARA PRODUCCIÓN
+if not DEBUG:
+    IS_RAILWAY = config('RAILWAY_ENVIRONMENT', default=None) is not None
+    
+    if IS_RAILWAY:
+        SECURE_SSL_REDIRECT = False
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    else:
+        SECURE_SSL_REDIRECT = True
+    
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+
+LANGUAGE_CODE = 'es'
+TIME_ZONE = 'America/Costa_Rica'
+USE_I18N = True
+USE_TZ = True
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# RESUMEN DE CONFIGURACIÓN
 print(f"\n{'='*60}")
-print(f"📧 Email Backend: {EMAIL_BACKEND}")
-print(f"📧 Email Host: {EMAIL_HOST}:{EMAIL_PORT}")
-print(f"📧 Email User: {EMAIL_HOST_USER}")
-print(f"📧 Email Password Configured: {'✅ Yes' if EMAIL_HOST_PASSWORD else '❌ No'}")
+print(f"🚀 MODO: {'DESARROLLO' if DEBUG else 'PRODUCCIÓN'}")
+print(f"📧 Email: {EMAIL_HOST_USER}")
+print(f"📧 Password: {'✅ Configurado' if EMAIL_HOST_PASSWORD else '❌ No configurado'}")
+print(f"🌐 Frontend: {FRONTEND_URL}")
+print(f"🗄️  Database: {'PostgreSQL (Railway)' if DATABASE_URL else 'PostgreSQL (Local)'}")
+print(f"☁️  Cloudinary: {'✅ Habilitado' if USE_CLOUDINARY else '❌ Deshabilitado'}")
 print(f"{'='*60}\n")

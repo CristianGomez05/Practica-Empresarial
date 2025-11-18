@@ -1,14 +1,16 @@
 // Frontend/src/pages/admin/AdminOffersPanel.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaBox } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
+import useSmartRefresh from '../../hooks/useAutoRefresh';
 
 export default function AdminOffersPanel() {
   const [offers, setOffers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [offerToDelete, setOfferToDelete] = useState(null);
@@ -23,25 +25,42 @@ export default function AdminOffersPanel() {
   });
   const { enqueueSnackbar } = useSnackbar();
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
+      if (!loading) setRefreshing(true);
+      
       const [offersRes, productsRes] = await Promise.all([
         api.get('/ofertas/'),
         api.get('/productos/')
       ]);
+      
       setOffers(offersRes.data.results || offersRes.data);
       setProducts(productsRes.data.results || productsRes.data);
+      
+      if (refreshing) {
+        enqueueSnackbar('Datos actualizados', { variant: 'info', autoHideDuration: 2000 });
+      }
     } catch (error) {
       console.error('Error cargando datos:', error);
-      enqueueSnackbar('Error al cargar datos', { variant: 'error' });
+      if (!loading) {
+        enqueueSnackbar('Error al cargar datos', { variant: 'error' });
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [loading, refreshing, enqueueSnackbar]);
+
+  // Auto-refresh cada 30 segundos + refresh al volver a la pestaña
+  useSmartRefresh(fetchData, {
+    interval: 30000,
+    enabled: !showModal && !showDeleteModal, // No refrescar si hay modal abierto
+    refreshOnFocus: true
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const formatDateForInput = (dateString) => {
     if (!dateString) return '';
@@ -101,7 +120,7 @@ export default function AdminOffersPanel() {
   };
 
   const handleSubmit = async () => {
-    // Validaciones básicas
+    // Validaciones
     if (!formData.titulo.trim()) {
       enqueueSnackbar('El título es requerido', { variant: 'warning' });
       return;
@@ -115,7 +134,7 @@ export default function AdminOffersPanel() {
       return;
     }
 
-    // ⭐ VALIDACIÓN DE STOCK
+    // Validar stock
     const productosSeleccionados = products.filter(p => formData.productos_ids.includes(p.id));
     const productosAgotados = productosSeleccionados.filter(p => p.stock === 0);
     
@@ -157,7 +176,7 @@ export default function AdminOffersPanel() {
         });
       }
       
-      fetchData();
+      await fetchData();
       handleCloseModal();
     } catch (error) {
       console.error('Error guardando oferta:', error);
@@ -178,7 +197,7 @@ export default function AdminOffersPanel() {
     try {
       await api.delete(`/ofertas/${offerToDelete.id}/`);
       enqueueSnackbar('Oferta eliminada exitosamente', { variant: 'success' });
-      fetchData();
+      await fetchData();
       setShowDeleteModal(false);
       setOfferToDelete(null);
     } catch (error) {
@@ -189,8 +208,6 @@ export default function AdminOffersPanel() {
 
   const getEstadoOferta = (oferta) => {
     const hoy = new Date().toISOString().split('T')[0];
-    
-    // ⭐ Verificar si tiene productos agotados
     const offerProducts = getOfferProducts(oferta);
     const tieneAgotados = offerProducts.some(p => p.stock === 0);
     
@@ -204,23 +221,11 @@ export default function AdminOffersPanel() {
     }
     
     if (oferta.fecha_inicio > hoy) {
-      return { 
-        text: 'Próxima', 
-        bg: 'bg-blue-100', 
-        textColor: 'text-blue-700' 
-      };
+      return { text: 'Próxima', bg: 'bg-blue-100', textColor: 'text-blue-700' };
     } else if (oferta.fecha_fin < hoy) {
-      return { 
-        text: 'Expirada', 
-        bg: 'bg-gray-100', 
-        textColor: 'text-gray-700' 
-      };
+      return { text: 'Expirada', bg: 'bg-gray-100', textColor: 'text-gray-700' };
     } else {
-      return { 
-        text: 'Activa', 
-        bg: 'bg-green-100', 
-        textColor: 'text-green-700' 
-      };
+      return { text: 'Activa', bg: 'bg-green-100', textColor: 'text-green-700' };
     }
   };
 
@@ -256,13 +261,25 @@ export default function AdminOffersPanel() {
             <p className="text-[#8D6E63]">{offers.length} ofertas registradas</p>
           </div>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
-        >
-          <FaPlus />
-          Nueva Oferta
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchData}
+            disabled={refreshing}
+            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-amber-500 transition-all ${
+              refreshing ? 'animate-spin' : ''
+            }`}
+            title="Actualizar datos"
+          >
+            <FaSync className="text-gray-600" />
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
+          >
+            <FaPlus />
+            Nueva Oferta
+          </button>
+        </div>
       </div>
 
       {/* Offers Grid */}

@@ -1,40 +1,39 @@
-# panaderia/urls.py
+# Backend/panaderia/urls.py
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 
-# Swagger configuration
 schema_view = get_schema_view(
-    openapi.Info(
-        title="Panadería Santa Clara API",
-        default_version='v1',
-        description="API para gestión de panadería",
-        contact=openapi.Contact(email="contacto@santaclara.com"),
-    ),
-    public=True,
-    permission_classes=(permissions.AllowAny,),
+   openapi.Info(
+      title="Panadería API",
+      default_version='v1',
+      description="API para sistema de panadería",
+      contact=openapi.Contact(email="contact@panaderia.com"),
+   ),
+   public=True,
+   permission_classes=(permissions.AllowAny,),
 )
 
 urlpatterns = [
-
-    # Admin panel
     path('admin/', admin.site.urls),
-    
-    # API Documentation (Swagger)
-    path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    
-    # API endpoints (core app)
     path('api/', include('core.urls')),
-    
-    # Authentication (Google OAuth)
     path('accounts/', include('allauth.urls')),
+    path('api/auth/', include('dj_rest_auth.urls')),
+    path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    
+    # Documentación Swagger
+    re_path(r'^swagger(?P<format>\.json|\.yaml)$', schema_view.without_ui(cache_timeout=0), name='schema-json'),
+    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 ]
 
-# Servir archivos media en desarrollo
+# ⭐ IMPORTANTE: Servir archivos media en desarrollo
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    print(f"📁 Sirviendo archivos media desde: {settings.MEDIA_ROOT}")
+
+# En producción con Cloudinary, esto no es necesario
