@@ -6,7 +6,8 @@ from .email_templates import (
     template_nuevo_producto,
     template_nueva_oferta,
     template_confirmacion_pedido,
-    template_actualizacion_estado
+    template_actualizacion_estado,
+    template_alerta_sin_stock
 )
 import logging
 
@@ -80,8 +81,7 @@ def enviar_notificacion_nuevo_producto(producto_id):
         asunto = f"🥐 Nuevo Producto: {producto.nombre}"
         
         # Usar template profesional
-        html_content = template_nuevo_producto(producto)
-        html_content = html_content.replace('{{url_productos}}', URL_PRODUCTOS_CLIENTE)
+        html_content = template_nuevo_producto(producto, URL_PRODUCTOS_CLIENTE)
         
         text_content = f"""
         ¡Nuevo Producto Disponible!
@@ -128,8 +128,7 @@ def enviar_notificacion_oferta(oferta_id):
         asunto = f"🎉 Nueva Oferta: {oferta.titulo}"
         
         # Usar template profesional
-        html_content = template_nueva_oferta(oferta)
-        html_content = html_content.replace('{{url_ofertas}}', URL_OFERTAS_CLIENTE)
+        html_content = template_nueva_oferta(oferta, URL_OFERTAS_CLIENTE)
         
         productos_texto = "\n".join([f"  - {p.nombre} (₡{p.precio:,.2f})" for p in oferta.productos.all()])
         
@@ -172,8 +171,7 @@ def enviar_confirmacion_pedido(pedido_id):
             asunto = f"✅ Confirmación de Pedido #{pedido.id}"
             
             # Usar template profesional
-            html_content = template_confirmacion_pedido(pedido)
-            html_content = html_content.replace('{{url_pedidos}}', URL_PEDIDOS_CLIENTE)
+            html_content = template_confirmacion_pedido(pedido, URL_PEDIDOS_CLIENTE)
             
             productos_texto = "\n".join([
                 f"  - {d.producto.nombre} x{d.cantidad} = ₡{d.producto.precio * d.cantidad:,.2f}"
@@ -244,7 +242,12 @@ def enviar_alerta_sin_stock(producto_id):
     try:
         producto = Producto.objects.get(id=producto_id)
         
-        admins = Usuario.objects.filter(rol='administrador', is_active=True, email__isnull=False).exclude(email='')
+        admins = Usuario.objects.filter(
+            rol='administrador', 
+            is_active=True, 
+            email__isnull=False
+        ).exclude(email='')
+        
         destinatarios = [admin.email for admin in admins if admin.email]
         
         if not destinatarios:
@@ -253,32 +256,37 @@ def enviar_alerta_sin_stock(producto_id):
         
         asunto = f"⚠️ ALERTA: Sin Stock - {producto.nombre}"
         
-        imagen_url = producto.imagen.url if producto.imagen else "https://via.placeholder.com/400x250?text=Sin+Imagen"
+        # ⭐ Usar template profesional con botón funcional
+        html_content = template_alerta_sin_stock(producto, URL_ADMIN_PRODUCTOS)
         
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f3f4f6;">
-            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; border-left: 4px solid #dc2626;">
-                <h1 style="color: #dc2626;">⚠️ Producto Agotado</h1>
-                <img src="{imagen_url}" alt="{producto.nombre}" style="width: 100%; max-width: 400px; border-radius: 10px; margin: 20px 0;">
-                <h2>{producto.nombre}</h2>
-                <p style="color: #6b7280;">El producto se ha quedado sin stock.</p>
-                <p><strong>Precio:</strong> ₡{producto.precio:,.2f}</p>
-                <div style="text-align: center; margin-top: 30px;">
-                    <a href="{URL_ADMIN_PRODUCTOS}" style="display: inline-block; padding: 14px 32px; background: #dc2626; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                        Gestionar Inventario
-                    </a>
-                </div>
-            </div>
-        </body>
-        </html>
+        text_content = f"""
+        ⚠️ ALERTA DE INVENTARIO
+        
+        Producto sin stock: {producto.nombre}
+        {producto.descripcion or ''}
+        
+        Stock Actual: 0
+        Precio: ₡{producto.precio:,.2f}
+        Estado: 🔴 AGOTADO
+        
+        ACCIÓN REQUERIDA:
+        - Verificar stock físico en bodega
+        - Actualizar cantidad disponible
+        - Evaluar demanda del producto
+        - Coordinar con proveedores si es necesario
+        
+        Gestionar inventario: {URL_ADMIN_PRODUCTOS}
+        
+        ---
+        Panadería Santa Clara
+        Sistema de Gestión de Inventario
         """
-        
-        text_content = f"ALERTA: {producto.nombre} sin stock. Gestionar: {URL_ADMIN_PRODUCTOS}"
         
         return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
         
+    except Producto.DoesNotExist:
+        logger.error(f"❌ Producto {producto_id} no encontrado")
+        return False
     except Exception as e:
         logger.error(f"❌ Error en enviar_alerta_sin_stock: {str(e)}")
         return False
@@ -303,8 +311,7 @@ def enviar_actualizacion_estado(pedido_id):
         asunto = f"{emoji} Actualización de Pedido #{pedido.id}"
         
         # Usar template profesional
-        html_content = template_actualizacion_estado(pedido)
-        html_content = html_content.replace('{{url_pedidos}}', URL_PEDIDOS_CLIENTE)
+        html_content = template_actualizacion_estado(pedido, URL_PEDIDOS_CLIENTE)
         
         text_content = f"""
         Actualización de Pedido
