@@ -574,3 +574,126 @@ def template_alerta_sin_stock(producto, url_admin_productos):
     """
     
     return get_base_template(content)
+
+def template_notificacion_pedido_admin(pedido, url_admin_pedidos):
+    """
+    Template para notificación de nuevo pedido a administradores
+    """
+    # Construir lista de productos del pedido
+    productos_html = ""
+    for detalle in pedido.detalles.all():
+        imagen_url = detalle.producto.imagen.url if detalle.producto.imagen else "https://via.placeholder.com/80x80?text=Sin+Imagen"
+        subtotal = detalle.producto.precio * detalle.cantidad
+        productos_html += f"""
+        <tr>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
+                <img src="{imagen_url}" alt="{detalle.producto.nombre}" 
+                     style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; vertical-align: middle;">
+            </td>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #111827;">
+                {detalle.producto.nombre}
+            </td>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: center; color: #6b7280;">
+                x{detalle.cantidad}
+            </td>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600; color: #111827;">
+                ₡{subtotal:,.2f}
+            </td>
+        </tr>
+        """
+    
+    # Información del cliente
+    cliente_nombre = pedido.usuario.get_full_name() or pedido.usuario.username
+    cliente_email = pedido.usuario.email or "No proporcionado"
+    cliente_usuario = pedido.usuario.username
+    
+    content = f"""
+    <div class="header" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+        <h1>🔔 Nuevo Pedido Recibido</h1>
+        <p class="subtitle">Pedido #{pedido.id}</p>
+    </div>
+    <div class="content">
+        <p class="greeting">¡Hola Administrador!</p>
+        <p style="font-size: 16px; color: #6b7280; margin-bottom: 30px;">
+            Se ha recibido un nuevo pedido que requiere tu atención:
+        </p>
+        
+        <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-left: 4px solid #f59e0b; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #111827; margin-top: 0; font-size: 18px; margin-bottom: 15px;">📋 Información del Cliente</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                <div style="flex: 1; min-width: 200px;">
+                    <p style="color: #6b7280; font-size: 14px; margin: 0;">Nombre Completo</p>
+                    <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 5px 0;">{cliente_nombre}</p>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <p style="color: #6b7280; font-size: 14px; margin: 0;">Usuario</p>
+                    <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 5px 0;">{cliente_usuario}</p>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <p style="color: #6b7280; font-size: 14px; margin: 0;">Email de Contacto</p>
+                <p style="color: #f59e0b; font-size: 16px; font-weight: 600; margin: 5px 0;">
+                    <a href="mailto:{cliente_email}" style="color: #f59e0b; text-decoration: none;">{cliente_email}</a>
+                </p>
+            </div>
+        </div>
+        
+        <div class="product-card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left-color: #10b981;">
+            <h3 style="color: #111827; margin-bottom: 20px; font-size: 18px;">🛒 Detalles del Pedido</h3>
+            
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background-color: rgba(16, 185, 129, 0.1);">
+                        <th style="padding: 12px; text-align: left; font-size: 14px; color: #6b7280;">Imagen</th>
+                        <th style="padding: 12px; text-align: left; font-size: 14px; color: #6b7280;">Producto</th>
+                        <th style="padding: 12px; text-align: center; font-size: 14px; color: #6b7280;">Cant.</th>
+                        <th style="padding: 12px; text-align: right; font-size: 14px; color: #6b7280;">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {productos_html}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="3" style="padding: 20px 15px; text-align: right; font-weight: 700; font-size: 18px; color: #111827;">
+                            TOTAL:
+                        </td>
+                        <td style="padding: 20px 15px; text-align: right; font-weight: 700; font-size: 28px; color: #10b981;">
+                            ₡{pedido.total:,.2f}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <div style="margin-top: 20px; padding: 15px; background-color: rgba(245, 158, 11, 0.1); border-radius: 8px; text-align: center;">
+                <p style="font-size: 14px; color: #d97706; margin: 0;">
+                    <strong>Estado Actual:</strong> {pedido.get_estado_display()}
+                </p>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <a href="{url_admin_pedidos}" class="button" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);">
+                Gestionar Pedido
+            </a>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div style="background-color: #fff7ed; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+            <h3 style="color: #f59e0b; margin-top: 0; font-size: 16px;">⚡ Próximos Pasos:</h3>
+            <ul style="color: #6b7280; margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                <li>Verificar disponibilidad de productos</li>
+                <li>Confirmar el pedido con el cliente si es necesario</li>
+                <li>Actualizar el estado del pedido según avance la preparación</li>
+                <li>Notificar al cliente cuando esté listo para entrega</li>
+            </ul>
+        </div>
+        
+        <p style="text-align: center; color: #6b7280; margin-top: 30px; font-size: 14px;">
+            Este email fue enviado automáticamente por el sistema de gestión de pedidos.
+        </p>
+    </div>
+    """
+    
+    return get_base_template(content)

@@ -7,8 +7,9 @@ from .email_templates import (
     template_nueva_oferta,
     template_confirmacion_pedido,
     template_actualizacion_estado,
-    template_alerta_sin_stock
-)
+    template_alerta_sin_stock,
+    template_notificacion_pedido_admin
+    )
 import logging
 
 logger = logging.getLogger(__name__)
@@ -199,34 +200,47 @@ def enviar_confirmacion_pedido(pedido_id):
             
             enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
         
-        # Notificar a admins
+        # ⭐ NOTIFICAR A ADMINS CON TEMPLATE PROFESIONAL
         admins = Usuario.objects.filter(rol='administrador', is_active=True, email__isnull=False).exclude(email='')
         emails_admin = [admin.email for admin in admins if admin.email]
         
         if emails_admin:
             asunto_admin = f"🔔 Nuevo Pedido #{pedido.id}"
             
-            html_admin = f"""
-            <!DOCTYPE html>
-            <html>
-            <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f3f4f6;">
-                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px;">
-                    <h1 style="color: #111827;">🔔 Nuevo Pedido Recibido</h1>
-                    <p><strong>Pedido:</strong> #{pedido.id}</p>
-                    <p><strong>Cliente:</strong> {pedido.usuario.get_full_name() or pedido.usuario.username}</p>
-                    <p><strong>Email:</strong> {pedido.usuario.email}</p>
-                    <p><strong>Total:</strong> <span style="color: #10b981; font-size: 24px; font-weight: bold;">₡{pedido.total:,.2f}</span></p>
-                    <div style="text-align: center; margin-top: 30px;">
-                        <a href="{URL_ADMIN_PEDIDOS}" style="display: inline-block; padding: 14px 32px; background: #f59e0b; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
-                            Gestionar Pedido
-                        </a>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
+            # Usar template profesional para admins
+            html_admin = template_notificacion_pedido_admin(pedido, URL_ADMIN_PEDIDOS)
             
-            text_admin = f"Nuevo pedido #{pedido.id} de {pedido.usuario.username}. Total: ₡{pedido.total:,.2f}. Gestionar: {URL_ADMIN_PEDIDOS}"
+            productos_texto_admin = "\n".join([
+                f"  - {d.producto.nombre} x{d.cantidad} = ₡{d.producto.precio * d.cantidad:,.2f}"
+                for d in pedido.detalles.all()
+            ])
+            
+            text_admin = f"""
+            🔔 NUEVO PEDIDO RECIBIDO
+            
+            Pedido: #{pedido.id}
+            Cliente: {pedido.usuario.get_full_name() or pedido.usuario.username}
+            Usuario: {pedido.usuario.username}
+            Email: {pedido.usuario.email}
+            
+            Productos:
+            {productos_texto_admin}
+            
+            TOTAL: ₡{pedido.total:,.2f}
+            Estado: {pedido.get_estado_display()}
+            
+            Gestionar pedido: {URL_ADMIN_PEDIDOS}
+            
+            PRÓXIMOS PASOS:
+            - Verificar disponibilidad de productos
+            - Confirmar el pedido con el cliente si es necesario
+            - Actualizar el estado según avance la preparación
+            - Notificar al cliente cuando esté listo
+            
+            ---
+            Panadería Santa Clara
+            Sistema de Gestión de Pedidos
+            """
             
             enviar_email_seguro(asunto_admin, html_admin, text_admin, emails_admin)
         
