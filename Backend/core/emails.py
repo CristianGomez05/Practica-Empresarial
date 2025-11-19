@@ -35,17 +35,16 @@ def verificar_configuracion_email():
 def enviar_email_seguro(subject, html_content, text_content, recipients):
     """
     Wrapper para enviar emails con manejo robusto de errores
+    Funciona con SendGrid o SMTP
     """
     if not recipients:
         logger.warning("⚠️ No hay destinatarios para el email")
         return False
     
-    if not verificar_configuracion_email():
-        logger.error("❌ Configuración de email inválida")
-        return False
-    
     try:
-        logger.info(f"📧 Enviando email a {len(recipients)} destinatario(s): {subject}")
+        logger.info(f"📧 Preparando email: {subject}")
+        logger.info(f"   Destinatarios: {len(recipients)}")
+        logger.info(f"   Backend: {settings.EMAIL_BACKEND}")
         
         email = EmailMultiAlternatives(
             subject=subject,
@@ -64,15 +63,6 @@ def enviar_email_seguro(subject, html_content, text_content, recipients):
             logger.error("❌ email.send() retornó 0")
             return False
             
-    except socket.gaierror as e:
-        logger.error(f"❌ Error de red (DNS): {str(e)}")
-        return False
-    except socket.timeout as e:
-        logger.error(f"❌ Timeout al conectar con el servidor SMTP: {str(e)}")
-        return False
-    except ConnectionRefusedError as e:
-        logger.error(f"❌ Conexión rechazada por el servidor SMTP: {str(e)}")
-        return False
     except Exception as e:
         logger.error(f"❌ Error al enviar email: {type(e).__name__}: {str(e)}")
         import traceback

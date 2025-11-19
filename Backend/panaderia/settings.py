@@ -281,19 +281,48 @@ EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_USE_SSL = False
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='panaderiasantaclara01@gmail.com')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = f'Panadería Santa Clara <{EMAIL_HOST_USER}>'
-SERVER_EMAIL = EMAIL_HOST_USER
-EMAIL_TIMEOUT = 10  # ⭐ Reducir timeout a 10 segundos
+EMAIL_TIMEOUT = 10
 
-# ⭐ Determinar backend según configuración
-if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+# ============================================================================
+# SENDGRID CONFIGURATION (Prioritario en Producción)
+# ============================================================================
+SENDGRID_API_KEY = config('SENDGRID_API_KEY', default=None)
+DEFAULT_FROM_EMAIL = config(
+    'DEFAULT_FROM_EMAIL', 
+    default='Panadería Santa Clara <panaderiasantaclara01@gmail.com>'
+)
+
+# Determinar qué backend usar según configuración disponible
+if SENDGRID_API_KEY:
+    # ✅ Usar SendGrid en producción (Railway)
+    EMAIL_BACKEND = 'core.email_backend.SendGridBackend'
+    SERVER_EMAIL = DEFAULT_FROM_EMAIL
+    print("=" * 60)
+    print("✅ EMAIL: Usando SendGrid API")
+    print(f"   From: {DEFAULT_FROM_EMAIL}")
+    print("=" * 60)
+    
+elif EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    # ⚠️ Usar SMTP en desarrollo local
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    print(f"✅ EMAIL: SMTP configurado ({EMAIL_HOST_USER})")
+    DEFAULT_FROM_EMAIL = f'Panadería Santa Clara <{EMAIL_HOST_USER}>'
+    SERVER_EMAIL = EMAIL_HOST_USER
+    print("=" * 60)
+    print(f"⚠️ EMAIL: Usando SMTP ({EMAIL_HOST_USER})")
+    print(f"   Advertencia: SMTP puede fallar en Railway")
+    print("=" * 60)
+    
 else:
+    # ❌ Console backend (sin configuración)
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    print("⚠️ EMAIL: Usando console backend (sin credenciales)")
+    DEFAULT_FROM_EMAIL = 'noreply@panaderia.local'
+    SERVER_EMAIL = DEFAULT_FROM_EMAIL
+    print("=" * 60)
+    print("❌ EMAIL: Console backend (emails solo en logs)")
+    print("   Configure SENDGRID_API_KEY para enviar emails reales")
+    print("=" * 60)
 
 # ============================================================================
 # LOGGING
