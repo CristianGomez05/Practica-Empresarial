@@ -300,15 +300,6 @@ if SENDGRID_API_KEY:
     EMAIL_BACKEND = 'core.email_backend.SendGridBackend'
     SERVER_EMAIL = DEFAULT_FROM_EMAIL
     
-    # ⚠️ DEBUG TEMPORAL - BORRAR DESPUÉS
-    print("=" * 60)
-    print("🔍 DEBUG SENDGRID API KEY")
-    print(f"   Configurado: {'Sí' if SENDGRID_API_KEY else 'No'}")
-    print(f"   Longitud: {len(SENDGRID_API_KEY) if SENDGRID_API_KEY else 0} caracteres")
-    print(f"   Empieza con SG.: {SENDGRID_API_KEY.startswith('SG.') if SENDGRID_API_KEY else False}")
-    print(f"   Primeros 10: {SENDGRID_API_KEY[:10] if SENDGRID_API_KEY else 'N/A'}")
-    print("=" * 60)
-    
     print("✅ EMAIL: Usando SendGrid API")
     print(f"   From: {DEFAULT_FROM_EMAIL}")
     

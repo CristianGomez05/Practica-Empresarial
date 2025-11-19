@@ -1,9 +1,14 @@
 # Backend/core/emails.py
-from django.core.mail import send_mail, EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from .models import Usuario, Oferta, Pedido, Producto
+from .email_templates import (
+    template_nuevo_producto,
+    template_nueva_oferta,
+    template_confirmacion_pedido,
+    template_actualizacion_estado
+)
 import logging
-import socket
 
 logger = logging.getLogger(__name__)
 
@@ -17,25 +22,9 @@ URL_ADMIN_OFERTAS = f"{FRONTEND_URL}/admin/ofertas"
 URL_ADMIN_PEDIDOS = f"{FRONTEND_URL}/admin/pedidos"
 
 
-def verificar_configuracion_email():
-    """Verifica que el email esté configurado correctamente"""
-    if not settings.EMAIL_HOST_USER or not settings.EMAIL_HOST_PASSWORD:
-        logger.error("❌ EMAIL_HOST_USER o EMAIL_HOST_PASSWORD no configurados")
-        return False
-    
-    try:
-        # Intentar resolver el hostname
-        socket.gethostbyname(settings.EMAIL_HOST)
-        return True
-    except socket.gaierror:
-        logger.error(f"❌ No se puede resolver el hostname: {settings.EMAIL_HOST}")
-        return False
-
-
 def enviar_email_seguro(subject, html_content, text_content, recipients):
     """
     Wrapper para enviar emails con manejo robusto de errores
-    Funciona con SendGrid o SMTP
     """
     if not recipients:
         logger.warning("⚠️ No hay destinatarios para el email")
@@ -50,7 +39,8 @@ def enviar_email_seguro(subject, html_content, text_content, recipients):
             subject=subject,
             body=text_content,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=recipients
+            to=recipients,
+            reply_to=[settings.EMAIL_HOST_USER] if settings.EMAIL_HOST_USER else None
         )
         email.attach_alternative(html_content, "text/html")
         
@@ -89,73 +79,23 @@ def enviar_notificacion_nuevo_producto(producto_id):
         
         asunto = f"🥐 Nuevo Producto: {producto.nombre}"
         
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; }}
-                .header {{ 
-                    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); 
-                    color: white; 
-                    padding: 30px; 
-                    text-align: center; 
-                    border-radius: 10px 10px 0 0; 
-                }}
-                .content {{ background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
-                .product-card {{ 
-                    background: #f3f4f6; 
-                    padding: 20px; 
-                    margin: 20px 0; 
-                    border-radius: 8px; 
-                    border-left: 4px solid #f59e0b;
-                }}
-                .price {{ 
-                    font-size: 24px; 
-                    color: #10b981; 
-                    font-weight: bold; 
-                    margin: 15px 0;
-                }}
-                .button {{ 
-                    display: inline-block; 
-                    padding: 14px 32px; 
-                    background: #f59e0b; 
-                    color: white !important; 
-                    text-decoration: none; 
-                    border-radius: 8px; 
-                    margin-top: 20px;
-                    font-weight: bold;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🥐 Nuevo Producto Disponible</h1>
-                </div>
-                <div class="content">
-                    <div class="product-card">
-                        <h2>{producto.nombre}</h2>
-                        <p>{producto.descripcion or 'Delicioso producto recién agregado.'}</p>
-                        <div class="price">₡{producto.precio:,.2f}</div>
-                    </div>
-                    <div style="text-align: center;">
-                        <a href="{URL_PRODUCTOS_CLIENTE}" class="button">
-                            Ver Productos
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        # Usar template profesional
+        html_content = template_nuevo_producto(producto)
+        html_content = html_content.replace('{{url_productos}}', URL_PRODUCTOS_CLIENTE)
         
         text_content = f"""
-        Nuevo Producto: {producto.nombre}
+        ¡Nuevo Producto Disponible!
+        
+        {producto.nombre}
+        {producto.descripcion or 'Delicioso producto recién horneado.'}
+        
         Precio: ₡{producto.precio:,.2f}
         
-        Ver productos: {URL_PRODUCTOS_CLIENTE}
+        Ver todos los productos: {URL_PRODUCTOS_CLIENTE}
+        
+        ---
+        Panadería Santa Clara
+        Alajuela, Costa Rica
         """
         
         return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
@@ -185,51 +125,31 @@ def enviar_notificacion_oferta(oferta_id):
             logger.warning("⚠️ No hay clientes con correos válidos")
             return False
         
-        productos_html = ""
-        for producto in oferta.productos.all():
-            productos_html += f"<li>{producto.nombre} - ₡{producto.precio:,.2f}</li>"
-        
         asunto = f"🎉 Nueva Oferta: {oferta.titulo}"
         
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
-                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background: #dc2626; color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }}
-                .content {{ background: white; padding: 30px; }}
-                .button {{ display: inline-block; padding: 14px 32px; background: #dc2626; color: white !important; text-decoration: none; border-radius: 8px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <h1>🎉 {oferta.titulo}</h1>
-                </div>
-                <div class="content">
-                    <p>{oferta.descripcion}</p>
-                    <h3>Productos incluidos:</h3>
-                    <ul>{productos_html}</ul>
-                    <p><strong>Precio oferta: ₡{oferta.precio_oferta:,.2f}</strong></p>
-                    <p>Válido del {oferta.fecha_inicio} al {oferta.fecha_fin}</p>
-                    <div style="text-align: center;">
-                        <a href="{URL_OFERTAS_CLIENTE}" class="button">Ver Ofertas</a>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        # Usar template profesional
+        html_content = template_nueva_oferta(oferta)
+        html_content = html_content.replace('{{url_ofertas}}', URL_OFERTAS_CLIENTE)
+        
+        productos_texto = "\n".join([f"  - {p.nombre} (₡{p.precio:,.2f})" for p in oferta.productos.all()])
         
         text_content = f"""
-        Nueva Oferta: {oferta.titulo}
+        ¡Nueva Oferta Especial!
+        
+        {oferta.titulo}
         {oferta.descripcion}
-        Precio: ₡{oferta.precio_oferta:,.2f}
-        Válido: {oferta.fecha_inicio} - {oferta.fecha_fin}
+        
+        Productos incluidos:
+        {productos_texto}
+        
+        Precio de oferta: ₡{oferta.precio_oferta:,.2f}
+        Válido: {oferta.fecha_inicio} al {oferta.fecha_fin}
         
         Ver ofertas: {URL_OFERTAS_CLIENTE}
+        
+        ---
+        Panadería Santa Clara
+        Alajuela, Costa Rica
         """
         
         return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
@@ -249,31 +169,34 @@ def enviar_confirmacion_pedido(pedido_id):
         
         # Enviar al cliente
         if pedido.usuario.email:
-            productos_html = ""
-            for detalle in pedido.detalles.all():
-                productos_html += f"<li>{detalle.producto.nombre} x{detalle.cantidad}</li>"
-            
             asunto = f"✅ Confirmación de Pedido #{pedido.id}"
             
-            html_content = f"""
-            <!DOCTYPE html>
-            <html>
-            <body>
-                <h1>¡Pedido Confirmado!</h1>
-                <p>Hola {pedido.usuario.first_name or pedido.usuario.username},</p>
-                <p>Tu pedido #{pedido.id} ha sido recibido.</p>
-                <h3>Productos:</h3>
-                <ul>{productos_html}</ul>
-                <p><strong>Total: ₡{pedido.total:,.2f}</strong></p>
-                <a href="{URL_PEDIDOS_CLIENTE}">Ver Mis Pedidos</a>
-            </body>
-            </html>
-            """
+            # Usar template profesional
+            html_content = template_confirmacion_pedido(pedido)
+            html_content = html_content.replace('{{url_pedidos}}', URL_PEDIDOS_CLIENTE)
+            
+            productos_texto = "\n".join([
+                f"  - {d.producto.nombre} x{d.cantidad} = ₡{d.producto.precio * d.cantidad:,.2f}"
+                for d in pedido.detalles.all()
+            ])
             
             text_content = f"""
-            Pedido #{pedido.id} confirmado
-            Total: ₡{pedido.total:,.2f}
-            Ver pedidos: {URL_PEDIDOS_CLIENTE}
+            ¡Pedido Confirmado!
+            
+            Hola {pedido.usuario.first_name or pedido.usuario.username},
+            
+            Tu pedido #{pedido.id} ha sido recibido y está siendo preparado.
+            
+            Productos:
+            {productos_texto}
+            
+            TOTAL: ₡{pedido.total:,.2f}
+            
+            Ver mis pedidos: {URL_PEDIDOS_CLIENTE}
+            
+            ---
+            Panadería Santa Clara
+            Alajuela, Costa Rica
             """
             
             enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
@@ -284,18 +207,28 @@ def enviar_confirmacion_pedido(pedido_id):
         
         if emails_admin:
             asunto_admin = f"🔔 Nuevo Pedido #{pedido.id}"
+            
             html_admin = f"""
             <!DOCTYPE html>
             <html>
-            <body>
-                <h1>Nuevo Pedido Recibido</h1>
-                <p>Cliente: {pedido.usuario.get_full_name() or pedido.usuario.username}</p>
-                <p>Total: ₡{pedido.total:,.2f}</p>
-                <a href="{URL_ADMIN_PEDIDOS}">Gestionar Pedido</a>
+            <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f3f4f6;">
+                <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px;">
+                    <h1 style="color: #111827;">🔔 Nuevo Pedido Recibido</h1>
+                    <p><strong>Pedido:</strong> #{pedido.id}</p>
+                    <p><strong>Cliente:</strong> {pedido.usuario.get_full_name() or pedido.usuario.username}</p>
+                    <p><strong>Email:</strong> {pedido.usuario.email}</p>
+                    <p><strong>Total:</strong> <span style="color: #10b981; font-size: 24px; font-weight: bold;">₡{pedido.total:,.2f}</span></p>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="{URL_ADMIN_PEDIDOS}" style="display: inline-block; padding: 14px 32px; background: #f59e0b; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                            Gestionar Pedido
+                        </a>
+                    </div>
+                </div>
             </body>
             </html>
             """
-            text_admin = f"Nuevo pedido #{pedido.id} de {pedido.usuario.username}. Total: ₡{pedido.total:,.2f}"
+            
+            text_admin = f"Nuevo pedido #{pedido.id} de {pedido.usuario.username}. Total: ₡{pedido.total:,.2f}. Gestionar: {URL_ADMIN_PEDIDOS}"
             
             enviar_email_seguro(asunto_admin, html_admin, text_admin, emails_admin)
         
@@ -320,23 +253,29 @@ def enviar_alerta_sin_stock(producto_id):
         
         asunto = f"⚠️ ALERTA: Sin Stock - {producto.nombre}"
         
+        imagen_url = producto.imagen.url if producto.imagen else "https://via.placeholder.com/400x250?text=Sin+Imagen"
+        
         html_content = f"""
         <!DOCTYPE html>
         <html>
-        <body>
-            <h1 style="color: #dc2626;">⚠️ Producto Agotado</h1>
-            <p>El producto <strong>{producto.nombre}</strong> se ha quedado sin stock.</p>
-            <p>Precio: ₡{producto.precio:,.2f}</p>
-            <a href="{URL_ADMIN_PRODUCTOS}">Gestionar Inventario</a>
+        <body style="font-family: Arial, sans-serif; padding: 20px; background-color: #f3f4f6;">
+            <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; border-left: 4px solid #dc2626;">
+                <h1 style="color: #dc2626;">⚠️ Producto Agotado</h1>
+                <img src="{imagen_url}" alt="{producto.nombre}" style="width: 100%; max-width: 400px; border-radius: 10px; margin: 20px 0;">
+                <h2>{producto.nombre}</h2>
+                <p style="color: #6b7280;">El producto se ha quedado sin stock.</p>
+                <p><strong>Precio:</strong> ₡{producto.precio:,.2f}</p>
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="{URL_ADMIN_PRODUCTOS}" style="display: inline-block; padding: 14px 32px; background: #dc2626; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                        Gestionar Inventario
+                    </a>
+                </div>
+            </div>
         </body>
         </html>
         """
         
-        text_content = f"""
-        ALERTA: Producto sin stock
-        {producto.nombre}
-        Gestionar: {URL_ADMIN_PRODUCTOS}
-        """
+        text_content = f"ALERTA: {producto.nombre} sin stock. Gestionar: {URL_ADMIN_PRODUCTOS}"
         
         return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
         
@@ -363,22 +302,24 @@ def enviar_actualizacion_estado(pedido_id):
         emoji = estado_emoji.get(pedido.estado, '📦')
         asunto = f"{emoji} Actualización de Pedido #{pedido.id}"
         
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <body>
-            <h1>{emoji} Actualización de Pedido</h1>
-            <p>Hola {pedido.usuario.first_name or pedido.usuario.username},</p>
-            <p>Tu pedido #{pedido.id} ahora está: <strong>{pedido.get_estado_display()}</strong></p>
-            <p>Total: ₡{pedido.total:,.2f}</p>
-            <a href="{URL_PEDIDOS_CLIENTE}">Ver Mis Pedidos</a>
-        </body>
-        </html>
-        """
+        # Usar template profesional
+        html_content = template_actualizacion_estado(pedido)
+        html_content = html_content.replace('{{url_pedidos}}', URL_PEDIDOS_CLIENTE)
         
         text_content = f"""
-        Pedido #{pedido.id}: {pedido.get_estado_display()}
+        Actualización de Pedido
+        
+        Hola {pedido.usuario.first_name or pedido.usuario.username},
+        
+        Tu pedido #{pedido.id} ha sido actualizado:
+        Estado: {pedido.get_estado_display()}
+        Total: ₡{pedido.total:,.2f}
+        
         Ver pedidos: {URL_PEDIDOS_CLIENTE}
+        
+        ---
+        Panadería Santa Clara
+        Alajuela, Costa Rica
         """
         
         return enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
