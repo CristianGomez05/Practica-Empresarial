@@ -2,26 +2,40 @@
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from .models import Oferta, Pedido, Producto
-from .emails import (
-    enviar_notificacion_oferta, 
-    enviar_confirmacion_pedido, 
-    enviar_actualizacion_estado,
-    enviar_notificacion_nuevo_producto,
-    enviar_alerta_sin_stock
-)
+import threading
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def ejecutar_email_background(func, *args, **kwargs):
+    """
+    Ejecuta una función de email en un hilo separado para no bloquear
+    """
+    def wrapper():
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            logger.error(f"❌ Error en email background: {str(e)}")
+    
+    thread = threading.Thread(target=wrapper)
+    thread.daemon = True
+    thread.start()
+    logger.info(f"📧 Email programado en background: {func.__name__}")
 
 
 @receiver(post_save, sender=Producto)
 def notificar_nuevo_producto(sender, instance, created, **kwargs):
     """
     Envía correo a todos los clientes cuando se crea un nuevo producto
+    ⚠️ Se ejecuta en background para no bloquear la creación
     """
     if created:
         print(f"🆕 Nuevo producto creado: {instance.nombre}")
-        try:
-            enviar_notificacion_nuevo_producto(instance.id)
-        except Exception as e:
-            print(f"❌ Error al enviar notificación de nuevo producto: {str(e)}")
+        
+        # Ejecutar email en background
+        from .emails import enviar_notificacion_nuevo_producto
+        ejecutar_email_background(enviar_notificacion_nuevo_producto, instance.id)
 
 
 @receiver(pre_save, sender=Producto)
@@ -43,34 +57,28 @@ def detectar_cambio_disponibilidad(sender, instance, **kwargs):
 def notificar_sin_stock(sender, instance, created, **kwargs):
     """
     Envía alerta a administradores cuando un producto se queda sin stock
+    ⚠️ Se ejecuta en background
     """
     if not created and hasattr(instance, '_sin_stock'):
         print(f"📧 Enviando alerta de sin stock para: {instance.nombre}")
-        try:
-            enviar_alerta_sin_stock(instance.id)
-        except Exception as e:
-            print(f"❌ Error al enviar alerta de stock: {str(e)}")
-        finally:
-            delattr(instance, '_sin_stock')
+        
+        # Ejecutar email en background
+        from .emails import enviar_alerta_sin_stock
+        ejecutar_email_background(enviar_alerta_sin_stock, instance.id)
+        
+        # Limpiar flag
+        delattr(instance, '_sin_stock')
 
 
 @receiver(post_save, sender=Oferta)
 def notificar_nueva_oferta(sender, instance, created, **kwargs):
     """
-    Envía correo a todos los clientes cuando se crea una nueva oferta
     ⚠️ NO ENVIAR AQUÍ - Los productos aún no están asociados
     El correo se enviará manualmente desde la vista
     """
     if created:
         print(f"🎉 Nueva oferta creada: {instance.titulo} (correo se enviará después de asociar productos)")
-        # ⚠️ NO LLAMAR enviar_notificacion_oferta aquí
-        # Se llamará manualmente desde perform_create en views.py
 
-
-# ============================================================================
-# 🔧 CORRECCIÓN: NO ENVIAR CORREO AL CREAR PEDIDO
-# ============================================================================
-# El correo se enviará manualmente desde la vista DESPUÉS de crear los detalles
 
 @receiver(post_save, sender=Pedido)
 def notificar_pedido(sender, instance, created, **kwargs):
@@ -80,13 +88,9 @@ def notificar_pedido(sender, instance, created, **kwargs):
     """
     try:
         if created:
-            # ⚠️ NO ENVIAR CORREO AQUÍ - Los detalles aún no existen
             print(f"📦 Nuevo pedido creado: #{instance.id} (correo se enviará después)")
         else:
-            # Pedido actualizado - verificar si cambió el estado
             print(f"🔄 Pedido #{instance.id} actualizado")
-            # Nota: Este signal se ejecutará también cuando se actualice el total
-            # Por eso usamos el pre_save para detectar cambios de estado reales
     except Exception as e:
         print(f"❌ Error en signal de pedido: {str(e)}")
 
@@ -110,40 +114,45 @@ def detectar_cambio_estado_pedido(sender, instance, **kwargs):
 def notificar_cambio_estado_pedido(sender, instance, created, **kwargs):
     """
     Envía notificación cuando el estado del pedido cambia
+    ⚠️ Se ejecuta en background
     """
     if not created and hasattr(instance, '_estado_cambio'):
         print(f"📧 Enviando notificación de cambio de estado para pedido #{instance.id}")
-        try:
-            enviar_actualizacion_estado(instance.id)
-        except Exception as e:
-            print(f"❌ Error al enviar actualización de estado: {str(e)}")
-        finally:
-            delattr(instance, '_estado_cambio')
+        
+        # Ejecutar email en background
+        from .emails import enviar_actualizacion_estado
+        ejecutar_email_background(enviar_actualizacion_estado, instance.id)
+        
+        # Limpiar flag
+        delattr(instance, '_estado_cambio')
 
 
 # ============================================================================
-# COMENTARIOS ACTUALIZADOS
+# DOCUMENTACIÓN
 # ============================================================================
 
 """
-⚠️ IMPORTANTE - CAMBIO EN EL FLUJO DE CORREOS:
+✅ FLUJO DE EMAILS EN BACKGROUND
 
-ANTES (PROBLEMA):
-1. Se crea Pedido → Signal envía correo (sin detalles) ❌
-2. Se crean DetallePedido
-3. Se actualiza total del Pedido → Signal envía otro correo ❌
+Todos los emails se ejecutan en hilos separados (threading) para no bloquear:
+1. Creación de productos
+2. Actualización de stock
+3. Cambios de estado de pedidos
 
-AHORA (SOLUCIÓN):
-1. Se crea Pedido → Signal NO envía correo ✅
-2. Se crean DetallePedido ✅
-3. Se actualiza total del Pedido ✅
-4. La VISTA llama manualmente a enviar_confirmacion_pedido() ✅
-5. Cambios de estado → Signal envía notificación ✅
+Ventajas:
+- ✅ No bloquea el request/response
+- ✅ No causa timeouts en Gunicorn
+- ✅ El usuario recibe respuesta inmediata
+- ✅ Los emails se envían en paralelo
+
+Desventajas:
+- ⚠️ Si falla el email, no se notifica al usuario
+- ⚠️ No es escalable para alto volumen (usar Celery en ese caso)
 
 FLUJO DE CORREOS:
-- NUEVO PRODUCTO: Signal al crear producto
-- SIN STOCK: Signal al cambiar disponibilidad
-- NUEVA OFERTA: Signal al crear oferta
-- NUEVO PEDIDO: MANUAL desde la vista (después de crear detalles)
-- CAMBIO ESTADO PEDIDO: Signal al cambiar estado
+- NUEVO PRODUCTO: Signal al crear producto → Background
+- SIN STOCK: Signal al cambiar disponibilidad → Background
+- NUEVA OFERTA: Manual desde la vista (después de asociar productos) → Background
+- NUEVO PEDIDO: Manual desde la vista (después de crear detalles) → Background
+- CAMBIO ESTADO PEDIDO: Signal al cambiar estado → Background
 """

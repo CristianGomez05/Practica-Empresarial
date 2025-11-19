@@ -276,18 +276,30 @@ class OfertaViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         print("\n🎉 Creando oferta...")
         oferta = serializer.save()
-        
+    
         print(f"✅ Oferta creada: {oferta.titulo}")
         print(f"📦 Productos asociados: {oferta.productos.count()}")
-        
+    
         if oferta.productos.count() > 0:
-            print(f"📧 Enviando notificación...")
+            print(f"📧 Programando notificación en background...")
             try:
+                # ⭐ Ejecutar en background
+                import threading
                 from .emails import enviar_notificacion_oferta
-                enviar_notificacion_oferta(oferta.id)
-                print(f"✅ Notificación enviada\n")
+            
+                def enviar_email():
+                    try:
+                        enviar_notificacion_oferta(oferta.id)
+                        print(f"✅ Notificación enviada\n")
+                    except Exception as e:
+                        print(f"❌ Error: {e}\n")
+            
+                thread = threading.Thread(target=enviar_email)
+                thread.daemon = True
+                thread.start()
+                print(f"✅ Email programado\n")
             except Exception as e:
-                print(f"❌ Error: {e}\n")
+                print(f"❌ Error programando email: {e}\n")
 
 
 class PedidoViewSet(viewsets.ModelViewSet):
@@ -393,15 +405,25 @@ class PedidoViewSet(viewsets.ModelViewSet):
                     print(f"❌ Error alerta: {e}")
         
         # Enviar confirmación
-        print(f"\n📧 Enviando confirmación...")
+        print(f"\n📧 Programando confirmación en background...")
         try:
+            # ⭐ Ejecutar en background
+            import threading
             from .emails import enviar_confirmacion_pedido
-            enviar_confirmacion_pedido(pedido.id)
-            print(f"✅ Correos enviados\n")
+    
+            def enviar_email():
+                try:
+                    enviar_confirmacion_pedido(pedido.id)
+                    print(f"✅ Correos enviados\n")
+                except Exception as e:
+                    print(f"❌ Error: {e}\n")
+    
+            thread = threading.Thread(target=enviar_email)
+            thread.daemon = True
+            thread.start()
+            print(f"✅ Email programado\n")
         except Exception as e:
-            print(f"❌ Error: {e}\n")
-        
-        return pedido
+            print(f"❌ Error programando email: {e}\n")
     
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def cambiar_estado(self, request, pk=None):
