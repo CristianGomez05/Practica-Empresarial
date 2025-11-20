@@ -1,9 +1,14 @@
+// Frontend/panaderia-frontend/src/components/auth/LoginButton.jsx
 import React from "react";
 import { FaGoogle } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 
 export default function LoginButton() {
+  const navigate = useNavigate();
+
   const handleLoginRedirect = () => {
-    window.location.href = "http://localhost:5173/dashboard"; // redirige al frontend (Vite) página de login
+    // ✅ CORRECTO: Usar navigate en lugar de hardcodear URL
+    navigate("/login");
   };
 
   return (
