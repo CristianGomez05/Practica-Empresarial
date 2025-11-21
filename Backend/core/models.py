@@ -19,7 +19,7 @@ class Usuario(AbstractUser):
 
 
 # ============================================================================
-# PRODUCTO (CON CLOUDINARY)
+# PRODUCTO
 # ============================================================================
 class Producto(models.Model):
     nombre = models.CharField(max_length=100)
@@ -34,13 +34,17 @@ class Producto(models.Model):
         default=False, 
         help_text='Indica si ya se envió la notificación de stock agotado'
     )
+    # ⭐ NUEVO CAMPO
+    alerta_stock_bajo_enviada = models.BooleanField(
+        default=False,
+        help_text='Indica si ya se envió la notificación de stock bajo'
+    )
     
-    # ⭐⭐⭐ USAR CloudinaryField en lugar de ImageField ⭐⭐⭐
     imagen = CloudinaryField(
         'imagen',
         blank=True,
         null=True,
-        folder='productos/',  # Carpeta en Cloudinary
+        folder='productos/',
         transformation={
             'quality': 'auto',
             'fetch_format': 'auto'
@@ -59,6 +63,11 @@ class Producto(models.Model):
     def esta_agotado(self):
         """Verifica si el producto está agotado"""
         return self.stock == 0
+    
+    @property
+    def stock_bajo(self):
+        """Verifica si el producto tiene stock bajo (≤5 unidades)"""
+        return 0 < self.stock <= 5
     
     def reducir_stock(self, cantidad):
         """Reduce el stock del producto"""

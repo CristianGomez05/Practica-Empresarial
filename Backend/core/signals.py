@@ -53,21 +53,92 @@ def detectar_cambio_disponibilidad(sender, instance, **kwargs):
             pass
 
 
+@receiver(pre_save, sender=Producto)
+def detectar_cambio_stock(sender, instance, **kwargs):
+    """
+    Detecta cuando un producto:
+    1. Se queda sin stock (stock = 0)
+    2. Tiene stock bajo (stock ≤ 5 y no había alerta previa)
+    """
+    if instance.pk:
+        try:
+            producto_anterior = Producto.objects.get(pk=instance.pk)
+            
+            # Detectar cuando se queda sin stock
+            if producto_anterior.disponible and not instance.disponible:
+                print(f"⚠️ Producto sin stock detectado: {instance.nombre}")
+                instance._sin_stock = True
+            
+            # ⭐ NUEVO: Detectar stock bajo
+            # Solo enviar si:
+            # - El stock actual es ≤ 5
+            # - El stock anterior era > 5 O no se había enviado alerta antes
+            # - El producto tiene stock (no está en 0)
+            if (instance.stock > 0 and instance.stock <= 5 and 
+                (producto_anterior.stock > 5 or not producto_anterior.alerta_stock_bajo_enviada)):
+                print(f"⚠️ Stock bajo detectado: {instance.nombre} ({instance.stock} unidades)")
+                instance._stock_bajo = True
+                
+        except Producto.DoesNotExist:
+            pass
+
+
 @receiver(post_save, sender=Producto)
 def notificar_sin_stock(sender, instance, created, **kwargs):
     """
-    Envía alerta a administradores cuando un producto se queda sin stock
-    ⚠️ Se ejecuta en background
+    Envía alertas cuando un producto:
+    1. Se queda sin stock (agotado)
+    2. Tiene stock bajo (≤5 unidades)
     """
+    # Alerta de producto agotado
     if not created and hasattr(instance, '_sin_stock'):
         print(f"📧 Enviando alerta de sin stock para: {instance.nombre}")
         
-        # Ejecutar email en background
         from .emails import enviar_alerta_sin_stock
         ejecutar_email_background(enviar_alerta_sin_stock, instance.id)
         
-        # Limpiar flag
+        # Marcar que se envió la alerta de agotado
+        instance.alerta_stock_enviada = True
+        Producto.objects.filter(pk=instance.pk).update(alerta_stock_enviada=True)
+        
         delattr(instance, '_sin_stock')
+    
+    # ⭐ NUEVO: Alerta de stock bajo
+    if not created and hasattr(instance, '_stock_bajo'):
+        print(f"📧 Enviando alerta de stock bajo para: {instance.nombre}")
+        
+        from .emails import enviar_alerta_stock_bajo
+        ejecutar_email_background(enviar_alerta_stock_bajo, instance.id)
+        
+        # Marcar que se envió la alerta de stock bajo
+        Producto.objects.filter(pk=instance.pk).update(alerta_stock_bajo_enviada=True)
+        
+        delattr(instance, '_stock_bajo')
+
+
+# ⭐ NUEVO: Signal para resetear alertas cuando se reabastece
+@receiver(pre_save, sender=Producto)
+def resetear_alertas_al_reabastecer(sender, instance, **kwargs):
+    """
+    Resetea las alertas cuando el stock se reabastece
+    """
+    if instance.pk:
+        try:
+            producto_anterior = Producto.objects.get(pk=instance.pk)
+            
+            # Si el stock sube por encima de 5, resetear alerta de stock bajo
+            if producto_anterior.stock <= 5 and instance.stock > 5:
+                print(f"✅ Stock reabastecido: {instance.nombre} ({instance.stock} unidades)")
+                instance.alerta_stock_bajo_enviada = False
+            
+            # Si el stock vuelve a tener unidades, resetear alerta de agotado
+            if producto_anterior.stock == 0 and instance.stock > 0:
+                print(f"✅ Producto reabastecido desde agotado: {instance.nombre}")
+                instance.alerta_stock_enviada = False
+                instance.disponible = True
+                
+        except Producto.DoesNotExist:
+            pass
 
 
 @receiver(post_save, sender=Oferta)

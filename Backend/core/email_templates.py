@@ -697,3 +697,80 @@ def template_notificacion_pedido_admin(pedido, url_admin_pedidos):
     """
     
     return get_base_template(content)
+
+
+def template_alerta_stock_bajo(producto, url_admin_productos):
+    """
+    Template para alerta de stock bajo a administradores
+    """
+    imagen_url = producto.imagen.url if producto.imagen else "https://via.placeholder.com/400x250?text=Sin+Imagen"
+    
+    content = f"""
+    <div class="header" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+        <h1>⚠️ ALERTA: Stock Bajo</h1>
+        <p class="subtitle">Producto con pocas unidades</p>
+    </div>
+    <div class="content">
+        <p class="greeting">Hola Administrador,</p>
+        <p style="font-size: 16px; color: #6b7280; margin-bottom: 30px;">
+            El siguiente producto tiene stock bajo y requiere reabastecimiento pronto:
+        </p>
+        
+        <div class="product-card" style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-left-color: #f59e0b;">
+            <img src="{imagen_url}" alt="{producto.nombre}" class="product-image">
+            <h2 class="product-name" style="color: #f59e0b;">
+                ⚠️ {producto.nombre}
+            </h2>
+            <p class="product-description">{producto.descripcion or 'Producto sin descripción.'}</p>
+            
+            <div style="background-color: rgba(245, 158, 11, 0.1); padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px; text-align: center; margin: 10px;">
+                        <p style="color: #6b7280; font-size: 14px; margin: 0;">Stock Actual</p>
+                        <p style="color: #f59e0b; font-size: 32px; font-weight: 700; margin: 5px 0;">{producto.stock}</p>
+                        <p style="color: #f59e0b; font-size: 12px; font-weight: 600; margin: 0;">STOCK BAJO</p>
+                    </div>
+                    <div style="flex: 1; min-width: 150px; text-align: center; margin: 10px;">
+                        <p style="color: #6b7280; font-size: 14px; margin: 0;">Precio</p>
+                        <p style="color: #111827; font-size: 24px; font-weight: 700; margin: 5px 0;">₡{producto.precio:,.2f}</p>
+                    </div>
+                    <div style="flex: 1; min-width: 150px; text-align: center; margin: 10px;">
+                        <p style="color: #6b7280; font-size: 14px; margin: 0;">Estado</p>
+                        <p style="color: #f59e0b; font-size: 18px; font-weight: 700; margin: 5px 0;">🟠 BAJO</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="background-color: #fff; padding: 15px; border-radius: 8px; border: 2px dashed #f59e0b; margin-top: 20px;">
+                <p style="color: #f59e0b; font-weight: 600; margin: 0; text-align: center;">
+                    ⚡ Acción Recomendada: Reabastecer inventario
+                </p>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <a href="{url_admin_productos}" class="button" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);">
+                Gestionar Inventario
+            </a>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div style="background-color: #fff7ed; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
+            <h3 style="color: #f59e0b; margin-top: 0; font-size: 16px;">📋 Recomendaciones:</h3>
+            <ul style="color: #6b7280; margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                <li>Verificar stock físico en bodega</li>
+                <li>Planificar reabastecimiento urgente</li>
+                <li>Contactar con proveedores</li>
+                <li>Evaluar demanda del producto</li>
+                <li>Considerar ajustar precio si la demanda es alta</li>
+            </ul>
+        </div>
+        
+        <p style="text-align: center; color: #6b7280; margin-top: 30px; font-size: 14px;">
+            Este email fue enviado automáticamente cuando el stock bajó a {producto.stock} unidades o menos.
+        </p>
+    </div>
+    """
+    
+    return get_base_template(content)

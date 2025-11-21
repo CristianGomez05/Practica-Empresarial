@@ -305,6 +305,61 @@ def enviar_alerta_sin_stock(producto_id):
         logger.error(f"❌ Error en enviar_alerta_sin_stock: {str(e)}")
         return False
 
+def enviar_alerta_stock_bajo(producto_id):
+    """Notifica a administradores cuando un producto tiene stock bajo (≤5 unidades)"""
+    try:
+        producto = Producto.objects.get(id=producto_id)
+        
+        admins = Usuario.objects.filter(
+            rol='administrador', 
+            is_active=True, 
+            email__isnull=False
+        ).exclude(email='')
+        
+        destinatarios = [admin.email for admin in admins if admin.email]
+        
+        if not destinatarios:
+            logger.warning("⚠️ No hay administradores con correos válidos")
+            return False
+        
+        asunto = f"⚠️ Stock Bajo - {producto.nombre} ({producto.stock} unidades)"
+        
+        # Usar template profesional
+        html_content = template_alerta_stock_bajo(producto, URL_ADMIN_PRODUCTOS)
+        
+        text_content = f"""
+        ⚠️ ALERTA DE STOCK BAJO
+        
+        Producto con pocas unidades: {producto.nombre}
+        {producto.descripcion or ''}
+        
+        Stock Actual: {producto.stock} unidades
+        Precio: ₡{producto.precio:,.2f}
+        Estado: 🟠 STOCK BAJO
+        
+        ACCIÓN RECOMENDADA:
+        - Verificar stock físico en bodega
+        - Planificar reabastecimiento urgente
+        - Contactar con proveedores
+        - Evaluar demanda del producto
+        
+        Gestionar inventario: {URL_ADMIN_PRODUCTOS}
+        
+        ---
+        Panadería Santa Clara
+        Sistema de Gestión de Inventario
+        
+        Este email fue enviado automáticamente cuando el stock bajó a {producto.stock} unidades o menos.
+        """
+        
+        return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
+        
+    except Producto.DoesNotExist:
+        logger.error(f"❌ Producto {producto_id} no encontrado")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error en enviar_alerta_stock_bajo: {str(e)}")
+        return False
 
 def enviar_actualizacion_estado(pedido_id):
     """Notifica al cliente cuando cambia el estado de su pedido"""
