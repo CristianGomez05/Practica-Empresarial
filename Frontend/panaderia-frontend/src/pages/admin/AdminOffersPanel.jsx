@@ -1,7 +1,7 @@
 // Frontend/src/pages/admin/AdminOffersPanel.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
@@ -15,14 +15,17 @@ export default function AdminOffersPanel() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [offerToDelete, setOfferToDelete] = useState(null);
   const [editingOffer, setEditingOffer] = useState(null);
+  
+  // ⭐ CAMBIO: Ahora usamos productos_data con cantidades
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
-    productos_ids: [],
+    productos_data: [], // [{ producto_id: 1, cantidad: 2 }, ...]
     precio_oferta: '',
     fecha_inicio: '',
     fecha_fin: ''
   });
+  
   const { enqueueSnackbar } = useSnackbar();
 
   const fetchData = useCallback(async () => {
@@ -51,10 +54,9 @@ export default function AdminOffersPanel() {
     }
   }, [loading, refreshing, enqueueSnackbar]);
 
-  // Auto-refresh cada 30 segundos + refresh al volver a la pestaña
   useSmartRefresh(fetchData, {
     interval: 30000,
-    enabled: !showModal && !showDeleteModal, // No refrescar si hay modal abierto
+    enabled: !showModal && !showDeleteModal,
     refreshOnFocus: true
   });
 
@@ -74,18 +76,30 @@ export default function AdminOffersPanel() {
   const handleOpenModal = (offer = null) => {
     if (offer) {
       setEditingOffer(offer);
-      let productosIds = [];
-      if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
-        productosIds = offer.productos_ids;
-      } else if (offer.producto?.id) {
-        productosIds = [offer.producto.id];
+      
+      // ⭐ CAMBIO: Cargar productos_data desde la oferta
+      let productosData = [];
+      if (offer.productos_data && Array.isArray(offer.productos_data)) {
+        productosData = offer.productos_data;
+      } else if (offer.productos_con_cantidad && Array.isArray(offer.productos_con_cantidad)) {
+        // Convertir desde productos_con_cantidad
+        productosData = offer.productos_con_cantidad.map(pc => ({
+          producto_id: pc.producto.id,
+          cantidad: pc.cantidad
+        }));
+      } else if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
+        // Formato antiguo: convertir con cantidad = 1
+        productosData = offer.productos_ids.map(id => ({
+          producto_id: id,
+          cantidad: 1
+        }));
       }
       
       setFormData({
         titulo: offer.titulo,
         descripcion: offer.descripcion,
-        productos_ids: productosIds,
-        precio_oferta: offer.precio_oferta || offer.producto?.precio || '',
+        productos_data: productosData,
+        precio_oferta: offer.precio_oferta || '',
         fecha_inicio: formatDateForInput(offer.fecha_inicio),
         fecha_fin: formatDateForInput(offer.fecha_fin)
       });
@@ -94,7 +108,7 @@ export default function AdminOffersPanel() {
       setFormData({
         titulo: '',
         descripcion: '',
-        productos_ids: [],
+        productos_data: [],
         precio_oferta: '',
         fecha_inicio: '',
         fecha_fin: ''
@@ -108,15 +122,40 @@ export default function AdminOffersPanel() {
     setEditingOffer(null);
   };
 
+  // ⭐ NUEVO: Agregar/quitar producto con cantidad
   const toggleProductSelection = (productId) => {
     setFormData(prev => {
-      const isSelected = prev.productos_ids.includes(productId);
-      const newProductosIds = isSelected
-        ? prev.productos_ids.filter(id => id !== productId)
-        : [...prev.productos_ids, productId];
+      const exists = prev.productos_data.find(p => p.producto_id === productId);
       
-      return { ...prev, productos_ids: newProductosIds };
+      if (exists) {
+        // Remover producto
+        return {
+          ...prev,
+          productos_data: prev.productos_data.filter(p => p.producto_id !== productId)
+        };
+      } else {
+        // Agregar producto con cantidad = 1
+        return {
+          ...prev,
+          productos_data: [...prev.productos_data, { producto_id: productId, cantidad: 1 }]
+        };
+      }
     });
+  };
+
+  // ⭐ NUEVO: Actualizar cantidad de un producto
+  const updateProductQuantity = (productId, cantidad) => {
+    const cantidadNum = parseInt(cantidad) || 1;
+    if (cantidadNum < 1) return;
+
+    setFormData(prev => ({
+      ...prev,
+      productos_data: prev.productos_data.map(p =>
+        p.producto_id === productId
+          ? { ...p, cantidad: cantidadNum }
+          : p
+      )
+    }));
   };
 
   const handleSubmit = async () => {
@@ -129,13 +168,14 @@ export default function AdminOffersPanel() {
       enqueueSnackbar('La descripción es requerida', { variant: 'warning' });
       return;
     }
-    if (formData.productos_ids.length === 0) {
+    if (formData.productos_data.length === 0) {
       enqueueSnackbar('Debes seleccionar al menos un producto', { variant: 'warning' });
       return;
     }
 
     // Validar stock
-    const productosSeleccionados = products.filter(p => formData.productos_ids.includes(p.id));
+    const productosIds = formData.productos_data.map(p => p.producto_id);
+    const productosSeleccionados = products.filter(p => productosIds.includes(p.id));
     const productosAgotados = productosSeleccionados.filter(p => p.stock === 0);
     
     if (productosAgotados.length > 0) {
@@ -156,14 +196,20 @@ export default function AdminOffersPanel() {
     }
     
     try {
+      // ⭐ CAMBIO: Enviar productos_data con cantidades
       const payload = {
         titulo: formData.titulo,
         descripcion: formData.descripcion,
-        productos_ids: formData.productos_ids.map(id => parseInt(id)),
+        productos_data: formData.productos_data.map(p => ({
+          producto_id: parseInt(p.producto_id),
+          cantidad: parseInt(p.cantidad)
+        })),
         fecha_inicio: formData.fecha_inicio,
         fecha_fin: formData.fecha_fin,
         precio_oferta: parseFloat(formData.precio_oferta)
       };
+
+      console.log('📤 Enviando payload:', payload);
 
       if (editingOffer) {
         await api.put(`/ofertas/${editingOffer.id}/`, payload);
@@ -180,6 +226,7 @@ export default function AdminOffersPanel() {
       handleCloseModal();
     } catch (error) {
       console.error('Error guardando oferta:', error);
+      console.error('Error response:', error.response?.data);
       enqueueSnackbar(error.response?.data?.error || 'Error al guardar oferta', { 
         variant: 'error' 
       });
@@ -230,12 +277,26 @@ export default function AdminOffersPanel() {
   };
 
   const getOfferProducts = (offer) => {
-    if (offer.productos_ids && Array.isArray(offer.productos_ids) && offer.productos_ids.length > 0) {
-      return offer.productos_ids
-        .map(prodId => products.find(p => p.id === prodId))
+    // ⭐ CAMBIO: Usar productos_con_cantidad si existe
+    if (offer.productos_con_cantidad && Array.isArray(offer.productos_con_cantidad)) {
+      return offer.productos_con_cantidad.map(pc => ({
+        ...pc.producto,
+        cantidad_oferta: pc.cantidad
+      }));
+    } else if (offer.productos_data && Array.isArray(offer.productos_data)) {
+      return offer.productos_data
+        .map(pd => {
+          const producto = products.find(p => p.id === pd.producto_id);
+          return producto ? { ...producto, cantidad_oferta: pd.cantidad } : null;
+        })
         .filter(Boolean);
-    } else if (offer.producto) {
-      return [offer.producto];
+    } else if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
+      return offer.productos_ids
+        .map(prodId => {
+          const producto = products.find(p => p.id === prodId);
+          return producto ? { ...producto, cantidad_oferta: 1 } : null;
+        })
+        .filter(Boolean);
     }
     return [];
   };
@@ -321,7 +382,6 @@ export default function AdminOffersPanel() {
                     </div>
                   )}
                   
-                  {/* ⭐ Badge de Estado con Stock */}
                   <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1`}>
                     {estado.icon}
                     <span>{estado.text}</span>
@@ -357,7 +417,7 @@ export default function AdminOffersPanel() {
                     {offer.descripcion}
                   </p>
 
-                  {/* Products Info con Stock */}
+                  {/* ⭐ Products Info con CANTIDADES */}
                   <div className="bg-amber-50 rounded-lg p-3 mb-3">
                     <p className="text-xs text-[#8D6E63] mb-2">
                       {offerProducts.length > 1 ? 'Productos incluidos' : 'Producto'}
@@ -368,12 +428,19 @@ export default function AdminOffersPanel() {
                         {offerProducts.map((producto, idx) => {
                           const agotado = producto.stock === 0;
                           const stockBajo = producto.stock > 0 && producto.stock <= 5;
+                          const cantidad = producto.cantidad_oferta || 1;
 
                           return (
                             <div key={idx} className={`flex justify-between items-center ${
                               agotado ? 'opacity-60' : ''
                             }`}>
                               <div className="flex items-center gap-2">
+                                {/* ⭐ MOSTRAR CANTIDAD */}
+                                {cantidad > 1 && (
+                                  <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                                    {cantidad}x
+                                  </span>
+                                )}
                                 <p className="font-semibold text-[#5D4037] text-sm">
                                   {producto.nombre}
                                 </p>
@@ -444,7 +511,6 @@ export default function AdminOffersPanel() {
         </AnimatePresence>
       </div>
 
-      {/* Modal Crear/Editar (continúa igual pero con indicadores de stock) */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -485,7 +551,7 @@ export default function AdminOffersPanel() {
                       value={formData.titulo}
                       onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      placeholder="Ej: Combo 2x1 en Croissants y Pan Francés"
+                      placeholder="Ej: Combo Desayuno - 2 Panes + 1 Dona"
                     />
                   </div>
 
@@ -503,41 +569,49 @@ export default function AdminOffersPanel() {
                     />
                   </div>
 
-                  {/* ⭐ Selección de Productos CON INDICADORES DE STOCK */}
+                  {/* ⭐ Selección de Productos CON CANTIDADES */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-3">
-                      Productos Incluidos en la Oferta *
+                      Productos Incluidos en la Oferta * 
+                      <span className="text-xs text-gray-500 ml-2">(Selecciona y ajusta cantidades)</span>
                     </label>
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto p-1 border border-gray-200 rounded-lg">
+                    <div className="grid md:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-3 border border-gray-200 rounded-lg bg-gray-50">
                       {products.map(product => {
-                        const isSelected = formData.productos_ids.includes(product.id);
+                        const productoData = formData.productos_data.find(p => p.producto_id === product.id);
+                        const isSelected = !!productoData;
+                        const cantidad = productoData?.cantidad || 1;
                         const agotado = product.stock === 0;
                         const stockBajo = product.stock > 0 && product.stock <= 5;
                         
                         return (
-                          <button
+                          <div
                             key={product.id}
-                            type="button"
-                            onClick={() => !agotado && toggleProductSelection(product.id)}
-                            disabled={agotado}
-                            className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all text-left ${
+                            className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
                               agotado
-                                ? 'border-red-200 bg-red-50 opacity-50 cursor-not-allowed'
+                                ? 'border-red-200 bg-red-50 opacity-50'
                                 : isSelected
                                 ? 'border-orange-500 bg-orange-50 shadow-md'
-                                : 'border-gray-200 hover:border-orange-300 bg-white'
+                                : 'border-gray-200 bg-white hover:border-orange-300'
                             }`}
                           >
-                            <div className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
-                              agotado
-                                ? 'border-red-300 bg-red-100'
-                                : isSelected 
-                                ? 'bg-orange-500 border-orange-500' 
-                                : 'border-gray-300'
-                            }`}>
+                            {/* Checkbox */}
+                            <button
+                              type="button"
+                              onClick={() => !agotado && toggleProductSelection(product.id)}
+                              disabled={agotado}
+                              className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                                agotado
+                                  ? 'border-red-300 bg-red-100 cursor-not-allowed'
+                                  : isSelected 
+                                  ? 'bg-orange-500 border-orange-500 cursor-pointer' 
+                                  : 'border-gray-300 cursor-pointer hover:border-orange-400'
+                              }`}
+                            >
                               {isSelected && !agotado && <FaCheck className="text-white text-xs" />}
                               {agotado && <FaTimes className="text-red-600 text-xs" />}
-                            </div>
+                            </button>
+
+                            {/* Info del Producto */}
                             <div className="flex-1 min-w-0">
                               <p className={`font-semibold text-sm truncate ${
                                 agotado
@@ -548,7 +622,7 @@ export default function AdminOffersPanel() {
                               }`}>
                                 {product.nombre}
                               </p>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-xs text-gray-500">
                                   ₡{product.precio}
                                 </p>
@@ -567,13 +641,52 @@ export default function AdminOffersPanel() {
                                 )}
                               </div>
                             </div>
-                          </button>
+
+                            {/* ⭐ SELECTOR DE CANTIDAD */}
+                            {isSelected && !agotado && (
+                              <div className="flex items-center gap-2 bg-white rounded-lg border border-orange-300 px-2 py-1">
+                                <button
+                                  type="button"
+                                  onClick={() => updateProductQuantity(product.id, cantidad - 1)}
+                                  disabled={cantidad <= 1}
+                                  className={`w-6 h-6 flex items-center justify-center rounded ${
+                                    cantidad <= 1
+                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                      : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                                  }`}
+                                >
+                                  <FaMinus className="text-xs" />
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={cantidad}
+                                  onChange={(e) => updateProductQuantity(product.id, e.target.value)}
+                                  className="w-12 text-center font-bold text-orange-700 bg-transparent focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => updateProductQuantity(product.id, cantidad + 1)}
+                                  className="w-6 h-6 flex items-center justify-center rounded bg-orange-100 text-orange-600 hover:bg-orange-200"
+                                >
+                                  <FaPlus className="text-xs" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      ✓ {formData.productos_ids.length} producto(s) seleccionado(s)
-                    </p>
+                    <div className="mt-2 flex items-center justify-between text-sm">
+                      <p className="text-gray-600">
+                        ✓ {formData.productos_data.length} producto(s) seleccionado(s)
+                      </p>
+                      {formData.productos_data.length > 0 && (
+                        <p className="text-purple-600 font-semibold">
+                          Total items: {formData.productos_data.reduce((sum, p) => sum + p.cantidad, 0)}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Precio de la Oferta */}
@@ -590,7 +703,7 @@ export default function AdminOffersPanel() {
                       placeholder="0.00"
                     />
                     <p className="text-xs text-amber-700 mt-2">
-                      💡 Este será el precio total de la oferta que incluye todos los productos seleccionados
+                      💡 Este será el precio total de la oferta que incluye todos los productos seleccionados con sus cantidades
                     </p>
                   </div>
 
@@ -654,7 +767,7 @@ export default function AdminOffersPanel() {
         )}
       </AnimatePresence>
 
-      {/* Modal de Confirmación de Eliminación (igual que antes) */}
+      {/* Modal de Confirmación de Eliminación */}
       <AnimatePresence>
         {showDeleteModal && (
           <motion.div
