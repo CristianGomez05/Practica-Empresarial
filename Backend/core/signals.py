@@ -38,44 +38,33 @@ def notificar_nuevo_producto(sender, instance, created, **kwargs):
         ejecutar_email_background(enviar_notificacion_nuevo_producto, instance.id)
 
 
-@receiver(pre_save, sender=Producto)
-def detectar_cambio_disponibilidad(sender, instance, **kwargs):
-    """
-    Detecta cuando un producto cambia de disponible a no disponible (sin stock)
-    """
-    if instance.pk:
-        try:
-            producto_anterior = Producto.objects.get(pk=instance.pk)
-            if producto_anterior.disponible and not instance.disponible:
-                print(f"⚠️ Producto sin stock detectado: {instance.nombre}")
-                instance._sin_stock = True
-        except Producto.DoesNotExist:
-            pass
-
+# ============================================================================
+# DETECCIÓN DE CAMBIOS EN STOCK
+# ============================================================================
 
 @receiver(pre_save, sender=Producto)
 def detectar_cambio_stock(sender, instance, **kwargs):
     """
     Detecta cuando un producto:
     1. Se queda sin stock (stock = 0)
-    2. Tiene stock bajo (stock ≤ 5 y no había alerta previa)
+    2. Tiene stock bajo (stock ≤ 10 y no había alerta previa)
     """
     if instance.pk:
         try:
             producto_anterior = Producto.objects.get(pk=instance.pk)
             
-            # Detectar cuando se queda sin stock
-            if producto_anterior.disponible and not instance.disponible:
-                print(f"⚠️ Producto sin stock detectado: {instance.nombre}")
+            # ✅ Detectar cuando se queda SIN STOCK (agotado)
+            if producto_anterior.stock > 0 and instance.stock == 0:
+                print(f"🔴 Producto SIN STOCK detectado: {instance.nombre}")
                 instance._sin_stock = True
             
-            # ⭐ NUEVO: Detectar stock bajo
+            # ✅ Detectar STOCK BAJO (≤10)
             # Solo enviar si:
-            # - El stock actual es ≤ 5
-            # - El stock anterior era > 5 O no se había enviado alerta antes
+            # - El stock actual es ≤ 10
+            # - El stock anterior era > 10 O no se había enviado alerta antes
             # - El producto tiene stock (no está en 0)
-            if (instance.stock > 0 and instance.stock <= 5 and 
-                (producto_anterior.stock > 5 or not producto_anterior.alerta_stock_bajo_enviada)):
+            if (instance.stock > 0 and instance.stock <= 10 and 
+                (producto_anterior.stock > 10 or not producto_anterior.alerta_stock_bajo_enviada)):
                 print(f"⚠️ Stock bajo detectado: {instance.nombre} ({instance.stock} unidades)")
                 instance._stock_bajo = True
                 
@@ -84,28 +73,27 @@ def detectar_cambio_stock(sender, instance, **kwargs):
 
 
 @receiver(post_save, sender=Producto)
-def notificar_sin_stock(sender, instance, created, **kwargs):
+def notificar_cambios_stock(sender, instance, created, **kwargs):
     """
     Envía alertas cuando un producto:
-    1. Se queda sin stock (agotado)
-    2. Tiene stock bajo (≤5 unidades)
+    1. Se queda sin stock (agotado = 0)
+    2. Tiene stock bajo (≤10 unidades)
     """
-    # Alerta de producto agotado
+    # ✅ Alerta de producto AGOTADO (stock = 0)
     if not created and hasattr(instance, '_sin_stock'):
-        print(f"📧 Enviando alerta de sin stock para: {instance.nombre}")
+        print(f"📧 Enviando alerta de SIN STOCK para: {instance.nombre}")
         
         from .emails import enviar_alerta_sin_stock
         ejecutar_email_background(enviar_alerta_sin_stock, instance.id)
         
         # Marcar que se envió la alerta de agotado
-        instance.alerta_stock_enviada = True
         Producto.objects.filter(pk=instance.pk).update(alerta_stock_enviada=True)
         
         delattr(instance, '_sin_stock')
     
-    # ⭐ NUEVO: Alerta de stock bajo
+    # ✅ Alerta de STOCK BAJO (≤10)
     if not created and hasattr(instance, '_stock_bajo'):
-        print(f"📧 Enviando alerta de stock bajo para: {instance.nombre}")
+        print(f"📧 Enviando alerta de STOCK BAJO para: {instance.nombre}")
         
         from .emails import enviar_alerta_stock_bajo
         ejecutar_email_background(enviar_alerta_stock_bajo, instance.id)
@@ -116,7 +104,10 @@ def notificar_sin_stock(sender, instance, created, **kwargs):
         delattr(instance, '_stock_bajo')
 
 
-# ⭐ NUEVO: Signal para resetear alertas cuando se reabastece
+# ============================================================================
+# RESETEO DE ALERTAS AL REABASTECER
+# ============================================================================
+
 @receiver(pre_save, sender=Producto)
 def resetear_alertas_al_reabastecer(sender, instance, **kwargs):
     """
@@ -126,12 +117,12 @@ def resetear_alertas_al_reabastecer(sender, instance, **kwargs):
         try:
             producto_anterior = Producto.objects.get(pk=instance.pk)
             
-            # Si el stock sube por encima de 5, resetear alerta de stock bajo
-            if producto_anterior.stock <= 5 and instance.stock > 5:
+            # ✅ Si el stock sube por encima de 10, resetear alerta de stock bajo
+            if producto_anterior.stock <= 10 and instance.stock > 10:
                 print(f"✅ Stock reabastecido: {instance.nombre} ({instance.stock} unidades)")
                 instance.alerta_stock_bajo_enviada = False
             
-            # Si el stock vuelve a tener unidades, resetear alerta de agotado
+            # ✅ Si el stock vuelve a tener unidades, resetear alerta de agotado
             if producto_anterior.stock == 0 and instance.stock > 0:
                 print(f"✅ Producto reabastecido desde agotado: {instance.nombre}")
                 instance.alerta_stock_enviada = False
@@ -140,6 +131,10 @@ def resetear_alertas_al_reabastecer(sender, instance, **kwargs):
         except Producto.DoesNotExist:
             pass
 
+
+# ============================================================================
+# SIGNALS DE OFERTAS
+# ============================================================================
 
 @receiver(post_save, sender=Oferta)
 def notificar_nueva_oferta(sender, instance, created, **kwargs):
@@ -150,6 +145,10 @@ def notificar_nueva_oferta(sender, instance, created, **kwargs):
     if created:
         print(f"🎉 Nueva oferta creada: {instance.titulo} (correo se enviará después de asociar productos)")
 
+
+# ============================================================================
+# SIGNALS DE PEDIDOS
+# ============================================================================
 
 @receiver(post_save, sender=Pedido)
 def notificar_pedido(sender, instance, created, **kwargs):
@@ -207,14 +206,21 @@ def notificar_cambio_estado_pedido(sender, instance, created, **kwargs):
 
 Todos los emails se ejecutan en hilos separados (threading) para no bloquear:
 1. Creación de productos
-2. Actualización de stock
+2. Cambios en stock (bajo y agotado)
 3. Cambios de estado de pedidos
+
+⚠️ IMPORTANTE: Detección de Stock
+- STOCK BAJO (≤10): Se detecta en signals.py cuando el stock baja a 10 o menos
+- SIN STOCK (=0): Se detecta en signals.py cuando el stock llega a 0
+- Las alertas se envían automáticamente en background
+- Los flags de alertas se resetean al reabastecer
 
 Ventajas:
 - ✅ No bloquea el request/response
 - ✅ No causa timeouts en Gunicorn
 - ✅ El usuario recibe respuesta inmediata
 - ✅ Los emails se envían en paralelo
+- ✅ Detección automática de cambios en stock
 
 Desventajas:
 - ⚠️ Si falla el email, no se notifica al usuario
@@ -222,8 +228,13 @@ Desventajas:
 
 FLUJO DE CORREOS:
 - NUEVO PRODUCTO: Signal al crear producto → Background
-- SIN STOCK: Signal al cambiar disponibilidad → Background
+- STOCK BAJO (≤10): Signal al cambiar stock → Background
+- SIN STOCK (=0): Signal al cambiar stock → Background
 - NUEVA OFERTA: Manual desde la vista (después de asociar productos) → Background
 - NUEVO PEDIDO: Manual desde la vista (después de crear detalles) → Background
 - CAMBIO ESTADO PEDIDO: Signal al cambiar estado → Background
+
+RESETEO DE ALERTAS:
+- Stock sube >10: Resetea alerta de stock bajo
+- Stock sube >0: Resetea alerta de agotado y marca como disponible
 """

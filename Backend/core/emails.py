@@ -2,14 +2,15 @@
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
 from .models import Usuario, Oferta, Pedido, Producto
+# ✅ CORRECCIÓN: Importar la función correcta
 from .email_templates import (
     template_nuevo_producto,
     template_nueva_oferta,
     template_confirmacion_pedido,
     template_actualizacion_estado,
-    template_alerta_sin_stock,
+    template_alerta_stock_bajo,  # ⬅️ CAMBIO AQUÍ
     template_notificacion_pedido_admin
-    )
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -80,8 +81,6 @@ def enviar_notificacion_nuevo_producto(producto_id):
             return False
         
         asunto = f"🥐 Nuevo Producto: {producto.nombre}"
-        
-        # Usar template profesional
         html_content = template_nuevo_producto(producto, URL_PRODUCTOS_CLIENTE)
         
         text_content = f"""
@@ -127,8 +126,6 @@ def enviar_notificacion_oferta(oferta_id):
             return False
         
         asunto = f"🎉 Nueva Oferta: {oferta.titulo}"
-        
-        # Usar template profesional
         html_content = template_nueva_oferta(oferta, URL_OFERTAS_CLIENTE)
         
         productos_texto = "\n".join([f"  - {p.nombre} (₡{p.precio:,.2f})" for p in oferta.productos.all()])
@@ -170,8 +167,6 @@ def enviar_confirmacion_pedido(pedido_id):
         # Enviar al cliente
         if pedido.usuario.email:
             asunto = f"✅ Confirmación de Pedido #{pedido.id}"
-            
-            # Usar template profesional
             html_content = template_confirmacion_pedido(pedido, URL_PEDIDOS_CLIENTE)
             
             productos_texto = "\n".join([
@@ -200,14 +195,12 @@ def enviar_confirmacion_pedido(pedido_id):
             
             enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
         
-        # ⭐ NOTIFICAR A ADMINS CON TEMPLATE PROFESIONAL
+        # Notificar a admins
         admins = Usuario.objects.filter(rol='administrador', is_active=True, email__isnull=False).exclude(email='')
         emails_admin = [admin.email for admin in admins if admin.email]
         
         if emails_admin:
             asunto_admin = f"🔔 Nuevo Pedido #{pedido.id}"
-            
-            # Usar template profesional para admins
             html_admin = template_notificacion_pedido_admin(pedido, URL_ADMIN_PEDIDOS)
             
             productos_texto_admin = "\n".join([
@@ -251,8 +244,11 @@ def enviar_confirmacion_pedido(pedido_id):
         return False
 
 
-def enviar_alerta_sin_stock(producto_id):
-    """Notifica a administradores cuando un producto se queda sin stock"""
+# ✅ CORRECCIÓN: Renombrar función a enviar_alerta_stock_bajo
+def enviar_alerta_stock_bajo(producto_id):
+    """
+    Notifica a administradores cuando un producto tiene stock bajo (≤10) o agotado (=0)
+    """
     try:
         producto = Producto.objects.get(id=producto_id)
         
@@ -268,20 +264,28 @@ def enviar_alerta_sin_stock(producto_id):
             logger.warning("⚠️ No hay administradores con correos válidos")
             return False
         
-        asunto = f"⚠️ ALERTA: Sin Stock - {producto.nombre}"
+        # Determinar el tipo de alerta
+        if producto.stock == 0:
+            tipo_alerta = "SIN STOCK"
+            emoji = "🔴"
+        else:
+            tipo_alerta = "STOCK BAJO"
+            emoji = "⚠️"
+        
+        asunto = f"{emoji} ALERTA: {tipo_alerta} - {producto.nombre}"
         
         # ⭐ Usar template profesional con botón funcional
-        html_content = template_alerta_sin_stock(producto, URL_ADMIN_PRODUCTOS)
+        html_content = template_alerta_stock_bajo(producto, URL_ADMIN_PRODUCTOS)
         
         text_content = f"""
-        ⚠️ ALERTA DE INVENTARIO
+        {emoji} ALERTA DE INVENTARIO
         
-        Producto sin stock: {producto.nombre}
+        Producto con {tipo_alerta.lower()}: {producto.nombre}
         {producto.descripcion or ''}
         
-        Stock Actual: 0
+        Stock Actual: {producto.stock}
         Precio: ₡{producto.precio:,.2f}
-        Estado: 🔴 AGOTADO
+        Estado: {emoji} {tipo_alerta}
         
         ACCIÓN REQUERIDA:
         - Verificar stock físico en bodega
@@ -302,64 +306,9 @@ def enviar_alerta_sin_stock(producto_id):
         logger.error(f"❌ Producto {producto_id} no encontrado")
         return False
     except Exception as e:
-        logger.error(f"❌ Error en enviar_alerta_sin_stock: {str(e)}")
-        return False
-
-def enviar_alerta_stock_bajo(producto_id):
-    """Notifica a administradores cuando un producto tiene stock bajo (≤5 unidades)"""
-    try:
-        producto = Producto.objects.get(id=producto_id)
-        
-        admins = Usuario.objects.filter(
-            rol='administrador', 
-            is_active=True, 
-            email__isnull=False
-        ).exclude(email='')
-        
-        destinatarios = [admin.email for admin in admins if admin.email]
-        
-        if not destinatarios:
-            logger.warning("⚠️ No hay administradores con correos válidos")
-            return False
-        
-        asunto = f"⚠️ Stock Bajo - {producto.nombre} ({producto.stock} unidades)"
-        
-        # Usar template profesional
-        html_content = template_alerta_stock_bajo(producto, URL_ADMIN_PRODUCTOS)
-        
-        text_content = f"""
-        ⚠️ ALERTA DE STOCK BAJO
-        
-        Producto con pocas unidades: {producto.nombre}
-        {producto.descripcion or ''}
-        
-        Stock Actual: {producto.stock} unidades
-        Precio: ₡{producto.precio:,.2f}
-        Estado: 🟠 STOCK BAJO
-        
-        ACCIÓN RECOMENDADA:
-        - Verificar stock físico en bodega
-        - Planificar reabastecimiento urgente
-        - Contactar con proveedores
-        - Evaluar demanda del producto
-        
-        Gestionar inventario: {URL_ADMIN_PRODUCTOS}
-        
-        ---
-        Panadería Santa Clara
-        Sistema de Gestión de Inventario
-        
-        Este email fue enviado automáticamente cuando el stock bajó a {producto.stock} unidades o menos.
-        """
-        
-        return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
-        
-    except Producto.DoesNotExist:
-        logger.error(f"❌ Producto {producto_id} no encontrado")
-        return False
-    except Exception as e:
         logger.error(f"❌ Error en enviar_alerta_stock_bajo: {str(e)}")
         return False
+
 
 def enviar_actualizacion_estado(pedido_id):
     """Notifica al cliente cuando cambia el estado de su pedido"""
@@ -379,7 +328,6 @@ def enviar_actualizacion_estado(pedido_id):
         emoji = estado_emoji.get(pedido.estado, '📦')
         asunto = f"{emoji} Actualización de Pedido #{pedido.id}"
         
-        # Usar template profesional
         html_content = template_actualizacion_estado(pedido, URL_PEDIDOS_CLIENTE)
         
         text_content = f"""

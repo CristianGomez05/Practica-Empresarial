@@ -6,7 +6,8 @@ from rest_framework.response import Response
 from django.db.models import Q, Prefetch
 from django.db import transaction
 from django.core.cache import cache
-from .emails import enviar_alerta_sin_stock
+# ✅ CORRECCIÓN: Importar la función correcta
+from .emails import enviar_alerta_stock_bajo  # ⬅️ CAMBIO AQUÍ
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
 from .serializers import (
@@ -78,8 +79,6 @@ class ProductoViewSet(viewsets.ModelViewSet):
     """
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
-    
-    # ⭐ CRÍTICO: Agregar parsers para multipart/form-data
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_queryset(self):
@@ -87,25 +86,16 @@ class ProductoViewSet(viewsets.ModelViewSet):
         return Producto.objects.all().order_by('-id')
     
     def get_permissions(self):
-        """
-        GET: Cualquiera puede ver
-        POST/PUT/DELETE: Solo administradores
-        """
         if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
             return [AllowAny()]
         return [EsAdministrador()]
     
     def create(self, request, *args, **kwargs):
-        """
-        Crear producto con imagen
-        POST /api/productos/
-        """
         print(f"\n{'='*60}")
         print(f"📥 POST /api/productos/ - Creando producto")
         print(f"📋 Content-Type: {request.content_type}")
         print(f"📋 Data keys: {list(request.data.keys())}")
         
-        # Log de datos recibidos
         if 'imagen' in request.FILES:
             imagen = request.FILES['imagen']
             print(f"📸 Imagen recibida: {imagen.name}")
@@ -114,7 +104,6 @@ class ProductoViewSet(viewsets.ModelViewSet):
         else:
             print(f"⚠️  No se recibió imagen")
         
-        # Usar el serializer
         serializer = self.get_serializer(data=request.data)
         
         try:
@@ -137,10 +126,6 @@ class ProductoViewSet(viewsets.ModelViewSet):
             raise
     
     def update(self, request, *args, **kwargs):
-        """
-        Actualizar producto con o sin imagen
-        PUT /api/productos/{id}/
-        """
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         
@@ -175,18 +160,11 @@ class ProductoViewSet(viewsets.ModelViewSet):
             raise
     
     def perform_create(self, serializer):
-        """
-        Ejecutar después de validar al crear producto
-        """
-        # Limpiar cache
         cache.delete('productos_list')
-        
-        # Guardar producto (Cloudinary se encarga de la imagen automáticamente)
         producto = serializer.save()
         
         print(f"💾 Producto guardado en DB con ID: {producto.id}")
         
-        # Enviar notificación por email
         try:
             from .emails import enviar_notificacion_nuevo_producto
             print(f"📧 Enviando notificación de nuevo producto...")
@@ -196,20 +174,13 @@ class ProductoViewSet(viewsets.ModelViewSet):
             print(f"⚠️  Error enviando notificación: {e}")
     
     def perform_update(self, serializer):
-        """
-        Ejecutar después de validar al actualizar producto
-        """
         cache.delete('productos_list')
         serializer.save()
         print(f"💾 Producto actualizado en DB")
     
     def perform_destroy(self, instance):
-        """
-        Ejecutar al eliminar producto
-        """
         print(f"\n🗑️  Eliminando producto ID: {instance.id}")
         
-        # Eliminar imagen de Cloudinary si existe
         if instance.imagen:
             try:
                 import cloudinary.uploader
@@ -227,27 +198,18 @@ class ProductoViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def disponibles(self, request):
-        """
-        Endpoint para obtener solo productos disponibles
-        GET /api/productos/disponibles/
-        """
         productos = Producto.objects.filter(stock__gt=0, disponible=True).order_by('nombre')
         serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'])
     def agotados(self, request):
-        """
-        Endpoint para obtener productos agotados
-        GET /api/productos/agotados/
-        """
         productos = Producto.objects.filter(stock=0).order_by('nombre')
         serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
 
 
 class OfertaViewSet(viewsets.ModelViewSet):
-    # ⭐ CRÍTICO: Definir queryset como atributo de clase
     queryset = Oferta.objects.all()
     serializer_class = OfertaSerializer
     
@@ -257,7 +219,6 @@ class OfertaViewSet(viewsets.ModelViewSet):
         return [EsAdministrador()]
     
     def get_queryset(self):
-        # ⭐ Optimizar con prefetch
         return Oferta.objects.prefetch_related(
             Prefetch('productos', queryset=Producto.objects.all())
         ).all()
@@ -283,7 +244,6 @@ class OfertaViewSet(viewsets.ModelViewSet):
         if oferta.productos.count() > 0:
             print(f"📧 Programando notificación en background...")
             try:
-                # ⭐ Ejecutar en background
                 import threading
                 from .emails import enviar_notificacion_oferta
             
@@ -319,127 +279,126 @@ class PedidoViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_create(self, serializer):
-            items_data = self.request.data.get('items', [])
-    
-            if not items_data:
-                raise Exception('Debe incluir al menos un producto')
-    
-            print(f"\n{'='*60}")
-            print(f"🛒 CREANDO PEDIDO - Usuario: {self.request.user.username}")
-            print(f"{'='*60}\n")
-    
-            # Validar productos con select_for_update
-            productos_ids = [item['producto'] for item in items_data]
-            productos = {
-             p.id: p for p in Producto.objects.select_for_update().filter(id__in=productos_ids)
-            }
-    
-            # Validar stock
-            for item in items_data:
-                producto_id = item['producto']
-                cantidad = item['cantidad']
+        items_data = self.request.data.get('items', [])
         
-                if producto_id not in productos:
-                    raise Exception(f'Producto {producto_id} no encontrado')
+        if not items_data:
+            raise Exception('Debe incluir al menos un producto')
         
-                producto = productos[producto_id]
+        print(f"\n{'='*60}")
+        print(f"🛒 CREANDO PEDIDO - Usuario: {self.request.user.username}")
+        print(f"{'='*60}\n")
         
-                if producto.stock < cantidad:
-                    raise Exception(
+        # Validar productos con select_for_update
+        productos_ids = [item['producto'] for item in items_data]
+        productos = {
+            p.id: p for p in Producto.objects.select_for_update().filter(id__in=productos_ids)
+        }
+        
+        # Validar stock
+        for item in items_data:
+            producto_id = item['producto']
+            cantidad = item['cantidad']
+            
+            if producto_id not in productos:
+                raise Exception(f'Producto {producto_id} no encontrado')
+            
+            producto = productos[producto_id]
+            
+            if producto.stock < cantidad:
+                raise Exception(
                     f'Stock insuficiente para {producto.nombre}. '
                     f'Disponible: {producto.stock}, Solicitado: {cantidad}'
-                    )
-        
-                if not producto.disponible:
-                    raise Exception(f'Producto {producto.nombre} no disponible')
-    
-            # Crear pedido
-            pedido = serializer.save(usuario=self.request.user)
-            print(f"✅ Pedido #{pedido.id} creado\n")
-    
-            # Procesar items y detectar productos con stock bajo
-            from decimal import Decimal
-            total = Decimal('0.00')
-            productos_agotados = []
-            productos_stock_bajo = []  # ⭐ NUEVO
-    
-            for item_data in items_data:
-                producto = productos[item_data['producto']]
-                cantidad = item_data['cantidad']
-        
-                precio_unitario = Decimal(str(item_data.get('precio_unitario', producto.precio)))
-        
-                DetallePedido.objects.create(
-                    pedido=pedido,
-                    producto=producto,
-                    cantidad=cantidad
                 )
+            
+            if not producto.disponible:
+                raise Exception(f'Producto {producto.nombre} no disponible')
         
-                subtotal = precio_unitario * cantidad
-                total += subtotal
+        # Crear pedido
+        pedido = serializer.save(usuario=self.request.user)
+        print(f"✅ Pedido #{pedido.id} creado\n")
         
-                stock_anterior = producto.stock
-                producto.stock -= cantidad
+        # Procesar items
+        from decimal import Decimal
+        total = Decimal('0.00')
+        productos_con_stock_bajo = []
         
-                print(f"📦 {producto.nombre}: {stock_anterior} → {producto.stock}")
+        for item_data in items_data:
+            producto = productos[item_data['producto']]
+            cantidad = item_data['cantidad']
+            
+            precio_unitario = Decimal(str(item_data.get('precio_unitario', producto.precio)))
+            
+            DetallePedido.objects.create(
+                pedido=pedido,
+                producto=producto,
+                cantidad=cantidad
+            )
+            
+            subtotal = precio_unitario * cantidad
+            total += subtotal
+            
+            stock_anterior = producto.stock
+            producto.stock -= cantidad
+            
+            print(f"📦 {producto.nombre}: {stock_anterior} → {producto.stock}")
+            
+            # ✅ CORRECCIÓN: Verificar si el stock quedó bajo (≤10) o agotado (=0)
+            if producto.stock == 0:
+                producto.disponible = False
+                print(f"   ⚠️ AGOTADO")
+                productos_con_stock_bajo.append((producto, 'agotado'))
+            elif producto.stock <= 10:
+                print(f"   ⚠️ STOCK BAJO ({producto.stock} unidades)")
+                productos_con_stock_bajo.append((producto, 'bajo'))
+            
+            producto.save(update_fields=['stock', 'disponible'])
         
-                # ⭐ DETECTAR STOCK BAJO (antes de quedarse en 0)
-                if producto.stock > 0 and producto.stock <= 5 and not producto.alerta_stock_bajo_enviada:
-                    productos_stock_bajo.append(producto)
-                    print(f"   ⚠️ STOCK BAJO ({producto.stock} unidades)")
+        pedido.total = total
+        pedido.save(update_fields=['total'])
         
-                # Detectar agotado
-                if producto.stock == 0:
-                    producto.disponible = False
-                    productos_agotados.append(producto)
-                    print(f"   🔴 AGOTADO")
+        print(f"\n💵 TOTAL: ₡{total}")
         
-                producto.save(update_fields=['stock', 'disponible'])
-    
-            pedido.total = total
-            pedido.save(update_fields=['total'])
-    
-            print(f"\n💵 TOTAL: ₡{total}")
-    
-            # ⭐ ENVIAR ALERTAS DE STOCK BAJO
-            for producto_bajo in productos_stock_bajo:
-                try:
-                    enviar_alerta_stock_bajo(producto_bajo.id)
-                    producto_bajo.alerta_stock_bajo_enviada = True
-                    producto_bajo.save(update_fields=['alerta_stock_bajo_enviada'])
-                    print(f"📧 Alerta de stock bajo enviada para: {producto_bajo.nombre}")
-                except Exception as e:
-                    print(f"❌ Error enviando alerta de stock bajo: {e}")
-    
-            # Enviar alertas de agotado
-            for producto_agotado in productos_agotados:
-                if not producto_agotado.alerta_stock_enviada:
-                    try:
-                        enviar_alerta_sin_stock(producto_agotado.id)
-                        producto_agotado.alerta_stock_enviada = True
-                        producto_agotado.save(update_fields=['alerta_stock_enviada'])
-                    except Exception as e:
-                        print(f"❌ Error alerta agotado: {e}")
-    
-            # Enviar confirmación de pedido
-            print(f"\n📧 Programando confirmación en background...")
+        # ✅ CORRECCIÓN: Enviar alertas de stock bajo/agotado
+        for producto_alerta, tipo in productos_con_stock_bajo:
             try:
+                print(f"\n📧 Enviando alerta de stock {tipo} para: {producto_alerta.nombre}")
+                
+                # Ejecutar en background
                 import threading
-                from .emails import enviar_confirmacion_pedido
-
-                def enviar_email():
+                
+                def enviar_alerta():
                     try:
-                        enviar_confirmacion_pedido(pedido.id)
-                        print(f"✅ Correos enviados\n")
+                        enviar_alerta_stock_bajo(producto_alerta.id)  # ⬅️ NOMBRE CORRECTO
+                        print(f"✅ Alerta enviada para {producto_alerta.nombre}\n")
                     except Exception as e:
-                        print(f"❌ Error: {e}\n")
-
-                thread = threading.Thread(target=enviar_email)
+                        print(f"❌ Error enviando alerta: {e}\n")
+                
+                thread = threading.Thread(target=enviar_alerta)
                 thread.daemon = True
                 thread.start()
-                print(f"✅ Email programado\n")
+                
             except Exception as e:
-                print(f"❌ Error programando email: {e}\n")
+                print(f"❌ Error programando alerta: {e}")
+        
+        # Enviar confirmación de pedido
+        print(f"\n📧 Programando confirmación en background...")
+        try:
+            import threading
+            from .emails import enviar_confirmacion_pedido
+    
+            def enviar_email():
+                try:
+                    enviar_confirmacion_pedido(pedido.id)
+                    print(f"✅ Correos enviados\n")
+                except Exception as e:
+                    print(f"❌ Error: {e}\n")
+    
+            thread = threading.Thread(target=enviar_email)
+            thread.daemon = True
+            thread.start()
+            print(f"✅ Email programado\n")
+        except Exception as e:
+            print(f"❌ Error programando email: {e}\n")
     
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def cambiar_estado(self, request, pk=None):

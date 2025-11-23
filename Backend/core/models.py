@@ -19,7 +19,7 @@ class Usuario(AbstractUser):
 
 
 # ============================================================================
-# PRODUCTO
+# PRODUCTO (CON CLOUDINARY Y ALERTAS DE STOCK)
 # ============================================================================
 class Producto(models.Model):
     nombre = models.CharField(max_length=100)
@@ -30,16 +30,18 @@ class Producto(models.Model):
         default=0, 
         help_text='Cantidad disponible en inventario'
     )
+    
+    # ✅ Alertas de stock
     alerta_stock_enviada = models.BooleanField(
         default=False, 
-        help_text='Indica si ya se envió la notificación de stock agotado'
+        help_text='Indica si ya se envió la notificación de stock agotado (=0)'
     )
-    # ⭐ NUEVO CAMPO
     alerta_stock_bajo_enviada = models.BooleanField(
-        default=False,
-        help_text='Indica si ya se envió la notificación de stock bajo'
+        default=False, 
+        help_text='Indica si ya se envió la notificación de stock bajo (≤10 unidades)'
     )
     
+    # ⭐ CloudinaryField para imágenes
     imagen = CloudinaryField(
         'imagen',
         blank=True,
@@ -65,9 +67,9 @@ class Producto(models.Model):
         return self.stock == 0
     
     @property
-    def stock_bajo(self):
-        """Verifica si el producto tiene stock bajo (≤5 unidades)"""
-        return 0 < self.stock <= 5
+    def tiene_stock_bajo(self):
+        """Verifica si el producto tiene stock bajo (≤10)"""
+        return 0 < self.stock <= 10
     
     def reducir_stock(self, cantidad):
         """Reduce el stock del producto"""
