@@ -4,7 +4,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
 from django.utils import timezone
-from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
+from .models import Usuario, Producto, Oferta, ProductoOferta, Pedido, DetallePedido
 import cloudinary.uploader
 
 
@@ -114,10 +114,7 @@ class ProductoSerializer(serializers.ModelSerializer):
     """
     Serializer para productos con soporte completo para Cloudinary
     """
-    # Campo de solo lectura para la URL de la imagen
     imagen_url = serializers.SerializerMethodField(read_only=True)
-    
-    # Campos adicionales
     tiene_oferta = serializers.SerializerMethodField()
     oferta_activa = serializers.SerializerMethodField()
     esta_agotado = serializers.SerializerMethodField()
@@ -128,18 +125,14 @@ class ProductoSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'descripcion', 'precio', 'disponible', 'stock', 
             'imagen', 'imagen_url', 'tiene_oferta', 'oferta_activa', 'esta_agotado'
         ]
-        read_only_fields = ['alerta_stock_enviada']
+        read_only_fields = ['alerta_stock_enviada', 'alerta_stock_bajo_enviada']
     
     def get_imagen_url(self, obj):
-        """
-        Retorna la URL completa de la imagen desde Cloudinary
-        """
+        """Retorna la URL completa de la imagen desde Cloudinary"""
         if obj.imagen:
             try:
-                # Cloudinary devuelve la URL completa automáticamente
                 if hasattr(obj.imagen, 'url'):
                     return obj.imagen.url
-                # Fallback si es string
                 return str(obj.imagen)
             except Exception as e:
                 print(f"❌ Error obteniendo URL de imagen: {e}")
@@ -178,17 +171,13 @@ class ProductoSerializer(serializers.ModelSerializer):
         return obj.stock == 0
     
     def validate_imagen(self, value):
-        """
-        Valida la imagen subida
-        """
+        """Valida la imagen subida"""
         if value:
-            # Validar tamaño (5MB máximo)
             if value.size > 5 * 1024 * 1024:
                 raise serializers.ValidationError(
                     "La imagen no debe superar los 5MB"
                 )
             
-            # Validar tipo de archivo
             allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
             if hasattr(value, 'content_type') and value.content_type not in allowed_types:
                 raise serializers.ValidationError(
@@ -198,40 +187,29 @@ class ProductoSerializer(serializers.ModelSerializer):
         return value
     
     def to_representation(self, instance):
-        """
-        Personalizar la representación para devolver imagen_url en lugar de imagen
-        """
+        """Personalizar la representación para devolver imagen_url en lugar de imagen"""
         representation = super().to_representation(instance)
-        
-        # Reemplazar el campo 'imagen' con la URL completa
         imagen_url = representation.pop('imagen_url', None)
         representation['imagen'] = imagen_url
         
-        # Log para debugging
         if instance.stock == 0:
             print(f"⚠️  Producto agotado: {instance.nombre}")
         
         return representation
     
     def create(self, validated_data):
-        """
-        Crear producto y subir imagen a Cloudinary
-        """
+        """Crear producto y subir imagen a Cloudinary"""
         print(f"\n{'='*60}")
         print(f"📦 Creando producto: {validated_data.get('nombre')}")
         
         imagen = validated_data.get('imagen')
         if imagen:
             print(f"📸 Imagen recibida: {imagen.name} ({imagen.size} bytes)")
-            print(f"📸 Content Type: {getattr(imagen, 'content_type', 'unknown')}")
         
-        # Django-cloudinary-storage se encarga de subir automáticamente
         producto = Producto.objects.create(**validated_data)
         
         if producto.imagen:
             print(f"✅ Imagen subida a Cloudinary: {producto.imagen.url}")
-        else:
-            print(f"⚠️  Producto creado sin imagen")
         
         print(f"✅ Producto creado con ID: {producto.id}")
         print(f"{'='*60}\n")
@@ -239,41 +217,29 @@ class ProductoSerializer(serializers.ModelSerializer):
         return producto
     
     def update(self, instance, validated_data):
-        """
-        Actualizar producto y manejar imagen
-        """
+        """Actualizar producto y manejar imagen"""
         print(f"\n{'='*60}")
         print(f"🔄 Actualizando producto: {instance.nombre} (ID: {instance.id})")
         
-        # Verificar si hay nueva imagen
         nueva_imagen = validated_data.get('imagen')
         imagen_anterior = instance.imagen
         
         if nueva_imagen:
-            print(f"📸 Nueva imagen recibida: {nueva_imagen.name} ({nueva_imagen.size} bytes)")
+            print(f"📸 Nueva imagen recibida: {nueva_imagen.name}")
             
-            # Si hay imagen anterior en Cloudinary, eliminarla
             if imagen_anterior and hasattr(settings, 'CLOUDINARY_CLOUD_NAME'):
                 try:
-                    # Extraer public_id de la URL de Cloudinary
                     if hasattr(imagen_anterior, 'public_id'):
                         public_id = imagen_anterior.public_id
                         print(f"🗑️  Eliminando imagen anterior: {public_id}")
                         cloudinary.uploader.destroy(public_id)
-                        print(f"✅ Imagen anterior eliminada de Cloudinary")
                 except Exception as e:
                     print(f"⚠️  Error eliminando imagen anterior: {e}")
-        else:
-            print(f"📸 Manteniendo imagen existente")
         
-        # Actualizar campos
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
         instance.save()
-        
-        if instance.imagen:
-            print(f"✅ Imagen actualizada: {instance.imagen.url}")
         
         print(f"✅ Producto actualizado exitosamente")
         print(f"{'='*60}\n")
@@ -282,17 +248,43 @@ class ProductoSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
-# OFERTA SERIALIZER
+# OFERTA SERIALIZERS CON CANTIDADES
 # ============================================================================
 
+# ⭐ NUEVO: Serializer para la tabla intermedia
+class ProductoOfertaSerializer(serializers.ModelSerializer):
+    """Serializer para productos con cantidades en ofertas"""
+    producto = ProductoSerializer(read_only=True)
+    producto_id = serializers.IntegerField(write_only=True)
+    
+    class Meta:
+        model = ProductoOferta
+        fields = ['id', 'producto', 'producto_id', 'cantidad']
+    
+    def validate_cantidad(self, value):
+        """Validar que la cantidad sea mayor a 0"""
+        if value < 1:
+            raise serializers.ValidationError("La cantidad debe ser al menos 1")
+        return value
+
+
 class OfertaSerializer(serializers.ModelSerializer):
-    """Serializer para ofertas con soporte para múltiples productos"""
-    productos = ProductoSerializer(many=True, read_only=True)
-    productos_ids = serializers.ListField(
-        child=serializers.IntegerField(),
-        write_only=True,
-        required=True
+    """Serializer para ofertas con cantidades de productos"""
+    # ⭐ NUEVO: Usar el serializer de la tabla intermedia
+    productos_con_cantidad = ProductoOfertaSerializer(
+        source='productooferta_set',
+        many=True,
+        read_only=True
     )
+    
+    # ⭐ NUEVO: Para crear/actualizar con cantidades
+    productos_data = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=True,
+        help_text="Lista de productos con formato: [{'producto_id': 1, 'cantidad': 2}, ...]"
+    )
+    
     dias_restantes = serializers.SerializerMethodField()
     esta_activa = serializers.SerializerMethodField()
 
@@ -300,7 +292,7 @@ class OfertaSerializer(serializers.ModelSerializer):
         model = Oferta
         fields = [
             'id', 'titulo', 'descripcion', 'fecha_inicio', 'fecha_fin', 
-            'precio_oferta', 'productos', 'productos_ids', 
+            'precio_oferta', 'productos_con_cantidad', 'productos_data',
             'dias_restantes', 'esta_activa'
         ]
     
@@ -328,16 +320,34 @@ class OfertaSerializer(serializers.ModelSerializer):
             return obj.fecha_inicio <= hoy <= obj.fecha_fin
         except (AttributeError, TypeError):
             return None
-    
-    def validate_productos_ids(self, value):
-        """Valida que los IDs de productos existan"""
-        if not value:
-            raise serializers.ValidationError("Debe seleccionar al menos un producto")
         
-        for prod_id in value:
-            if not Producto.objects.filter(id=prod_id).exists():
+    def validate_productos_data(self, value):
+        """Valida la estructura de productos_data"""
+        if not value:
+            raise serializers.ValidationError("Debe incluir al menos un producto")
+        
+        for item in value:
+            if 'producto_id' not in item:
                 raise serializers.ValidationError(
-                    f"El producto con ID {prod_id} no existe"
+                    "Cada producto debe tener 'producto_id'"
+                )
+            
+            if 'cantidad' not in item:
+                raise serializers.ValidationError(
+                    "Cada producto debe tener 'cantidad'"
+                )
+            
+            cantidad = item['cantidad']
+            if not isinstance(cantidad, int) or cantidad < 1:
+                raise serializers.ValidationError(
+                    f"La cantidad debe ser un entero mayor a 0, recibido: {cantidad}"
+                )
+            
+            # Verificar que el producto existe
+            producto_id = item['producto_id']
+            if not Producto.objects.filter(id=producto_id).exists():
+                raise serializers.ValidationError(
+                    f"El producto con ID {producto_id} no existe"
                 )
         
         return value
@@ -362,35 +372,50 @@ class OfertaSerializer(serializers.ModelSerializer):
         return data
     
     def create(self, validated_data):
-        """Crea la oferta y asocia los productos"""
+        """Crea la oferta y asocia los productos con cantidades"""
         print(f"\n{'='*60}")
-        print("🎉 CREANDO NUEVA OFERTA")
+        print("🎉 CREANDO NUEVA OFERTA CON CANTIDADES")
         print(f"{'='*60}")
         
-        productos_ids = validated_data.pop('productos_ids')
-        print(f"Productos IDs: {productos_ids}")
+        productos_data = validated_data.pop('productos_data')
+        print(f"📦 Productos a agregar: {len(productos_data)}")
         
-        # Validar que los productos tengan stock
-        productos = Producto.objects.filter(id__in=productos_ids)
-        productos_sin_stock = [p.nombre for p in productos if p.stock == 0]
-        
-        if productos_sin_stock:
-            raise serializers.ValidationError({
-                'error': f'No puedes crear una oferta con productos agotados: {", ".join(productos_sin_stock)}'
-            })
-        
+        # Crear la oferta
         oferta = Oferta.objects.create(**validated_data)
         print(f"✅ Oferta creada: {oferta.titulo} (ID: {oferta.id})")
         
-        oferta.productos.set(productos_ids)
-        print(f"✅ Productos asociados: {oferta.productos.count()}")
+        # Asociar productos con cantidades
+        for item in productos_data:
+            producto_id = item['producto_id']
+            cantidad = item['cantidad']
+            
+            producto = Producto.objects.get(id=producto_id)
+            
+            # Validar stock
+            if producto.stock == 0:
+                print(f"⚠️  Advertencia: {producto.nombre} está agotado")
+            
+            # Crear relación con cantidad
+            ProductoOferta.objects.create(
+                oferta=oferta,
+                producto=producto,
+                cantidad=cantidad
+            )
+            
+            print(f"   ✓ {cantidad}x {producto.nombre}")
+        
+        print(f"✅ {len(productos_data)} producto(s) asociado(s)")
         print(f"{'='*60}\n")
         
         return oferta
     
     def update(self, instance, validated_data):
-        """Actualiza la oferta y sus productos"""
-        productos_ids = validated_data.pop('productos_ids', None)
+        """Actualiza la oferta y sus productos con cantidades"""
+        print(f"\n{'='*60}")
+        print(f"🔄 ACTUALIZANDO OFERTA: {instance.titulo}")
+        print(f"{'='*60}")
+        
+        productos_data = validated_data.pop('productos_data', None)
         
         # Actualizar campos básicos
         for attr, value in validated_data.items():
@@ -398,38 +423,61 @@ class OfertaSerializer(serializers.ModelSerializer):
         instance.save()
         
         # Actualizar productos si se proporcionaron
-        if productos_ids is not None:
-            productos = Producto.objects.filter(id__in=productos_ids)
-            productos_sin_stock = [p.nombre for p in productos if p.stock == 0]
+        if productos_data is not None:
+            # Eliminar relaciones anteriores
+            ProductoOferta.objects.filter(oferta=instance).delete()
+            print(f"🗑️  Relaciones anteriores eliminadas")
             
-            if productos_sin_stock:
-                raise serializers.ValidationError({
-                    'error': f'No puedes actualizar con productos agotados: {", ".join(productos_sin_stock)}'
-                })
+            # Crear nuevas relaciones con cantidades
+            for item in productos_data:
+                producto_id = item['producto_id']
+                cantidad = item['cantidad']
+                
+                producto = Producto.objects.get(id=producto_id)
+                
+                if producto.stock == 0:
+                    print(f"⚠️  Advertencia: {producto.nombre} está agotado")
+                
+                ProductoOferta.objects.create(
+                    oferta=instance,
+                    producto=producto,
+                    cantidad=cantidad
+                )
+                
+                print(f"   ✓ {cantidad}x {producto.nombre}")
             
-            instance.productos.set(productos_ids)
+            print(f"✅ {len(productos_data)} producto(s) actualizado(s)")
+        
+        print(f"✅ Oferta actualizada exitosamente")
+        print(f"{'='*60}\n")
         
         return instance
     
     def to_representation(self, instance):
-        """Personaliza la representación para incluir productos_ids"""
+        """Personaliza la representación para incluir productos_data"""
         if isinstance(instance, dict):
             return instance
         
         representation = super().to_representation(instance)
         
+        # Agregar productos_data para compatibilidad
         try:
-            representation['productos_ids'] = list(
-                instance.productos.values_list('id', flat=True)
-            )
+            productos_oferta = ProductoOferta.objects.filter(oferta=instance).select_related('producto')
+            representation['productos_data'] = [
+                {
+                    'producto_id': po.producto.id,
+                    'cantidad': po.cantidad
+                }
+                for po in productos_oferta
+            ]
         except AttributeError:
-            representation['productos_ids'] = []
+            representation['productos_data'] = []
         
         return representation
 
 
 # ============================================================================
-# PEDIDO SERIALIZERS
+# PEDIDO SERIALIZERS (sin cambios, mantienen la misma estructura)
 # ============================================================================
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
@@ -604,7 +652,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
         
-        # Agregar campos personalizados al payload del token
         token['username'] = user.username
         token['email'] = user.email
         token['rol'] = user.rol
@@ -624,7 +671,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         print(f"🔐 INTENTO DE LOGIN: {username_or_email}")
         print(f"{'='*60}")
         
-        # Intentar por username
         user = authenticate(
             request=self.context.get('request'),
             username=username_or_email,
@@ -634,7 +680,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if user:
             print(f"✅ Login exitoso por USERNAME: {user.username}")
         
-        # Si no funciona, intentar por email
         if not user:
             try:
                 print(f"🔍 Buscando por email...")
@@ -689,4 +734,4 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             }
         }
         
-        return data
+        return data      

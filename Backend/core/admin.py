@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
-from .models import Usuario, Producto, Oferta, Pedido, DetallePedido
+from .models import Usuario, Producto, Oferta, ProductoOferta, Pedido, DetallePedido
 
 
 @admin.register(Usuario)
@@ -43,14 +43,14 @@ class UsuarioAdmin(admin.ModelAdmin):
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'precio_formateado', 'disponible_badge', 'tiene_imagen', 'ofertas_count')
+    list_display = ('nombre', 'precio_formateado', 'stock', 'disponible_badge', 'tiene_imagen', 'ofertas_count')
     list_filter = ('disponible',)
     search_fields = ('nombre', 'descripcion')
     ordering = ('nombre',)
     
     fieldsets = (
         ('Información del Producto', {
-            'fields': ('nombre', 'descripcion', 'precio', 'disponible')
+            'fields': ('nombre', 'descripcion', 'precio', 'stock', 'disponible')
         }),
         ('Imagen', {
             'fields': ('imagen',),
@@ -80,12 +80,12 @@ class ProductoAdmin(admin.ModelAdmin):
     disponible_badge.short_description = 'Estado'
     
     def tiene_imagen(self, obj):
-        """Indica si el producto tiene imagen - CORRECCIÓN"""
+        """Indica si el producto tiene imagen"""
         if obj.imagen:
             return True
         return False
     tiene_imagen.short_description = 'Imagen'
-    tiene_imagen.boolean = True  # Esto le dice a Django que use los iconos estándar
+    tiene_imagen.boolean = True
     
     def ofertas_count(self, obj):
         """Cuenta las ofertas activas del producto"""
@@ -104,21 +104,38 @@ class ProductoAdmin(admin.ModelAdmin):
     ofertas_count.short_description = 'Ofertas Activas'
 
 
+# ⭐ NUEVO: Inline para productos en ofertas con cantidades
+class ProductoOfertaInline(admin.TabularInline):
+    model = ProductoOferta
+    extra = 1
+    fields = ('producto', 'cantidad')
+    autocomplete_fields = ['producto']
+    verbose_name = 'Producto'
+    verbose_name_plural = '🛒 Productos del Combo (con cantidades)'
+    
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "producto":
+            kwargs["queryset"] = Producto.objects.filter(disponible=True).order_by('nombre')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
 @admin.register(Oferta)
 class OfertaAdmin(admin.ModelAdmin):
     list_display = (
-        'titulo', 'productos_list', 'precio_oferta', 'estado_badge',  # ← CAMBIO AQUÍ
+        'titulo', 'productos_list', 'precio_oferta', 'estado_badge',
         'fecha_inicio', 'fecha_fin', 'dias_restantes'
     )
     list_filter = ('fecha_inicio', 'fecha_fin')
-    search_fields = ('titulo', 'descripcion', 'productos__nombre')  # ← CAMBIO AQUÍ
+    search_fields = ('titulo', 'descripcion', 'productos__nombre')
     ordering = ('-fecha_inicio',)
     date_hierarchy = 'fecha_inicio'
-    filter_horizontal = ('productos',)  # ← NUEVO: Para seleccionar múltiples productos fácilmente
+    # ⭐ CAMBIO: Usar inline en lugar de filter_horizontal
+    inlines = [ProductoOfertaInline]
     
     fieldsets = (
         ('Información de la Oferta', {
-            'fields': ('titulo', 'descripcion', 'precio_oferta', 'productos')  # ← CAMBIO AQUÍ
+            'fields': ('titulo', 'descripcion', 'precio_oferta'),
+            'description': '💡 Los productos y sus cantidades se configuran abajo'
         }),
         ('Periodo de Vigencia', {
             'fields': ('fecha_inicio', 'fecha_fin'),
@@ -128,20 +145,31 @@ class OfertaAdmin(admin.ModelAdmin):
     
     def productos_list(self, obj):
         """
-        Muestra la lista de productos asociados a la oferta
+        Muestra la lista de productos con cantidades
         """
-        productos = obj.productos.all()
-        if productos.exists():
-            items = ', '.join([p.nombre for p in productos[:3]])  # Mostrar máximo 3
-            if productos.count() > 3:
-                items += f' y {productos.count() - 3} más...'
-            return items
+        productos_oferta = ProductoOferta.objects.filter(oferta=obj).select_related('producto')
+        
+        if productos_oferta.exists():
+            items = []
+            for po in productos_oferta[:3]:
+                if po.cantidad > 1:
+                    items.append(f"{po.cantidad}x {po.producto.nombre}")
+                else:
+                    items.append(po.producto.nombre)
+            
+            result = ', '.join(items)
+            
+            if productos_oferta.count() > 3:
+                result += f' y {productos_oferta.count() - 3} más...'
+            
+            return format_html('<span title="{}">🛒 {}</span>', 
+                             'Ver detalles completos en la oferta', 
+                             result)
         return '-'
-    productos_list.short_description = 'Productos'
+    productos_list.short_description = 'Productos (Cantidades)'
     
     def estado_badge(self, obj):
         """Muestra el estado de la oferta con color"""
-        from django.utils import timezone
         hoy = timezone.now().date()
         
         if obj.fecha_inicio > hoy:
@@ -163,7 +191,6 @@ class OfertaAdmin(admin.ModelAdmin):
     
     def dias_restantes(self, obj):
         """Calcula días restantes de la oferta"""
-        from django.utils import timezone
         hoy = timezone.now().date()
         
         if obj.fecha_fin >= hoy:
@@ -303,7 +330,40 @@ class DetallePedidoAdmin(admin.ModelAdmin):
     subtotal.short_description = 'Subtotal'
 
 
+# ⭐ NUEVO: Admin para ProductoOferta (opcional, para gestión avanzada)
+@admin.register(ProductoOferta)
+class ProductoOfertaAdmin(admin.ModelAdmin):
+    list_display = ('oferta', 'producto', 'cantidad_badge', 'oferta_estado')
+    list_filter = ('oferta__fecha_inicio', 'oferta__fecha_fin')
+    search_fields = ('oferta__titulo', 'producto__nombre')
+    ordering = ('-oferta__fecha_inicio', 'producto__nombre')
+    
+    def cantidad_badge(self, obj):
+        return format_html(
+            '<span style="background-color: #3b82f6; color: white; padding: 3px 10px; '
+            'border-radius: 3px; font-weight: bold;">{}x</span>',
+            obj.cantidad
+        )
+    cantidad_badge.short_description = 'Cantidad'
+    
+    def oferta_estado(self, obj):
+        hoy = timezone.now().date()
+        if obj.oferta.fecha_inicio <= hoy <= obj.oferta.fecha_fin:
+            return format_html(
+                '<span style="color: green;">✅ Activa</span>'
+            )
+        elif obj.oferta.fecha_inicio > hoy:
+            return format_html(
+                '<span style="color: blue;">🕐 Próxima</span>'
+            )
+        else:
+            return format_html(
+                '<span style="color: gray;">⏹ Expirada</span>'
+            )
+    oferta_estado.short_description = 'Estado Oferta'
+
+
 # Personalización del sitio de administración
-admin.site.site_header = "🥐 Panadería Artesanal - Administración"
+admin.site.site_header = "🥐 Panadería Santa Clara - Administración"
 admin.site.site_title = "Panel Admin"
 admin.site.index_title = "Gestión de la Panadería"

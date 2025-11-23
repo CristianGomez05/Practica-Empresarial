@@ -31,7 +31,7 @@ class Producto(models.Model):
         help_text='Cantidad disponible en inventario'
     )
     
-    # ✅ Alertas de stock
+    # Alertas de stock
     alerta_stock_enviada = models.BooleanField(
         default=False, 
         help_text='Indica si ya se envió la notificación de stock agotado (=0)'
@@ -41,7 +41,7 @@ class Producto(models.Model):
         help_text='Indica si ya se envió la notificación de stock bajo (≤10 unidades)'
     )
     
-    # ⭐ CloudinaryField para imágenes
+    # CloudinaryField para imágenes
     imagen = CloudinaryField(
         'imagen',
         blank=True,
@@ -83,7 +83,7 @@ class Producto(models.Model):
 
 
 # ============================================================================
-# OFERTA
+# OFERTA CON TABLA INTERMEDIA PARA CANTIDADES
 # ============================================================================
 class Oferta(models.Model):
     titulo = models.CharField(max_length=100)
@@ -91,7 +91,12 @@ class Oferta(models.Model):
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField()
     precio_oferta = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    productos = models.ManyToManyField(Producto, related_name="ofertas")
+    # ⭐ CAMBIO: Ahora usa through para especificar la tabla intermedia
+    productos = models.ManyToManyField(
+        Producto, 
+        through='ProductoOferta',
+        related_name="ofertas"
+    )
 
     class Meta:
         verbose_name = 'Oferta'
@@ -105,6 +110,33 @@ class Oferta(models.Model):
     def productos_disponibles(self):
         """Retorna solo productos con stock disponible"""
         return self.productos.filter(stock__gt=0)
+    
+    def get_productos_con_cantidad(self):
+        """Retorna productos con sus cantidades"""
+        return ProductoOferta.objects.filter(oferta=self).select_related('producto')
+
+
+# ⭐ NUEVO: Modelo intermedio para cantidades
+class ProductoOferta(models.Model):
+    """
+    Tabla intermedia que almacena la cantidad de cada producto en una oferta.
+    Ejemplo: "2 panes + 1 dona" en el combo
+    """
+    oferta = models.ForeignKey(Oferta, on_delete=models.CASCADE)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    cantidad = models.PositiveIntegerField(
+        default=1,
+        help_text='Cantidad de este producto en la oferta'
+    )
+
+    class Meta:
+        verbose_name = 'Producto en Oferta'
+        verbose_name_plural = 'Productos en Ofertas'
+        unique_together = ['oferta', 'producto']  # Un producto no puede estar duplicado en la misma oferta
+        ordering = ['oferta', 'producto']
+
+    def __str__(self):
+        return f"{self.cantidad}x {self.producto.nombre} en {self.oferta.titulo}"
 
 
 # ============================================================================
