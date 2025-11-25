@@ -722,35 +722,46 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         print(f"🔐 INTENTO DE LOGIN: {username_or_email}")
         print(f"{'='*60}")
         
-        user = authenticate(
-            request=self.context.get('request'),
-            username=username_or_email,
-            password=password
-        )
+        # ⭐ FIX 1: Primero verificar si es un email
+        user = None
         
-        if user:
-            print(f"✅ Login exitoso por USERNAME: {user.username}")
-        
-        if not user:
+        # Si contiene @, es un email
+        if '@' in username_or_email:
             try:
                 print(f"🔍 Buscando por email...")
                 usuario_obj = Usuario.objects.get(email=username_or_email.lower())
                 print(f"✅ Usuario encontrado: {usuario_obj.username}")
                 
+                # ⭐ FIX 2: Autenticar con el USERNAME del objeto, no con el email
                 user = authenticate(
                     request=self.context.get('request'),
-                    username=usuario_obj.username,
+                    username=usuario_obj.username,  # ⭐ USAR USERNAME, NO EMAIL
                     password=password
                 )
                 
                 if user:
                     print(f"✅ Autenticación exitosa con email")
                 else:
-                    print(f"❌ Contraseña incorrecta")
+                    print(f"❌ Contraseña incorrecta para email")
                 
             except Usuario.DoesNotExist:
                 print(f"❌ No existe usuario con email: {username_or_email}")
+                user = None
+        else:
+            # Si no contiene @, es un username
+            print(f"🔍 Intentando login por username...")
+            user = authenticate(
+                request=self.context.get('request'),
+                username=username_or_email,
+                password=password
+            )
+            
+            if user:
+                print(f"✅ Login exitoso por USERNAME: {user.username}")
+            else:
+                print(f"❌ Credenciales incorrectas para username")
         
+        # Validar resultado final
         if not user:
             print(f"❌ Login fallido")
             print(f"{'='*60}\n")
