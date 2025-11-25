@@ -1,4 +1,4 @@
-// src/pages/LoginPage.jsx
+// src/pages/LoginPage.jsx - CORREGIDO
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../components/auth/AuthContext";
@@ -24,7 +24,8 @@ export default function LoginPage() {
     try {
       console.log("🔐 Intentando login con:", form.username);
       
-      const res = await axios.post(`${API_BASE}/core/token/`, {
+      // ⭐ FIX: URL correcta es /api/token/ (NO /core/token/)
+      const res = await axios.post(`${API_BASE}/api/token/`, {
         username: form.username,
         password: form.password
       });
@@ -33,7 +34,7 @@ export default function LoginPage() {
 
       const { access, refresh, user: userData } = res.data;
 
-      // ✅ CRÍTICO: Guardar en localStorage PRIMERO
+      // Guardar en localStorage
       localStorage.setItem('access', access);
       localStorage.setItem('refresh', refresh);
       console.log("💾 Tokens guardados en localStorage");
@@ -45,9 +46,7 @@ export default function LoginPage() {
       // Decodificar y guardar usuario
       const decoded = jwtDecode(access);
       console.log("🔍 Token decodificado:", decoded);
-      console.log("🔍 userData de respuesta:", userData);
       
-      // Usar userData si está disponible, sino usar decoded
       const userInfo = userData || decoded;
       setUser(userInfo);
 
@@ -55,7 +54,7 @@ export default function LoginPage() {
       console.log("✅ Rol final del usuario:", userInfo.rol);
 
       // Redirigir según rol
-      if (userInfo.rol === 'administrador') {
+      if (userInfo.rol === 'administrador' || userInfo.rol === 'administrador_general') {
         console.log("👑 Administrador detectado, redirigiendo a /admin");
         navigate("/admin");
       } else {
@@ -70,6 +69,8 @@ export default function LoginPage() {
         setError("Usuario o contraseña incorrectos");
       } else if (err.response?.status === 400) {
         setError("Por favor ingresa usuario y contraseña");
+      } else if (err.response?.status === 404) {
+        setError("Endpoint no encontrado. Verifica la configuración del servidor.");
       } else {
         setError("Error de conexión. Verifica que el servidor esté corriendo.");
       }
@@ -172,9 +173,9 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Debug Info (remover en producción) */}
+      {/* Debug Info */}
       <div className="mt-4 text-xs text-gray-500 text-center">
-        <p>Endpoint: {API_BASE}/core/token/</p>
+        <p>✅ Endpoint correcto: {API_BASE}/api/token/</p>
       </div>
     </div>
   );
