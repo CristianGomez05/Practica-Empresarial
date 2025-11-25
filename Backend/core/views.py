@@ -9,13 +9,14 @@ from django.core.cache import cache
 from .emails import enviar_alerta_stock_bajo
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import Usuario, Producto, Oferta, ProductoOferta, Pedido, DetallePedido, Sucursal
+
+# ✅ CORRECCIÓN: Eliminar UsuarioRegistroSerializer de las importaciones
 from .serializers import (
-    UsuarioSerializer, 
+    UsuarioSerializer,  # ✅ Solo este necesitas
     ProductoSerializer, 
     OfertaSerializer, 
     PedidoSerializer, 
     DetallePedidoSerializer,
-    UsuarioRegistroSerializer,
     SucursalSerializer
 )
 from .permissions import EsAdministrador, EsClienteOAdmin
@@ -29,10 +30,27 @@ def registro_usuario(request):
     print("📝 REGISTRO DE USUARIO")
     print("="*60)
     
-    serializer = UsuarioRegistroSerializer(data=request.data)
+    # ✅ USAR UsuarioSerializer directamente
+    serializer = UsuarioSerializer(data=request.data)
     
     if serializer.is_valid():
-        usuario = serializer.save()
+        # ✅ Asegurar que se cree el password correctamente
+        password = request.data.get('password')
+        if not password:
+            return Response({
+                'error': 'La contraseña es requerida'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Crear usuario con contraseña hasheada
+        usuario = Usuario.objects.create_user(
+            username=request.data['username'],
+            email=request.data['email'],
+            password=password,
+            first_name=request.data.get('first_name', ''),
+            last_name=request.data.get('last_name', ''),
+            rol=request.data.get('rol', 'cliente')
+        )
+        
         print(f"✅ Usuario creado: {usuario.username}")
         
         return Response({
@@ -52,7 +70,7 @@ def registro_usuario(request):
 
 
 # ============================================================================
-# SUCURSAL VIEWSET (NUEVO)
+# SUCURSAL VIEWSET
 # ============================================================================
 
 class SucursalViewSet(viewsets.ModelViewSet):
@@ -62,7 +80,7 @@ class SucursalViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_permissions(self):
-        """Solo admins generales pueden crear/editar/eliminar sucursales"""
+        """Solo admins pueden crear/editar/eliminar sucursales"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated()]
         return [IsAuthenticated()]
@@ -71,15 +89,12 @@ class SucursalViewSet(viewsets.ModelViewSet):
         """Filtrar sucursales según el rol del usuario"""
         user = self.request.user
         
-        # Admin general ve todas las sucursales
         if user.rol == 'administrador_general':
             return Sucursal.objects.all()
         
-        # Admin regular solo ve su sucursal
         elif user.rol == 'administrador' and user.sucursal:
             return Sucursal.objects.filter(id=user.sucursal.id)
         
-        # Clientes no ven sucursales (aunque no deberían acceder aquí)
         return Sucursal.objects.none()
     
     @action(detail=False, methods=['get'])
@@ -91,7 +106,7 @@ class SucursalViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# USUARIO VIEWSET (ACTUALIZADO)
+# USUARIO VIEWSET
 # ============================================================================
 
 class UsuarioViewSet(viewsets.ModelViewSet):
@@ -103,19 +118,15 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         """Filtrar usuarios según el rol - SIN FILTRO DE SUCURSAL"""
         user = self.request.user
         
-        # ⭐ Admin general ve TODOS los usuarios (sin filtro de sucursal)
         if user.rol == 'administrador_general':
             return Usuario.objects.all().order_by('-date_joined')
         
-        # ⭐ Admin regular ve:
-        # - Todos los clientes (sin importar sucursal)
-        # - Administradores de su sucursal
-        # - Administradores generales (para info)
         elif user.rol == 'administrador' and user.sucursal:
+            from django.db.models import Q
             return Usuario.objects.filter(
-                models.Q(rol='cliente') |  # Todos los clientes
-                models.Q(sucursal=user.sucursal) |  # Usuarios de su sucursal
-                models.Q(rol='administrador_general')  # Admins generales
+                Q(rol='cliente') |
+                Q(sucursal=user.sucursal) |
+                Q(rol='administrador_general')
             ).distinct().order_by('-date_joined')
         
         return Usuario.objects.none()
@@ -128,7 +139,6 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         
         elif request.method == 'PATCH':
-            # Solo permitir editar campos seguros
             allowed_fields = ['first_name', 'last_name']
             data = {k: v for k, v in request.data.items() if k in allowed_fields}
             
