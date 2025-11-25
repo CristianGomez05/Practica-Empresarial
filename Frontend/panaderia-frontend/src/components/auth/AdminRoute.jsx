@@ -23,12 +23,16 @@ export default function AdminRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Si no es administrador, redirigir al dashboard
-  if (user.rol !== 'administrador') {
-    console.log("🚫 No es administrador, redirigiendo a /dashboard/inicio");
+  // ⭐ Roles administrativos permitidos
+  const rolesAdmin = ['administrador', 'administrador_general'];
+
+  // Si no es administrador (regular o general), redirigir al dashboard
+  if (!rolesAdmin.includes(user.rol)) {
+    console.log(`🚫 Rol "${user.rol}" no autorizado, redirigiendo a /dashboard/inicio`);
     return <Navigate to="/dashboard/inicio" replace />;
   }
 
-  // Si es administrador, mostrar contenido
+  // Si es administrador o administrador_general, mostrar contenido
+  console.log(`✅ Acceso permitido - Rol: ${user.rol}`);
   return children;
 }
