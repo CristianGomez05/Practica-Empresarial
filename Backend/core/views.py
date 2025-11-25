@@ -70,48 +70,6 @@ def registro_usuario(request):
 
 
 # ============================================================================
-# SUCURSAL VIEWSET
-# ============================================================================
-
-class SucursalViewSet(viewsets.ModelViewSet):
-    """ViewSet para gestionar sucursales"""
-    queryset = Sucursal.objects.all()
-    serializer_class = SucursalSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_permissions(self):
-        """Solo admins pueden crear/editar/eliminar sucursales"""
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated()]
-        return [IsAuthenticated()]
-    
-    def get_queryset(self):
-        """Filtrar sucursales según el rol del usuario"""
-        user = self.request.user
-        
-        # ✅ Admin general ve todas las sucursales
-        if user.rol == 'administrador_general':
-            print(f"🏪 Admin General - Mostrando TODAS las sucursales")
-            return Sucursal.objects.all().order_by('nombre')
-        
-        # ✅ Admin regular ve su sucursal
-        elif user.rol == 'administrador' and user.sucursal:
-            print(f"🏪 Admin Regular - Mostrando su sucursal: {user.sucursal.nombre}")
-            return Sucursal.objects.filter(id=user.sucursal.id).order_by('nombre')
-        
-        # ✅ Clientes no ven sucursales
-        return Sucursal.objects.none()
-    
-    @action(detail=False, methods=['get'])
-    def activas(self, request):
-        """Retorna solo sucursales activas"""
-        # ✅ Usar get_queryset para respetar permisos
-        sucursales = self.get_queryset().filter(activa=True)
-        serializer = self.get_serializer(sucursales, many=True)
-        return Response(serializer.data)
-
-
-# ============================================================================
 # USUARIO VIEWSET
 # ============================================================================
 
@@ -172,11 +130,8 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 'error': 'No tienes permisos para crear usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # ✅ Validar que no se cree admin_general si no eres admin_general
-        if request.data.get('rol') == 'administrador_general' and user.rol != 'administrador_general':
-            return Response({
-                'error': 'Solo un Administrador General puede crear otros Administradores Generales'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # ⭐ PERMITIR que cualquier admin cree admin_general
+        # (Sin restricción de rol)
         
         return super().create(request, *args, **kwargs)
     
@@ -193,17 +148,11 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 'error': 'No tienes permisos para editar usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # ✅ Validar cambio de rol a admin_general
-        if request.data.get('rol') == 'administrador_general' and user.rol != 'administrador_general':
-            return Response({
-                'error': 'Solo un Administrador General puede asignar el rol de Administrador General'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # ⭐ PERMITIR que cualquier admin asigne el rol admin_general
+        # (Sin restricción de rol)
         
-        # ✅ No permitir que admins regulares editen admins generales
-        if instance.rol == 'administrador_general' and user.rol != 'administrador_general':
-            return Response({
-                'error': 'No tienes permisos para editar Administradores Generales'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # ⭐ PERMITIR que cualquier admin edite admins generales
+        # (Sin restricción de rol)
         
         return super().update(request, *args, **kwargs)
     
@@ -220,11 +169,8 @@ class UsuarioViewSet(viewsets.ModelViewSet):
                 'error': 'No tienes permisos para eliminar usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # ✅ No permitir eliminar admins generales si no eres admin general
-        if instance.rol == 'administrador_general' and user.rol != 'administrador_general':
-            return Response({
-                'error': 'No tienes permisos para eliminar Administradores Generales'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # ⭐ PERMITIR que cualquier admin elimine admins generales
+        # (Sin restricción de rol)
         
         # ✅ No permitir auto-eliminación
         if instance.id == user.id:
@@ -280,6 +226,48 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             'activos': activos,
             'inactivos': total - activos
         })
+
+
+# ============================================================================
+# SUCURSAL VIEWSET
+# ============================================================================
+
+class SucursalViewSet(viewsets.ModelViewSet):
+    """ViewSet para gestionar sucursales"""
+    queryset = Sucursal.objects.all()
+    serializer_class = SucursalSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        """Solo admins pueden crear/editar/eliminar sucursales"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated()]
+        return [IsAuthenticated()]
+    
+    def get_queryset(self):
+        """Filtrar sucursales según el rol del usuario"""
+        user = self.request.user
+        
+        # ✅ Admin general ve todas las sucursales
+        if user.rol == 'administrador_general':
+            print(f"🏪 Admin General - Mostrando TODAS las sucursales")
+            return Sucursal.objects.all().order_by('nombre')
+        
+        # ✅ Admin regular ve su sucursal
+        elif user.rol == 'administrador' and user.sucursal:
+            print(f"🏪 Admin Regular - Mostrando su sucursal: {user.sucursal.nombre}")
+            return Sucursal.objects.filter(id=user.sucursal.id).order_by('nombre')
+        
+        # ✅ Clientes no ven sucursales
+        return Sucursal.objects.none()
+    
+    @action(detail=False, methods=['get'])
+    def activas(self, request):
+        """Retorna solo sucursales activas"""
+        # ✅ Usar get_queryset para respetar permisos
+        sucursales = self.get_queryset().filter(activa=True)
+        serializer = self.get_serializer(sucursales, many=True)
+        return Response(serializer.data)
 
 
 # ============================================================================
