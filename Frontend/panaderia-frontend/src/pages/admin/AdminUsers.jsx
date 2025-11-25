@@ -73,19 +73,13 @@ export default function AdminUsers() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validaciones
+    // Validaciones básicas
     if (!formData.username.trim()) {
       enqueueSnackbar('El nombre de usuario es requerido', { variant: 'warning' });
       return;
     }
     if (!formData.email.trim()) {
       enqueueSnackbar('El email es requerido', { variant: 'warning' });
-      return;
-    }
-    
-    // Validar que administradores tengan sucursal asignada
-    if ((formData.rol === 'administrador' || formData.rol === 'administrador_general') && !formData.sucursal) {
-      enqueueSnackbar('Los administradores deben tener una sucursal asignada', { variant: 'warning' });
       return;
     }
     
@@ -108,9 +102,16 @@ export default function AdminUsers() {
     try {
       const dataToSend = { ...formData };
       
-      // Si es cliente, remover sucursal
-      if (dataToSend.rol === 'cliente') {
-        dataToSend.sucursal = null;
+      // ⭐ Permitir sucursal null para administrador_general y cliente
+      if (dataToSend.rol === 'cliente' || dataToSend.rol === 'administrador_general') {
+        dataToSend.sucursal = dataToSend.sucursal || null;
+      }
+      
+      // Si es administrador normal y no tiene sucursal, advertir pero permitir
+      if (dataToSend.rol === 'administrador' && !dataToSend.sucursal) {
+        if (!window.confirm('⚠️ Estás creando un administrador sin sucursal asignada. ¿Continuar?')) {
+          return;
+        }
       }
       
       // Remover campos de contraseña si están vacíos en edición
@@ -331,7 +332,7 @@ export default function AdminUsers() {
                         </span>
                       </div>
                     ) : (
-                      <span className="text-gray-400 text-sm">-</span>
+                      <span className="text-gray-400 text-sm">Sin asignar</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
@@ -422,7 +423,7 @@ export default function AdminUsers() {
                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="Nombre de usuario"
-                        disabled={editando} // No se puede cambiar username en edición
+                        disabled={editando}
                       />
                     </div>
 
@@ -480,36 +481,36 @@ export default function AdminUsers() {
                       >
                         <option value="cliente">Cliente</option>
                         <option value="administrador">Administrador</option>
-                        {currentUser?.rol === 'administrador_general' && (
-                          <option value="administrador_general">Administrador General</option>
-                        )}
+                        <option value="administrador_general">Administrador General</option>
                       </select>
                     </div>
 
-                    {(formData.rol === 'administrador' || formData.rol === 'administrador_general') && (
-                      <div>
-                        <label className="block text-sm font-medium text-[#5D4037] mb-2">
-                          Sucursal *
-                        </label>
-                        <select
-                          value={formData.sucursal}
-                          onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Seleccionar sucursal...</option>
-                          {sucursales.filter(s => s.activa).map((sucursal) => (
-                            <option key={sucursal.id} value={sucursal.id}>
-                              {sucursal.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        {sucursales.length === 0 && (
-                          <p className="text-sm text-amber-600 mt-1">
-                            ⚠️ No hay sucursales activas. Crea una primero.
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                        Sucursal {formData.rol === 'administrador' && '*'}
+                        {formData.rol === 'administrador_general' && ' (Opcional)'}
+                      </label>
+                      <select
+                        value={formData.sucursal}
+                        onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={formData.rol === 'cliente'}
+                      >
+                        <option value="">
+                          {formData.rol === 'cliente' ? 'No aplica' : 'Seleccionar sucursal...'}
+                        </option>
+                        {sucursales.filter(s => s.activa).map((sucursal) => (
+                          <option key={sucursal.id} value={sucursal.id}>
+                            {sucursal.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      {formData.rol === 'administrador_general' && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          💡 Admin General puede gestionar todas las sucursales
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {!editando && (
