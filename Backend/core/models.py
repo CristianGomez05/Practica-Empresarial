@@ -5,21 +5,51 @@ from django.contrib.auth.models import AbstractUser
 from cloudinary.models import CloudinaryField
 
 # ============================================================================
-# USUARIO
+# SUCURSAL (NUEVO)
+# ============================================================================
+class Sucursal(models.Model):
+    nombre = models.CharField(max_length=100, unique=True)
+    telefono = models.CharField(max_length=20)
+    direccion = models.TextField()
+    activa = models.BooleanField(default=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Sucursal'
+        verbose_name_plural = 'Sucursales'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
+# ============================================================================
+# USUARIO (ACTUALIZADO)
 # ============================================================================
 class Usuario(AbstractUser):
     ROLES = [
         ('cliente', 'Cliente'),
         ('administrador', 'Administrador'),
+        ('administrador_general', 'Administrador General'),  # ⭐ NUEVO ROL
     ]
-    rol = models.CharField(max_length=20, choices=ROLES, default='cliente')
+    rol = models.CharField(max_length=25, choices=ROLES, default='cliente')
+    
+    # ⭐ NUEVO: Relación con Sucursal
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='usuarios',
+        help_text='Sucursal asignada (solo para administradores)'
+    )
 
     def __str__(self):
         return f"{self.username} ({self.rol})"
 
 
 # ============================================================================
-# PRODUCTO (CON CLOUDINARY Y ALERTAS DE STOCK)
+# PRODUCTO (ACTUALIZADO CON SUCURSAL)
 # ============================================================================
 class Producto(models.Model):
     nombre = models.CharField(max_length=100)
@@ -29,6 +59,16 @@ class Producto(models.Model):
     stock = models.PositiveIntegerField(
         default=0, 
         help_text='Cantidad disponible en inventario'
+    )
+    
+    # ⭐ NUEVO: Relación con Sucursal
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='productos',
+        help_text='Sucursal a la que pertenece este producto',
+        null=True,  # ⭐ TEMPORAL para la migración
+        blank=True  # ⭐ TEMPORAL para la migración
     )
     
     # Alertas de stock
@@ -59,7 +99,7 @@ class Producto(models.Model):
         ordering = ['-id']
 
     def __str__(self):
-        return self.nombre
+        return f"{self.nombre} - {self.sucursal.nombre}"
     
     @property
     def esta_agotado(self):
@@ -83,7 +123,7 @@ class Producto(models.Model):
 
 
 # ============================================================================
-# OFERTA CON TABLA INTERMEDIA PARA CANTIDADES
+# OFERTA (ACTUALIZADA CON SUCURSAL)
 # ============================================================================
 class Oferta(models.Model):
     titulo = models.CharField(max_length=100)
@@ -91,7 +131,17 @@ class Oferta(models.Model):
     fecha_inicio = models.DateField()
     fecha_fin = models.DateField()
     precio_oferta = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    # ⭐ CAMBIO: Ahora usa through para especificar la tabla intermedia
+    
+    # ⭐ NUEVO: Relación con Sucursal
+    sucursal = models.ForeignKey(
+        Sucursal,
+        on_delete=models.CASCADE,
+        related_name='ofertas',
+        help_text='Sucursal a la que pertenece esta oferta',
+        null=True,  # ⭐ TEMPORAL para la migración
+        blank=True  # ⭐ TEMPORAL para la migración
+    )
+    
     productos = models.ManyToManyField(
         Producto, 
         through='ProductoOferta',
@@ -104,7 +154,7 @@ class Oferta(models.Model):
         ordering = ['-fecha_inicio']
 
     def __str__(self):
-        return f"{self.titulo}"
+        return f"{self.titulo} - {self.sucursal.nombre}"
     
     @property
     def productos_disponibles(self):
@@ -116,7 +166,7 @@ class Oferta(models.Model):
         return ProductoOferta.objects.filter(oferta=self).select_related('producto')
 
 
-# ⭐ NUEVO: Modelo intermedio para cantidades
+# ⭐ Modelo intermedio para cantidades (sin cambios)
 class ProductoOferta(models.Model):
     """
     Tabla intermedia que almacena la cantidad de cada producto en una oferta.
@@ -132,7 +182,7 @@ class ProductoOferta(models.Model):
     class Meta:
         verbose_name = 'Producto en Oferta'
         verbose_name_plural = 'Productos en Ofertas'
-        unique_together = ['oferta', 'producto']  # Un producto no puede estar duplicado en la misma oferta
+        unique_together = ['oferta', 'producto']
         ordering = ['oferta', 'producto']
 
     def __str__(self):
@@ -140,7 +190,7 @@ class ProductoOferta(models.Model):
 
 
 # ============================================================================
-# PEDIDO
+# PEDIDO (sin cambios)
 # ============================================================================
 class Pedido(models.Model):
     ESTADOS = [
@@ -164,7 +214,7 @@ class Pedido(models.Model):
 
 
 # ============================================================================
-# DETALLE PEDIDO
+# DETALLE PEDIDO (sin cambios)
 # ============================================================================
 class DetallePedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="detalles")

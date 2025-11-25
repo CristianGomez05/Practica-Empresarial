@@ -3,13 +3,68 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
-from .models import Usuario, Producto, Oferta, ProductoOferta, Pedido, DetallePedido
+from .models import Usuario, Producto, Oferta, ProductoOferta, Pedido, DetallePedido, Sucursal
 
+
+# ============================================================================
+# SUCURSAL ADMIN (NUEVO)
+# ============================================================================
+
+@admin.register(Sucursal)
+class SucursalAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'telefono', 'activa_badge', 'productos_count', 'ofertas_count', 'fecha_creacion')
+    list_filter = ('activa', 'fecha_creacion')
+    search_fields = ('nombre', 'telefono', 'direccion')
+    ordering = ('nombre',)
+    
+    fieldsets = (
+        ('Información General', {
+            'fields': ('nombre', 'telefono', 'direccion', 'activa')
+        }),
+    )
+    
+    def activa_badge(self, obj):
+        """Muestra si la sucursal está activa"""
+        if obj.activa:
+            return format_html(
+                '<span style="background-color: green; color: white; padding: 3px 10px; '
+                'border-radius: 3px;">✓ Activa</span>'
+            )
+        return format_html(
+            '<span style="background-color: red; color: white; padding: 3px 10px; '
+            'border-radius: 3px;">✗ Inactiva</span>'
+        )
+    activa_badge.short_description = 'Estado'
+    
+    def productos_count(self, obj):
+        """Cuenta productos de la sucursal"""
+        count = obj.productos.count()
+        return format_html(
+            '<span style="background-color: #3b82f6; color: white; padding: 3px 8px; '
+            'border-radius: 3px;">{} producto(s)</span>',
+            count
+        )
+    productos_count.short_description = 'Productos'
+    
+    def ofertas_count(self, obj):
+        """Cuenta ofertas de la sucursal"""
+        count = obj.ofertas.count()
+        return format_html(
+            '<span style="background-color: #f59e0b; color: white; padding: 3px 8px; '
+            'border-radius: 3px;">{} oferta(s)</span>',
+            count
+        )
+    ofertas_count.short_description = 'Ofertas'
+
+
+# ============================================================================
+# USUARIO ADMIN (ACTUALIZADO CON SUCURSAL)
+# ============================================================================
 
 @admin.register(Usuario)
 class UsuarioAdmin(admin.ModelAdmin):
-    list_display = ('username', 'email', 'rol_badge', 'is_active', 'is_staff', 'date_joined')
-    list_filter = ('rol', 'is_active', 'is_staff', 'date_joined')
+    list_display = ('username', 'email', 'rol_badge', 'sucursal_info', 'is_active', 'is_staff', 'date_joined')
+    list_filter = ('rol', 'is_active', 'is_staff', 'sucursal', 'date_joined')
     search_fields = ('username', 'email', 'first_name', 'last_name')
     ordering = ('-date_joined',)
     readonly_fields = ('date_joined', 'last_login')
@@ -19,7 +74,7 @@ class UsuarioAdmin(admin.ModelAdmin):
             'fields': ('username', 'email', 'first_name', 'last_name')
         }),
         ('Permisos y Roles', {
-            'fields': ('rol', 'is_active', 'is_staff', 'is_superuser')
+            'fields': ('rol', 'sucursal', 'is_active', 'is_staff', 'is_superuser')
         }),
         ('Fechas Importantes', {
             'fields': ('date_joined', 'last_login')
@@ -31,6 +86,7 @@ class UsuarioAdmin(admin.ModelAdmin):
         colors = {
             'cliente': 'green',
             'administrador': 'blue',
+            'administrador_general': 'purple',
         }
         color = colors.get(obj.rol, 'gray')
         return format_html(
@@ -39,24 +95,44 @@ class UsuarioAdmin(admin.ModelAdmin):
             color, obj.get_rol_display()
         )
     rol_badge.short_description = 'Rol'
+    
+    def sucursal_info(self, obj):
+        """Muestra información de la sucursal"""
+        if obj.sucursal:
+            return format_html(
+                '<span style="background-color: #fbbf24; color: black; padding: 3px 8px; '
+                'border-radius: 3px;">{}</span>',
+                obj.sucursal.nombre
+            )
+        return '-'
+    sucursal_info.short_description = 'Sucursal'
 
+
+# ============================================================================
+# PRODUCTO ADMIN
+# ============================================================================
 
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'precio_formateado', 'stock', 'disponible_badge', 'tiene_imagen', 'ofertas_count')
-    list_filter = ('disponible',)
+    list_display = ('nombre', 'sucursal_nombre', 'precio_formateado', 'stock', 'disponible_badge', 'tiene_imagen', 'ofertas_count')
+    list_filter = ('disponible', 'sucursal')
     search_fields = ('nombre', 'descripcion')
     ordering = ('nombre',)
     
     fieldsets = (
         ('Información del Producto', {
-            'fields': ('nombre', 'descripcion', 'precio', 'stock', 'disponible')
+            'fields': ('nombre', 'descripcion', 'precio', 'stock', 'disponible', 'sucursal')
         }),
         ('Imagen', {
             'fields': ('imagen',),
             'description': 'URL de la imagen del producto'
         }),
     )
+    
+    def sucursal_nombre(self, obj):
+        """Muestra el nombre de la sucursal"""
+        return obj.sucursal.nombre if obj.sucursal else '-'
+    sucursal_nombre.short_description = 'Sucursal'
     
     def precio_formateado(self, obj):
         """Formatea el precio con símbolo de moneda"""
@@ -104,7 +180,10 @@ class ProductoAdmin(admin.ModelAdmin):
     ofertas_count.short_description = 'Ofertas Activas'
 
 
-# ⭐ NUEVO: Inline para productos en ofertas con cantidades
+# ============================================================================
+# OFERTA ADMIN
+# ============================================================================
+
 class ProductoOfertaInline(admin.TabularInline):
     model = ProductoOferta
     extra = 1
@@ -122,19 +201,18 @@ class ProductoOfertaInline(admin.TabularInline):
 @admin.register(Oferta)
 class OfertaAdmin(admin.ModelAdmin):
     list_display = (
-        'titulo', 'productos_list', 'precio_oferta', 'estado_badge',
+        'titulo', 'sucursal_nombre', 'productos_list', 'precio_oferta', 'estado_badge',
         'fecha_inicio', 'fecha_fin', 'dias_restantes'
     )
-    list_filter = ('fecha_inicio', 'fecha_fin')
+    list_filter = ('fecha_inicio', 'fecha_fin', 'sucursal')
     search_fields = ('titulo', 'descripcion', 'productos__nombre')
     ordering = ('-fecha_inicio',)
     date_hierarchy = 'fecha_inicio'
-    # ⭐ CAMBIO: Usar inline en lugar de filter_horizontal
     inlines = [ProductoOfertaInline]
     
     fieldsets = (
         ('Información de la Oferta', {
-            'fields': ('titulo', 'descripcion', 'precio_oferta'),
+            'fields': ('titulo', 'descripcion', 'precio_oferta', 'sucursal'),
             'description': '💡 Los productos y sus cantidades se configuran abajo'
         }),
         ('Periodo de Vigencia', {
@@ -142,6 +220,11 @@ class OfertaAdmin(admin.ModelAdmin):
             'description': 'Define cuándo estará activa la oferta'
         }),
     )
+    
+    def sucursal_nombre(self, obj):
+        """Muestra el nombre de la sucursal"""
+        return obj.sucursal.nombre if obj.sucursal else '-'
+    sucursal_nombre.short_description = 'Sucursal'
     
     def productos_list(self, obj):
         """
@@ -204,6 +287,10 @@ class OfertaAdmin(admin.ModelAdmin):
         return '-'
     dias_restantes.short_description = 'Días Restantes'
 
+
+# ============================================================================
+# PEDIDO ADMIN
+# ============================================================================
 
 class DetallePedidoInline(admin.TabularInline):
     model = DetallePedido
@@ -330,7 +417,6 @@ class DetallePedidoAdmin(admin.ModelAdmin):
     subtotal.short_description = 'Subtotal'
 
 
-# ⭐ NUEVO: Admin para ProductoOferta (opcional, para gestión avanzada)
 @admin.register(ProductoOferta)
 class ProductoOfertaAdmin(admin.ModelAdmin):
     list_display = ('oferta', 'producto', 'cantidad_badge', 'oferta_estado')

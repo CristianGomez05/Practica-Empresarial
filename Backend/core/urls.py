@@ -16,6 +16,7 @@ router.register(r'productos', views.ProductoViewSet)
 router.register(r'ofertas', views.OfertaViewSet)
 router.register(r'pedidos', views.PedidoViewSet, basename='pedido')
 router.register(r'detalles-pedido', views.DetallePedidoViewSet)
+router.register(r'sucursales', views.SucursalViewSet)  # ⭐ NUEVO
 
 urlpatterns = [
     # Router (sin prefijo adicional)

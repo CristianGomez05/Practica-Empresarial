@@ -61,12 +61,6 @@ function App() {
           <Route path="perfil" element={<DashboardProfile />} />
           <Route path="pedido-confirmado/:id" element={<OrderConfirmation />} />
           
-          {/* ❌ ELIMINAR ESTA RUTA - Ya no debe estar aquí */}
-          {/* <Route path="admin/ofertas" element={
-            <AdminRoute>
-              <AdminOffersPanel />
-            </AdminRoute>
-          } /> */}
         </Route>
 
         {/* ==================== PANEL DE ADMINISTRADOR (Solo Admin) ==================== */}

@@ -1,5 +1,6 @@
 // Frontend/src/pages/admin/AdminOffersPanel.jsx
 import React, { useState, useEffect, useCallback } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
@@ -7,38 +8,57 @@ import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
 
 export default function AdminOffersPanel() {
+  // ⭐ NUEVO: Obtener sucursal seleccionada del contexto
+  const { selectedBranch } = useOutletContext();
+  
   const [offers, setOffers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [sucursales, setSucursales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [offerToDelete, setOfferToDelete] = useState(null);
   const [editingOffer, setEditingOffer] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   
-  // ⭐ CAMBIO: Ahora usamos productos_data con cantidades
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
-    productos_data: [], // [{ producto_id: 1, cantidad: 2 }, ...]
+    productos_data: [],
     precio_oferta: '',
     fecha_inicio: '',
-    fecha_fin: ''
+    fecha_fin: '',
+    sucursal: '' // ⭐ NUEVO
   });
   
   const { enqueueSnackbar } = useSnackbar();
 
+  // Cargar usuario actual
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem('user'));
+    setCurrentUser(userData);
+  }, []);
+
+  // ⭐ ACTUALIZADO: Cargar datos con filtro de sucursal
   const fetchData = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
       
-      const [offersRes, productsRes] = await Promise.all([
-        api.get('/ofertas/'),
-        api.get('/productos/')
+      // ⭐ Aplicar filtro de sucursal si está seleccionada
+      const params = selectedBranch ? { sucursal: selectedBranch } : {};
+      
+      const [offersRes, productsRes, sucursalesRes] = await Promise.all([
+        api.get('/ofertas/', { params }),
+        api.get('/productos/', { params }), // También filtrar productos por sucursal
+        api.get('/sucursales/activas/')
       ]);
       
       setOffers(offersRes.data.results || offersRes.data);
       setProducts(productsRes.data.results || productsRes.data);
+      setSucursales(sucursalesRes.data.results || sucursalesRes.data);
+      
+      console.log('🏷️ Ofertas cargadas:', offersRes.data.length, selectedBranch ? `(Sucursal: ${selectedBranch})` : '(Todas)');
       
       if (refreshing) {
         enqueueSnackbar('Datos actualizados', { variant: 'info', autoHideDuration: 2000 });
@@ -52,7 +72,14 @@ export default function AdminOffersPanel() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loading, refreshing, enqueueSnackbar]);
+  }, [loading, refreshing, selectedBranch, enqueueSnackbar]); // ⭐ Agregar selectedBranch
+
+  // ⭐ Recargar cuando cambia la sucursal seleccionada
+  useEffect(() => {
+    if (!loading) {
+      fetchData();
+    }
+  }, [selectedBranch]);
 
   useSmartRefresh(fetchData, {
     interval: 30000,
@@ -77,18 +104,15 @@ export default function AdminOffersPanel() {
     if (offer) {
       setEditingOffer(offer);
       
-      // ⭐ CAMBIO: Cargar productos_data desde la oferta
       let productosData = [];
       if (offer.productos_data && Array.isArray(offer.productos_data)) {
         productosData = offer.productos_data;
       } else if (offer.productos_con_cantidad && Array.isArray(offer.productos_con_cantidad)) {
-        // Convertir desde productos_con_cantidad
         productosData = offer.productos_con_cantidad.map(pc => ({
           producto_id: pc.producto.id,
           cantidad: pc.cantidad
         }));
       } else if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
-        // Formato antiguo: convertir con cantidad = 1
         productosData = offer.productos_ids.map(id => ({
           producto_id: id,
           cantidad: 1
@@ -101,17 +125,28 @@ export default function AdminOffersPanel() {
         productos_data: productosData,
         precio_oferta: offer.precio_oferta || '',
         fecha_inicio: formatDateForInput(offer.fecha_inicio),
-        fecha_fin: formatDateForInput(offer.fecha_fin)
+        fecha_fin: formatDateForInput(offer.fecha_fin),
+        sucursal: offer.sucursal || '' // ⭐ NUEVO
       });
     } else {
       setEditingOffer(null);
+      
+      // ⭐ Auto-asignar sucursal según el usuario
+      let sucursalDefault = '';
+      if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
+        sucursalDefault = currentUser.sucursal_id;
+      } else if (currentUser?.rol === 'administrador_general' && selectedBranch) {
+        sucursalDefault = selectedBranch;
+      }
+      
       setFormData({
         titulo: '',
         descripcion: '',
         productos_data: [],
         precio_oferta: '',
         fecha_inicio: '',
-        fecha_fin: ''
+        fecha_fin: '',
+        sucursal: sucursalDefault
       });
     }
     setShowModal(true);
@@ -122,19 +157,16 @@ export default function AdminOffersPanel() {
     setEditingOffer(null);
   };
 
-  // ⭐ NUEVO: Agregar/quitar producto con cantidad
   const toggleProductSelection = (productId) => {
     setFormData(prev => {
       const exists = prev.productos_data.find(p => p.producto_id === productId);
       
       if (exists) {
-        // Remover producto
         return {
           ...prev,
           productos_data: prev.productos_data.filter(p => p.producto_id !== productId)
         };
       } else {
-        // Agregar producto con cantidad = 1
         return {
           ...prev,
           productos_data: [...prev.productos_data, { producto_id: productId, cantidad: 1 }]
@@ -143,7 +175,6 @@ export default function AdminOffersPanel() {
     });
   };
 
-  // ⭐ NUEVO: Actualizar cantidad de un producto
   const updateProductQuantity = (productId, cantidad) => {
     const cantidadNum = parseInt(cantidad) || 1;
     if (cantidadNum < 1) return;
@@ -173,6 +204,12 @@ export default function AdminOffersPanel() {
       return;
     }
 
+    // ⭐ Validar sucursal
+    if (!formData.sucursal) {
+      enqueueSnackbar('Debes seleccionar una sucursal', { variant: 'warning' });
+      return;
+    }
+
     // Validar stock
     const productosIds = formData.productos_data.map(p => p.producto_id);
     const productosSeleccionados = products.filter(p => productosIds.includes(p.id));
@@ -196,7 +233,6 @@ export default function AdminOffersPanel() {
     }
     
     try {
-      // ⭐ CAMBIO: Enviar productos_data con cantidades
       const payload = {
         titulo: formData.titulo,
         descripcion: formData.descripcion,
@@ -206,7 +242,8 @@ export default function AdminOffersPanel() {
         })),
         fecha_inicio: formData.fecha_inicio,
         fecha_fin: formData.fecha_fin,
-        precio_oferta: parseFloat(formData.precio_oferta)
+        precio_oferta: parseFloat(formData.precio_oferta),
+        sucursal: parseInt(formData.sucursal) // ⭐ NUEVO
       };
 
       console.log('📤 Enviando payload:', payload);
@@ -227,9 +264,12 @@ export default function AdminOffersPanel() {
     } catch (error) {
       console.error('Error guardando oferta:', error);
       console.error('Error response:', error.response?.data);
-      enqueueSnackbar(error.response?.data?.error || 'Error al guardar oferta', { 
-        variant: 'error' 
-      });
+      
+      const errorMsg = error.response?.data?.error 
+        || error.response?.data?.sucursal?.[0]
+        || 'Error al guardar oferta';
+      
+      enqueueSnackbar(errorMsg, { variant: 'error' });
     }
   };
 
@@ -277,7 +317,6 @@ export default function AdminOffersPanel() {
   };
 
   const getOfferProducts = (offer) => {
-    // ⭐ CAMBIO: Usar productos_con_cantidad si existe
     if (offer.productos_con_cantidad && Array.isArray(offer.productos_con_cantidad)) {
       return offer.productos_con_cantidad.map(pc => ({
         ...pc.producto,
@@ -319,7 +358,15 @@ export default function AdminOffersPanel() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[#5D4037]">Gestión de Ofertas</h1>
-            <p className="text-[#8D6E63]">{offers.length} ofertas registradas</p>
+            <p className="text-[#8D6E63]">
+              {offers.length} ofertas registradas
+              {/* ⭐ Mostrar filtro activo */}
+              {selectedBranch && sucursales.length > 0 && (
+                <span className="ml-2 text-purple-600 font-semibold">
+                  • {sucursales.find(s => s.id === selectedBranch)?.nombre || 'Filtrado'}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -417,7 +464,14 @@ export default function AdminOffersPanel() {
                     {offer.descripcion}
                   </p>
 
-                  {/* ⭐ Products Info con CANTIDADES */}
+                  {/* ⭐ Mostrar sucursal */}
+                  {offer.sucursal_nombre && (
+                    <div className="mb-3 flex items-center gap-2 text-sm text-purple-600">
+                      <span className="font-semibold">📍 {offer.sucursal_nombre}</span>
+                    </div>
+                  )}
+
+                  {/* Products Info con CANTIDADES */}
                   <div className="bg-amber-50 rounded-lg p-3 mb-3">
                     <p className="text-xs text-[#8D6E63] mb-2">
                       {offerProducts.length > 1 ? 'Productos incluidos' : 'Producto'}
@@ -435,7 +489,6 @@ export default function AdminOffersPanel() {
                               agotado ? 'opacity-60' : ''
                             }`}>
                               <div className="flex items-center gap-2">
-                                {/* ⭐ MOSTRAR CANTIDAD */}
                                 {cantidad > 1 && (
                                   <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
                                     {cantidad}x
@@ -511,6 +564,19 @@ export default function AdminOffersPanel() {
         </AnimatePresence>
       </div>
 
+      {offers.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-lg shadow">
+          <FaTag className="text-6xl text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">
+            {selectedBranch 
+              ? 'No hay ofertas en esta sucursal' 
+              : 'No hay ofertas registradas'
+            }
+          </p>
+        </div>
+      )}
+
+      {/* Modal Crear/Editar */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -541,6 +607,34 @@ export default function AdminOffersPanel() {
                 </div>
 
                 <div className="space-y-6">
+                  {/* ⭐ NUEVO: Selector de Sucursal */}
+                  <div>
+                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                      Sucursal *
+                      {currentUser?.rol === 'administrador' && (
+                        <span className="text-xs text-gray-500 ml-2">(Tu sucursal)</span>
+                      )}
+                    </label>
+                    <select
+                      value={formData.sucursal}
+                      onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      disabled={currentUser?.rol === 'administrador'}
+                    >
+                      <option value="">Seleccionar sucursal...</option>
+                      {sucursales.map((sucursal) => (
+                        <option key={sucursal.id} value={sucursal.id}>
+                          {sucursal.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    {sucursales.length === 0 && (
+                      <p className="text-sm text-red-600 mt-1">
+                        ⚠️ No hay sucursales activas. Crea una primero.
+                      </p>
+                    )}
+                  </div>
+
                   {/* Título */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
@@ -569,114 +663,127 @@ export default function AdminOffersPanel() {
                     />
                   </div>
 
-                  {/* ⭐ Selección de Productos CON CANTIDADES */}
+                  {/* Selección de Productos CON CANTIDADES */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-3">
                       Productos Incluidos en la Oferta * 
                       <span className="text-xs text-gray-500 ml-2">(Selecciona y ajusta cantidades)</span>
                     </label>
-                    <div className="grid md:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-3 border border-gray-200 rounded-lg bg-gray-50">
-                      {products.map(product => {
-                        const productoData = formData.productos_data.find(p => p.producto_id === product.id);
-                        const isSelected = !!productoData;
-                        const cantidad = productoData?.cantidad || 1;
-                        const agotado = product.stock === 0;
-                        const stockBajo = product.stock > 0 && product.stock <= 5;
-                        
-                        return (
-                          <div
-                            key={product.id}
-                            className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
-                              agotado
-                                ? 'border-red-200 bg-red-50 opacity-50'
-                                : isSelected
-                                ? 'border-orange-500 bg-orange-50 shadow-md'
-                                : 'border-gray-200 bg-white hover:border-orange-300'
-                            }`}
-                          >
-                            {/* Checkbox */}
-                            <button
-                              type="button"
-                              onClick={() => !agotado && toggleProductSelection(product.id)}
-                              disabled={agotado}
-                              className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                    {products.length === 0 ? (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+                        <p className="text-yellow-800">
+                          ⚠️ No hay productos disponibles en esta sucursal.
+                          {currentUser?.rol === 'administrador_general' && (
+                            <span className="block mt-2 text-sm">
+                              Selecciona otra sucursal o crea productos primero.
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid md:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-3 border border-gray-200 rounded-lg bg-gray-50">
+                        {products.map(product => {
+                          const productoData = formData.productos_data.find(p => p.producto_id === product.id);
+                          const isSelected = !!productoData;
+                          const cantidad = productoData?.cantidad || 1;
+                          const agotado = product.stock === 0;
+                          const stockBajo = product.stock > 0 && product.stock <= 5;
+                          
+                          return (
+                            <div
+                              key={product.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
                                 agotado
-                                  ? 'border-red-300 bg-red-100 cursor-not-allowed'
-                                  : isSelected 
-                                  ? 'bg-orange-500 border-orange-500 cursor-pointer' 
-                                  : 'border-gray-300 cursor-pointer hover:border-orange-400'
+                                  ? 'border-red-200 bg-red-50 opacity-50'
+                                  : isSelected
+                                  ? 'border-orange-500 bg-orange-50 shadow-md'
+                                  : 'border-gray-200 bg-white hover:border-orange-300'
                               }`}
                             >
-                              {isSelected && !agotado && <FaCheck className="text-white text-xs" />}
-                              {agotado && <FaTimes className="text-red-600 text-xs" />}
-                            </button>
+                              {/* Checkbox */}
+                              <button
+                                type="button"
+                                onClick={() => !agotado && toggleProductSelection(product.id)}
+                                disabled={agotado}
+                                className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                                  agotado
+                                    ? 'border-red-300 bg-red-100 cursor-not-allowed'
+                                    : isSelected 
+                                    ? 'bg-orange-500 border-orange-500 cursor-pointer' 
+                                    : 'border-gray-300 cursor-pointer hover:border-orange-400'
+                                }`}
+                              >
+                                {isSelected && !agotado && <FaCheck className="text-white text-xs" />}
+                                {agotado && <FaTimes className="text-red-600 text-xs" />}
+                              </button>
 
-                            {/* Info del Producto */}
-                            <div className="flex-1 min-w-0">
-                              <p className={`font-semibold text-sm truncate ${
-                                agotado
-                                  ? 'text-red-600'
-                                  : isSelected 
-                                  ? 'text-orange-900' 
-                                  : 'text-gray-800'
-                              }`}>
-                                {product.nombre}
-                              </p>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-xs text-gray-500">
-                                  ₡{product.precio}
+                              {/* Info del Producto */}
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-semibold text-sm truncate ${
+                                  agotado
+                                    ? 'text-red-600'
+                                    : isSelected 
+                                    ? 'text-orange-900' 
+                                    : 'text-gray-800'
+                                }`}>
+                                  {product.nombre}
                                 </p>
-                                {agotado ? (
-                                  <span className="text-xs text-red-600 font-semibold">
-                                    AGOTADO
-                                  </span>
-                                ) : stockBajo ? (
-                                  <span className="text-xs text-orange-600 font-semibold">
-                                    Stock: {product.stock}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-green-600">
-                                    Stock: {product.stock}
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs text-gray-500">
+                                    ₡{product.precio}
+                                  </p>
+                                  {agotado ? (
+                                    <span className="text-xs text-red-600 font-semibold">
+                                      AGOTADO
+                                    </span>
+                                  ) : stockBajo ? (
+                                    <span className="text-xs text-orange-600 font-semibold">
+                                      Stock: {product.stock}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-green-600">
+                                      Stock: {product.stock}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
 
-                            {/* ⭐ SELECTOR DE CANTIDAD */}
-                            {isSelected && !agotado && (
-                              <div className="flex items-center gap-2 bg-white rounded-lg border border-orange-300 px-2 py-1">
-                                <button
-                                  type="button"
-                                  onClick={() => updateProductQuantity(product.id, cantidad - 1)}
-                                  disabled={cantidad <= 1}
-                                  className={`w-6 h-6 flex items-center justify-center rounded ${
-                                    cantidad <= 1
-                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
-                                  }`}
-                                >
-                                  <FaMinus className="text-xs" />
-                                </button>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={cantidad}
-                                  onChange={(e) => updateProductQuantity(product.id, e.target.value)}
-                                  className="w-12 text-center font-bold text-orange-700 bg-transparent focus:outline-none"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => updateProductQuantity(product.id, cantidad + 1)}
-                                  className="w-6 h-6 flex items-center justify-center rounded bg-orange-100 text-orange-600 hover:bg-orange-200"
-                                >
-                                  <FaPlus className="text-xs" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+                              {/* Selector de Cantidad */}
+                              {isSelected && !agotado && (
+                                <div className="flex items-center gap-2 bg-white rounded-lg border border-orange-300 px-2 py-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateProductQuantity(product.id, cantidad - 1)}
+                                    disabled={cantidad <= 1}
+                                    className={`w-6 h-6 flex items-center justify-center rounded ${
+                                      cantidad <= 1
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                                    }`}
+                                  >
+                                    <FaMinus className="text-xs" />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={cantidad}
+                                    onChange={(e) => updateProductQuantity(product.id, e.target.value)}
+                                    className="w-12 text-center font-bold text-orange-700 bg-transparent focus:outline-none"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => updateProductQuantity(product.id, cantidad + 1)}
+                                    className="w-6 h-6 flex items-center justify-center rounded bg-orange-100 text-orange-600 hover:bg-orange-200"
+                                  >
+                                    <FaPlus className="text-xs" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <div className="mt-2 flex items-center justify-between text-sm">
                       <p className="text-gray-600">
                         ✓ {formData.productos_data.length} producto(s) seleccionado(s)

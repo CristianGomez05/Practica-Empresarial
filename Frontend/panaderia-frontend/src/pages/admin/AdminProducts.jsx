@@ -1,5 +1,6 @@
 // Frontend/src/pages/admin/AdminProducts.jsx
 import { useState, useEffect, useCallback } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { FaPlus, FaEdit, FaTrash, FaBox, FaExclamationTriangle, FaUpload, FaImage, FaTimes, FaSync, FaCheck } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
@@ -7,7 +8,11 @@ import { useSnackbar } from 'notistack';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
 
 const AdminProducts = () => {
+  // ⭐ NUEVO: Obtener sucursal seleccionada del contexto
+  const { selectedBranch } = useOutletContext();
+  
   const [productos, setProductos] = useState([]);
+  const [sucursales, setSucursales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -18,21 +23,33 @@ const AdminProducts = () => {
     precio: '',
     stock: '',
     disponible: true,
-    imagen: ''
+    imagen: '',
+    sucursal: '' // ⭐ NUEVO
   });
   const [archivoImagen, setArchivoImagen] = useState(null);
   const [previewImagen, setPreviewImagen] = useState(null);
   const [subiendoImagen, setSubiendoImagen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
   const { enqueueSnackbar } = useSnackbar();
 
+  // Cargar usuario actual
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem('user'));
+    setCurrentUser(userData);
+  }, []);
+
+  // ⭐ ACTUALIZADO: Cargar productos con filtro de sucursal
   const cargarProductos = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
       
-      const response = await api.get('/productos/');
+      // ⭐ Aplicar filtro de sucursal si está seleccionada
+      const params = selectedBranch ? { sucursal: selectedBranch } : {};
+      const response = await api.get('/productos/', { params });
+      
       const data = response.data.results || response.data;
-      console.log('📦 Productos cargados:', data.length);
+      console.log('📦 Productos cargados:', data.length, selectedBranch ? `(Sucursal: ${selectedBranch})` : '(Todas)');
       setProductos(data);
       
       if (refreshing) {
@@ -47,11 +64,30 @@ const AdminProducts = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loading, refreshing, enqueueSnackbar]);
+  }, [loading, refreshing, selectedBranch, enqueueSnackbar]); // ⭐ Agregar selectedBranch
+
+  // ⭐ NUEVO: Cargar sucursales
+  const cargarSucursales = useCallback(async () => {
+    try {
+      const response = await api.get('/sucursales/activas/');
+      const data = response.data.results || response.data;
+      setSucursales(data);
+    } catch (error) {
+      console.error('❌ Error cargando sucursales:', error);
+    }
+  }, []);
 
   useEffect(() => {
     cargarProductos();
+    cargarSucursales();
   }, []);
+
+  // ⭐ Recargar cuando cambia la sucursal seleccionada
+  useEffect(() => {
+    if (!loading) {
+      cargarProductos();
+    }
+  }, [selectedBranch]);
 
   useSmartRefresh(cargarProductos, {
     interval: 30000,
@@ -108,6 +144,12 @@ const AdminProducts = () => {
       return;
     }
     
+    // ⭐ Validar sucursal
+    if (!formData.sucursal) {
+      enqueueSnackbar('Debes seleccionar una sucursal', { variant: 'warning' });
+      return;
+    }
+    
     try {
       setSubiendoImagen(true);
 
@@ -117,6 +159,7 @@ const AdminProducts = () => {
       formDataToSend.append('precio', parseFloat(formData.precio));
       formDataToSend.append('stock', parseInt(formData.stock) || 0);
       formDataToSend.append('disponible', formData.disponible);
+      formDataToSend.append('sucursal', formData.sucursal); // ⭐ NUEVO
 
       if (archivoImagen) {
         console.log('📤 Subiendo imagen:', archivoImagen.name, (archivoImagen.size / 1024).toFixed(2), 'KB');
@@ -127,6 +170,7 @@ const AdminProducts = () => {
         nombre: formData.nombre,
         precio: formData.precio,
         stock: formData.stock,
+        sucursal: formData.sucursal,
         tiene_imagen_nueva: !!archivoImagen,
         editando: !!editando
       });
@@ -160,6 +204,7 @@ const AdminProducts = () => {
       const errorMsg = error.response?.data?.error 
         || error.response?.data?.detail
         || error.response?.data?.imagen?.[0]
+        || error.response?.data?.sucursal?.[0]
         || 'Error al guardar producto';
       
       enqueueSnackbar(errorMsg, { variant: 'error', autoHideDuration: 5000 });
@@ -183,13 +228,25 @@ const AdminProducts = () => {
 
   const abrirModalCrear = () => {
     setEditando(null);
+    
+    // ⭐ Auto-asignar sucursal según el usuario
+    let sucursalDefault = '';
+    if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
+      // Admin regular: su sucursal
+      sucursalDefault = currentUser.sucursal_id;
+    } else if (currentUser?.rol === 'administrador_general' && selectedBranch) {
+      // Admin general: la sucursal seleccionada
+      sucursalDefault = selectedBranch;
+    }
+    
     setFormData({
       nombre: '',
       descripcion: '',
       precio: '',
       stock: '',
       disponible: true,
-      imagen: ''
+      imagen: '',
+      sucursal: sucursalDefault
     });
     setArchivoImagen(null);
     setPreviewImagen(null);
@@ -205,7 +262,8 @@ const AdminProducts = () => {
       precio: producto.precio,
       stock: producto.stock,
       disponible: producto.disponible,
-      imagen: producto.imagen || ''
+      imagen: producto.imagen || '',
+      sucursal: producto.sucursal || '' // ⭐ NUEVO
     });
     setArchivoImagen(null);
     setPreviewImagen(producto.imagen || null);
@@ -275,7 +333,15 @@ const AdminProducts = () => {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[#5D4037]">Gestión de Productos</h1>
-            <p className="text-[#8D6E63]">{productos.length} productos registrados</p>
+            <p className="text-[#8D6E63]">
+              {productos.length} productos registrados
+              {/* ⭐ Mostrar filtro activo */}
+              {selectedBranch && sucursales.length > 0 && (
+                <span className="ml-2 text-purple-600 font-semibold">
+                  • {sucursales.find(s => s.id === selectedBranch)?.nombre || 'Filtrado'}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -461,6 +527,13 @@ const AdminProducts = () => {
                       <span>ID:</span>
                       <span className="font-semibold">#{producto.id}</span>
                     </p>
+                    {/* ⭐ NUEVO: Mostrar sucursal */}
+                    {producto.sucursal_nombre && (
+                      <p className="flex justify-between">
+                        <span>Sucursal:</span>
+                        <span className="font-semibold text-purple-600">{producto.sucursal_nombre}</span>
+                      </p>
+                    )}
                     <p className="flex justify-between">
                       <span>Disponibilidad:</span>
                       <span className={`font-semibold ${producto.disponible ? 'text-green-600' : 'text-gray-600'}`}>
@@ -494,7 +567,12 @@ const AdminProducts = () => {
       {productos.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <FaBox className="text-6xl text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No hay productos registrados</p>
+          <p className="text-gray-500">
+            {selectedBranch 
+              ? 'No hay productos en esta sucursal' 
+              : 'No hay productos registrados'
+            }
+          </p>
         </div>
       )}
 
@@ -529,6 +607,34 @@ const AdminProducts = () => {
                 </div>
 
                 <div className="space-y-6">
+                  {/* ⭐ NUEVO: Selector de Sucursal */}
+                  <div>
+                    <label className="block text-sm font-medium text-[#5D4037] mb-2">
+                      Sucursal * 
+                      {currentUser?.rol === 'administrador' && (
+                        <span className="text-xs text-gray-500 ml-2">(Tu sucursal)</span>
+                      )}
+                    </label>
+                    <select
+                      value={formData.sucursal}
+                      onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      disabled={currentUser?.rol === 'administrador'} // Admin regular no puede cambiar
+                    >
+                      <option value="">Seleccionar sucursal...</option>
+                      {sucursales.map((sucursal) => (
+                        <option key={sucursal.id} value={sucursal.id}>
+                          {sucursal.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    {sucursales.length === 0 && (
+                      <p className="text-sm text-red-600 mt-1">
+                        ⚠️ No hay sucursales activas. Crea una primero.
+                      </p>
+                    )}
+                  </div>
+
                   <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border-2 border-dashed border-amber-300">
                     <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                       <FaImage className="text-amber-600" />
@@ -652,7 +758,7 @@ const AdminProducts = () => {
                     <button
                       onClick={handleSubmit}
                       disabled={subiendoImagen}
-                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
+                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {subiendoImagen ? (
                         <>
@@ -677,6 +783,7 @@ const AdminProducts = () => {
         )}
       </AnimatePresence>
     </div>
+    
   );
 };
 
