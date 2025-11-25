@@ -33,16 +33,20 @@ export default function AdminUsers() {
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
     setCurrentUser(userData);
+    console.log('👤 Usuario actual:', userData);
   }, []);
 
-  // Cargar datos
+  // ⭐ Cargar datos SIN filtro de sucursal
   const cargarDatos = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
       
+      console.log('📡 Cargando usuarios y sucursales...');
+      
+      // ⭐ NO enviar parámetro de sucursal - queremos TODOS los usuarios
       const [usuariosRes, sucursalesRes] = await Promise.all([
-        api.get('/usuarios/'),
-        api.get('/sucursales/')
+        api.get('/usuarios/'),  // ✅ SIN parámetros de filtro
+        api.get('/sucursales/') // ✅ Cargar todas las sucursales
       ]);
       
       const usuariosData = usuariosRes.data.results || usuariosRes.data;
@@ -50,6 +54,10 @@ export default function AdminUsers() {
       
       console.log('👥 Usuarios cargados:', usuariosData.length);
       console.log('🏪 Sucursales cargadas:', sucursalesData.length);
+      
+      if (usuariosData.length === 0) {
+        console.warn('⚠️ No se cargaron usuarios - verificar permisos');
+      }
       
       setUsuarios(usuariosData);
       setSucursales(sucursalesData);
@@ -59,7 +67,14 @@ export default function AdminUsers() {
       }
     } catch (error) {
       console.error('❌ Error cargando datos:', error);
-      enqueueSnackbar('Error al cargar datos', { variant: 'error' });
+      console.error('❌ Response:', error.response?.data);
+      console.error('❌ Status:', error.response?.status);
+      
+      const errorMsg = error.response?.data?.error || 
+                      error.response?.data?.detail ||
+                      'Error al cargar datos';
+      
+      enqueueSnackbar(errorMsg, { variant: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -72,6 +87,8 @@ export default function AdminUsers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    console.log('📤 Enviando datos:', formData);
     
     // Validaciones básicas
     if (!formData.username.trim()) {
@@ -102,13 +119,12 @@ export default function AdminUsers() {
     try {
       const dataToSend = { ...formData };
       
-      // ⭐ Permitir sucursal null para administrador_general y cliente
+      // ⭐ Limpiar sucursal según el rol
       if (dataToSend.rol === 'cliente' || dataToSend.rol === 'administrador_general') {
-        dataToSend.sucursal = dataToSend.sucursal || null;
-      }
-      
-      // Si es administrador normal y no tiene sucursal, advertir pero permitir
-      if (dataToSend.rol === 'administrador' && !dataToSend.sucursal) {
+        // Clientes y admin general no necesitan sucursal
+        delete dataToSend.sucursal;
+      } else if (dataToSend.rol === 'administrador' && !dataToSend.sucursal) {
+        // Admin regular sin sucursal - advertir
         if (!window.confirm('⚠️ Estás creando un administrador sin sucursal asignada. ¿Continuar?')) {
           return;
         }
@@ -116,11 +132,15 @@ export default function AdminUsers() {
       
       // Remover campos de contraseña si están vacíos en edición
       if (editando) {
-        delete dataToSend.password;
+        if (!dataToSend.password) {
+          delete dataToSend.password;
+        }
         delete dataToSend.password_confirm;
       } else {
         delete dataToSend.password_confirm;
       }
+      
+      console.log('📤 Data final a enviar:', dataToSend);
       
       if (editando) {
         await api.put(`/usuarios/${editando.id}/`, dataToSend);
@@ -134,10 +154,14 @@ export default function AdminUsers() {
       cerrarModal();
     } catch (error) {
       console.error('❌ Error guardando usuario:', error);
+      console.error('❌ Response:', error.response?.data);
+      
       const errorMsg = error.response?.data?.error || 
                       error.response?.data?.username?.[0] ||
                       error.response?.data?.email?.[0] ||
+                      error.response?.data?.detail ||
                       'Error al guardar usuario';
+      
       enqueueSnackbar(errorMsg, { variant: 'error' });
     }
   };
@@ -153,7 +177,10 @@ export default function AdminUsers() {
       await cargarDatos();
     } catch (error) {
       console.error('❌ Error eliminando usuario:', error);
-      enqueueSnackbar('Error al eliminar usuario', { variant: 'error' });
+      const errorMsg = error.response?.data?.error || 
+                      error.response?.data?.detail ||
+                      'Error al eliminar usuario';
+      enqueueSnackbar(errorMsg, { variant: 'error' });
     }
   };
 
@@ -190,6 +217,7 @@ export default function AdminUsers() {
   };
 
   const abrirModalEditar = (usuario) => {
+    console.log('✏️ Editando usuario:', usuario);
     setEditando(usuario);
     setFormData({
       username: usuario.username,
@@ -253,7 +281,10 @@ export default function AdminUsers() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[#5D4037]">Gestión de Usuarios</h1>
-            <p className="text-[#8D6E63]">{usuarios.length} usuarios registrados</p>
+            <p className="text-[#8D6E63]">
+              {usuarios.length} usuarios registrados
+              <span className="text-purple-600 font-semibold ml-2">• Todas las sucursales</span>
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -276,6 +307,18 @@ export default function AdminUsers() {
           </button>
         </div>
       </div>
+
+      {/* Info Box para Admin Regular */}
+      {currentUser?.rol === 'administrador' && (
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+          <p className="text-blue-800 text-sm">
+            ℹ️ <strong>Gestión Global:</strong> Puedes ver y gestionar usuarios de todas las sucursales.
+            {currentUser.sucursal_nombre && (
+              <span className="ml-2">Tu sucursal asignada: <strong>{currentUser.sucursal_nombre}</strong></span>
+            )}
+          </p>
+        </div>
+      )}
 
       {/* Tabla de Usuarios */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -332,7 +375,9 @@ export default function AdminUsers() {
                         </span>
                       </div>
                     ) : (
-                      <span className="text-gray-400 text-sm">Sin asignar</span>
+                      <span className="text-gray-400 text-sm">
+                        {usuario.rol === 'cliente' ? 'N/A' : 'Sin asignar'}
+                      </span>
                     )}
                   </td>
                   <td className="px-6 py-4">
@@ -377,7 +422,10 @@ export default function AdminUsers() {
       {usuarios.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <FaUsers className="text-6xl text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No hay usuarios registrados</p>
+          <p className="text-gray-500 mb-2">No hay usuarios registrados</p>
+          <p className="text-sm text-gray-400">
+            Si esperabas ver usuarios aquí, verifica tus permisos de administrador
+          </p>
         </div>
       )}
 

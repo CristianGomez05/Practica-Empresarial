@@ -89,17 +89,23 @@ class SucursalViewSet(viewsets.ModelViewSet):
         """Filtrar sucursales según el rol del usuario"""
         user = self.request.user
         
+        # ✅ Admin general ve todas las sucursales
         if user.rol == 'administrador_general':
-            return Sucursal.objects.all()
+            print(f"🏪 Admin General - Mostrando TODAS las sucursales")
+            return Sucursal.objects.all().order_by('nombre')
         
+        # ✅ Admin regular ve su sucursal
         elif user.rol == 'administrador' and user.sucursal:
-            return Sucursal.objects.filter(id=user.sucursal.id)
+            print(f"🏪 Admin Regular - Mostrando su sucursal: {user.sucursal.nombre}")
+            return Sucursal.objects.filter(id=user.sucursal.id).order_by('nombre')
         
+        # ✅ Clientes no ven sucursales
         return Sucursal.objects.none()
     
     @action(detail=False, methods=['get'])
     def activas(self, request):
         """Retorna solo sucursales activas"""
+        # ✅ Usar get_queryset para respetar permisos
         sucursales = self.get_queryset().filter(activa=True)
         serializer = self.get_serializer(sucursales, many=True)
         return Response(serializer.data)
@@ -110,26 +116,123 @@ class SucursalViewSet(viewsets.ModelViewSet):
 # ============================================================================
 
 class UsuarioViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet para gestionar usuarios.
+    ⭐ NO filtra por sucursal - muestra TODOS los usuarios según rol del admin
+    """
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
-    permission_classes = [EsAdministrador]
+    permission_classes = [IsAuthenticated]  # ✅ Cambiar de EsAdministrador a IsAuthenticated
+    
+    def get_permissions(self):
+        """
+        Solo admins pueden crear/editar/eliminar usuarios
+        """
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # ✅ Validar que sea admin o admin general
+            return [IsAuthenticated()]
+        return [IsAuthenticated()]
     
     def get_queryset(self):
-        """Filtrar usuarios según el rol - SIN FILTRO DE SUCURSAL"""
+        """
+        ⭐ CAMBIO IMPORTANTE: NO filtrar por sucursal
+        - Admin General: Ve TODOS los usuarios
+        - Admin Regular: Ve TODOS los usuarios (puede necesitar gestionar clientes de todas las sucursales)
+        - Cliente: Solo ve su propio perfil
+        """
         user = self.request.user
         
+        # ✅ Admin General - ve TODO
         if user.rol == 'administrador_general':
+            print(f"🔓 Admin General - Mostrando TODOS los usuarios")
             return Usuario.objects.all().order_by('-date_joined')
         
-        elif user.rol == 'administrador' and user.sucursal:
-            from django.db.models import Q
-            return Usuario.objects.filter(
-                Q(rol='cliente') |
-                Q(sucursal=user.sucursal) |
-                Q(rol='administrador_general')
-            ).distinct().order_by('-date_joined')
+        # ✅ Admin Regular - TAMBIÉN ve TODO (sin filtro de sucursal)
+        elif user.rol == 'administrador':
+            print(f"🔓 Admin Regular - Mostrando TODOS los usuarios")
+            return Usuario.objects.all().order_by('-date_joined')
         
+        # ✅ Cliente - solo ve su perfil
+        elif user.rol == 'cliente':
+            print(f"🔒 Cliente - Solo su perfil")
+            return Usuario.objects.filter(id=user.id)
+        
+        # Fallback
         return Usuario.objects.none()
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Crear usuario - validar permisos
+        """
+        user = request.user
+        
+        # ✅ Solo admins pueden crear usuarios
+        if user.rol not in ['administrador', 'administrador_general']:
+            return Response({
+                'error': 'No tienes permisos para crear usuarios'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # ✅ Validar que no se cree admin_general si no eres admin_general
+        if request.data.get('rol') == 'administrador_general' and user.rol != 'administrador_general':
+            return Response({
+                'error': 'Solo un Administrador General puede crear otros Administradores Generales'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """
+        Actualizar usuario - validar permisos
+        """
+        user = request.user
+        instance = self.get_object()
+        
+        # ✅ Solo admins pueden editar usuarios
+        if user.rol not in ['administrador', 'administrador_general']:
+            return Response({
+                'error': 'No tienes permisos para editar usuarios'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # ✅ Validar cambio de rol a admin_general
+        if request.data.get('rol') == 'administrador_general' and user.rol != 'administrador_general':
+            return Response({
+                'error': 'Solo un Administrador General puede asignar el rol de Administrador General'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # ✅ No permitir que admins regulares editen admins generales
+        if instance.rol == 'administrador_general' and user.rol != 'administrador_general':
+            return Response({
+                'error': 'No tienes permisos para editar Administradores Generales'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        return super().update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        Eliminar usuario - validar permisos
+        """
+        user = request.user
+        instance = self.get_object()
+        
+        # ✅ Solo admins pueden eliminar usuarios
+        if user.rol not in ['administrador', 'administrador_general']:
+            return Response({
+                'error': 'No tienes permisos para eliminar usuarios'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # ✅ No permitir eliminar admins generales si no eres admin general
+        if instance.rol == 'administrador_general' and user.rol != 'administrador_general':
+            return Response({
+                'error': 'No tienes permisos para eliminar Administradores Generales'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # ✅ No permitir auto-eliminación
+        if instance.id == user.id:
+            return Response({
+                'error': 'No puedes eliminar tu propia cuenta'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        return super().destroy(request, *args, **kwargs)
     
     @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
@@ -139,7 +242,8 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         
         elif request.method == 'PATCH':
-            allowed_fields = ['first_name', 'last_name']
+            # Solo permitir editar campos seguros
+            allowed_fields = ['first_name', 'last_name', 'email']
             data = {k: v for k, v in request.data.items() if k in allowed_fields}
             
             serializer = self.get_serializer(request.user, data=data, partial=True)
@@ -147,6 +251,35 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             serializer.save()
             
             return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """
+        Estadísticas de usuarios
+        ⭐ Sin filtro de sucursal
+        """
+        user = request.user
+        
+        # Solo admins pueden ver stats
+        if user.rol not in ['administrador', 'administrador_general']:
+            return Response({
+                'error': 'No tienes permisos'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        total = Usuario.objects.count()
+        clientes = Usuario.objects.filter(rol='cliente').count()
+        admins = Usuario.objects.filter(rol='administrador').count()
+        admins_general = Usuario.objects.filter(rol='administrador_general').count()
+        activos = Usuario.objects.filter(is_active=True).count()
+        
+        return Response({
+            'total': total,
+            'clientes': clientes,
+            'administradores': admins,
+            'administradores_generales': admins_general,
+            'activos': activos,
+            'inactivos': total - activos
+        })
 
 
 # ============================================================================
