@@ -100,28 +100,35 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     permission_classes = [EsAdministrador]
     
     def get_queryset(self):
-        """Filtrar usuarios según el rol"""
+        """Filtrar usuarios según el rol - SIN FILTRO DE SUCURSAL"""
         user = self.request.user
         
-        # Admin general ve todos los usuarios
+        # ⭐ Admin general ve TODOS los usuarios (sin filtro de sucursal)
         if user.rol == 'administrador_general':
-            return Usuario.objects.all()
+            return Usuario.objects.all().order_by('-date_joined')
         
-        # Admin regular solo ve usuarios de su sucursal
+        # ⭐ Admin regular ve:
+        # - Todos los clientes (sin importar sucursal)
+        # - Administradores de su sucursal
+        # - Administradores generales (para info)
         elif user.rol == 'administrador' and user.sucursal:
             return Usuario.objects.filter(
-                Q(sucursal=user.sucursal) | Q(rol='cliente')
-            )
+                models.Q(rol='cliente') |  # Todos los clientes
+                models.Q(sucursal=user.sucursal) |  # Usuarios de su sucursal
+                models.Q(rol='administrador_general')  # Admins generales
+            ).distinct().order_by('-date_joined')
         
         return Usuario.objects.none()
     
     @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
+        """Endpoint para obtener/actualizar el usuario actual"""
         if request.method == 'GET':
             serializer = self.get_serializer(request.user)
             return Response(serializer.data)
         
         elif request.method == 'PATCH':
+            # Solo permitir editar campos seguros
             allowed_fields = ['first_name', 'last_name']
             data = {k: v for k, v in request.data.items() if k in allowed_fields}
             

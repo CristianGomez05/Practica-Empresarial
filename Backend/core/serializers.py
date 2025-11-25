@@ -47,98 +47,69 @@ class UsuarioSerializer(serializers.ModelSerializer):
     """Serializer para usuarios con información completa"""
     sucursal_nombre = serializers.CharField(source='sucursal.nombre', read_only=True)
     sucursal_data = SucursalSerializer(source='sucursal', read_only=True)
+    password = serializers.CharField(write_only=True, required=False)
     
     class Meta:
         model = Usuario
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 
             'rol', 'is_active', 'date_joined', 'sucursal', 
-            'sucursal_nombre', 'sucursal_data'
+            'sucursal_nombre', 'sucursal_data', 'password'
         ]
-        read_only_fields = ['date_joined', 'is_active']
-
-
-class UsuarioRegistroSerializer(serializers.ModelSerializer):
-    """Serializer para el registro de nuevos usuarios"""
-    password = serializers.CharField(
-        write_only=True,
-        min_length=8,
-        style={'input_type': 'password'},
-        help_text="La contraseña debe tener al menos 8 caracteres"
-    )
-    password_confirm = serializers.CharField(
-        write_only=True,
-        style={'input_type': 'password'},
-        help_text="Repite la contraseña"
-    )
-
-    class Meta:
-        model = Usuario
-        fields = [
-            'username', 'email', 'password', 'password_confirm',
-            'first_name', 'last_name'
-        ]
+        read_only_fields = ['date_joined']
         extra_kwargs = {
-            'email': {'required': True},
-            'first_name': {'required': True},
-            'last_name': {'required': True}
+            'sucursal': {'required': False, 'allow_null': True}  # ⭐ Permitir null
         }
-
-    def validate_username(self, value):
-        """Validar que el username sea único"""
-        if Usuario.objects.filter(username=value).exists():
-            raise serializers.ValidationError("Este nombre de usuario ya está en uso")
-        return value
-
-    def validate_email(self, value):
-        """Validar que el email sea único y válido"""
-        if Usuario.objects.filter(email=value).exists():
-            raise serializers.ValidationError("Este correo electrónico ya está registrado")
-        
-        if '@' not in value or '.' not in value.split('@')[-1]:
-            raise serializers.ValidationError("Ingresa un correo electrónico válido")
-        
-        return value.lower()
-
+    
     def validate(self, data):
-        """Validar que las contraseñas coincidan"""
-        if data['password'] != data['password_confirm']:
-            raise serializers.ValidationError({
-                'password_confirm': 'Las contraseñas no coinciden'
-            })
+        """Validaciones personalizadas"""
+        rol = data.get('rol', self.instance.rol if self.instance else None)
+        sucursal = data.get('sucursal', self.instance.sucursal if self.instance else None)
         
-        password = data['password']
-        if len(password) < 8:
-            raise serializers.ValidationError({
-                'password': 'La contraseña debe tener al menos 8 caracteres'
-            })
-        
-        if not any(c.isalpha() for c in password):
-            raise serializers.ValidationError({
-                'password': 'La contraseña debe contener al menos una letra'
-            })
-        
-        if not any(c.isdigit() for c in password):
-            raise serializers.ValidationError({
-                'password': 'La contraseña debe contener al menos un número'
-            })
+        # ⭐ Solo validar sucursal para administradores regulares
+        if rol == 'administrador' and not sucursal:
+            # Advertencia, pero no error - permitir crear sin sucursal
+            print(f"⚠️ Creando administrador sin sucursal asignada")
         
         return data
-
+    
     def create(self, validated_data):
-        """Crear el usuario con la contraseña hasheada"""
-        validated_data.pop('password_confirm')
+        """Crear usuario con contraseña hasheada"""
+        password = validated_data.pop('password', None)
         
         usuario = Usuario.objects.create_user(
             username=validated_data['username'],
             email=validated_data['email'],
-            password=validated_data['password'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name'],
-            rol='cliente'
+            password=password or Usuario.objects.make_random_password(),
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            rol=validated_data.get('rol', 'cliente'),
+            sucursal=validated_data.get('sucursal', None),
+            is_active=validated_data.get('is_active', True)
         )
         
+        print(f"✅ Usuario creado: {usuario.username} (Rol: {usuario.rol})")
+        if usuario.sucursal:
+            print(f"   Sucursal: {usuario.sucursal.nombre}")
+        else:
+            print(f"   Sin sucursal asignada")
+        
         return usuario
+    
+    def update(self, instance, validated_data):
+        """Actualizar usuario"""
+        password = validated_data.pop('password', None)
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        if password:
+            instance.set_password(password)
+        
+        instance.save()
+        
+        print(f"🔄 Usuario actualizado: {instance.username}")
+        return instance
 
 
 # ============================================================================
