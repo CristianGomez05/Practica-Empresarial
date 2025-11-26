@@ -1,4 +1,4 @@
-// src/App.jsx
+// src/App.jsx - ACTUALIZADO
 import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
@@ -16,7 +16,7 @@ import DashboardProfile from "./pages/dashboard/DashboardProfile";
 import OrderConfirmation from "./pages/OrderConfirmation";
 import RegisterPage from './pages/RegisterPage';
 
-// Importar componentes de administrador
+// Importar componentes de administrador REGULAR
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
@@ -25,8 +25,14 @@ import AdminOrders from "./pages/admin/AdminOrders";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminUsers from "./pages/admin/AdminUsers";
 
+// ⭐ NUEVO: Importar componentes de ADMIN GENERAL
+import AdminGeneralLayout from "./components/admin/AdminGeneralLayout";
+import AdminGeneralDashboard from "./pages/admin/AdminGeneralDashboard";
+import AdminBranches from "./pages/admin/AdminBranches";
+
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import AdminRoute from "./components/auth/AdminRoute";
+import AdminGeneralRoute from "./components/auth/AdminGeneralRoute";
 import "./App.css";
 
 function App() {
@@ -55,15 +61,14 @@ function App() {
         }>
           <Route path="inicio" element={<DashboardHome />} />
           <Route path="productos" element={<DashboardProducts />} />
-          <Route path="ofertas" element={<DashboardOffers />} /> {/* ✅ Esta es la ruta para CLIENTES */}
+          <Route path="ofertas" element={<DashboardOffers />} />
           <Route path="carrito" element={<DashboardCart />} />
           <Route path="pedidos" element={<DashboardOrders />} />
           <Route path="perfil" element={<DashboardProfile />} />
           <Route path="pedido-confirmado/:id" element={<OrderConfirmation />} />
-          
         </Route>
 
-        {/* ==================== PANEL DE ADMINISTRADOR (Solo Admin) ==================== */}
+        {/* ==================== PANEL DE ADMINISTRADOR REGULAR ==================== */}
         <Route path="/admin" element={
           <AdminRoute>
             <AdminLayout />
@@ -71,7 +76,22 @@ function App() {
         }>
           <Route index element={<AdminDashboard />} />
           <Route path="productos" element={<AdminProducts />} />
-          <Route path="ofertas" element={<AdminOffersPanel />} /> {/* ✅ Esta es la ruta para ADMIN */}
+          <Route path="ofertas" element={<AdminOffersPanel />} />
+          <Route path="pedidos" element={<AdminOrders />} />
+          <Route path="usuarios" element={<AdminUsers />} />
+          <Route path="reportes" element={<AdminReports />} />
+        </Route>
+
+        {/* ⭐ NUEVO: PANEL DE ADMINISTRADOR GENERAL ==================== */}
+        <Route path="/admin-general" element={
+          <AdminGeneralRoute>
+            <AdminGeneralLayout />
+          </AdminGeneralRoute>
+        }>
+          <Route index element={<AdminGeneralDashboard />} />
+          <Route path="sucursales" element={<AdminBranches />} />
+          <Route path="productos" element={<AdminProducts />} />
+          <Route path="ofertas" element={<AdminOffersPanel />} />
           <Route path="pedidos" element={<AdminOrders />} />
           <Route path="usuarios" element={<AdminUsers />} />
           <Route path="reportes" element={<AdminReports />} />

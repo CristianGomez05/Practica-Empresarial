@@ -1,4 +1,4 @@
-// src/pages/LoginPage.jsx - CORREGIDO
+// src/pages/LoginPage.jsx - ACTUALIZADO
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../components/auth/AuthContext";
@@ -24,7 +24,6 @@ export default function LoginPage() {
     try {
       console.log("🔐 Intentando login con:", form.username);
       
-      // ⭐ FIX: URL correcta es /api/token/ (NO /core/token/)
       const res = await axios.post(`${API_BASE}/api/token/`, {
         username: form.username,
         password: form.password
@@ -53,9 +52,12 @@ export default function LoginPage() {
       console.log("✅ Usuario guardado en contexto:", userInfo);
       console.log("✅ Rol final del usuario:", userInfo.rol);
 
-      // Redirigir según rol
-      if (userInfo.rol === 'administrador' || userInfo.rol === 'administrador_general') {
-        console.log("👑 Administrador detectado, redirigiendo a /admin");
+      // ⭐ ACTUALIZADO: Redirigir según rol específico
+      if (userInfo.rol === 'administrador_general') {
+        console.log("👑👑 Admin General detectado, redirigiendo a /admin-general");
+        navigate("/admin-general");
+      } else if (userInfo.rol === 'administrador') {
+        console.log("👑 Administrador Regular detectado, redirigiendo a /admin");
         navigate("/admin");
       } else {
         console.log("👤 Cliente detectado, redirigiendo a /dashboard/inicio");

@@ -1,4 +1,4 @@
-// src/pages/Dashboard.jsx
+// src/pages/Dashboard.jsx - ACTUALIZADO
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../components/auth/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -37,7 +37,6 @@ export default function Dashboard() {
             const decoded = jwtDecode(access);
             console.log("🔍 Token decodificado completo:", decoded);
             console.log("🔍 Rol del usuario:", decoded.rol);
-            console.log("🔍 Todas las propiedades:", Object.keys(decoded));
             setUser(decoded);
             console.log("✅ Usuario autenticado:", decoded);
           } catch (error) {
@@ -72,20 +71,23 @@ export default function Dashboard() {
     processTokens();
   }, [setUser, setAccessToken, setRefreshToken, navigate]);
 
-  // Verificar autenticación y redirigir según rol
+  // ⭐ ACTUALIZADO: Redirigir según rol específico
   useEffect(() => {
     if (!processing && !accessToken && !window.location.hash.includes("access=")) {
       console.log("⚠️ No autenticado después de procesar, redirigiendo...");
       navigate("/login", { replace: true });
     } else if (!processing && accessToken && user) {
-      // ✨ NUEVA LÓGICA: Redirigir según rol
       console.log("✅ Autenticado, verificando rol:", user.rol);
       
-      if (user.rol === 'administrador') {
-        console.log("👑 Usuario administrador detectado, redirigiendo a panel admin");
+      // ⭐ NUEVA LÓGICA: Diferenciar entre admin general y admin regular
+      if (user.rol === 'administrador_general') {
+        console.log("👑👑 Admin General detectado, redirigiendo a /admin-general");
+        navigate("/admin-general", { replace: true });
+      } else if (user.rol === 'administrador') {
+        console.log("👑 Admin Regular detectado, redirigiendo a /admin");
         navigate("/admin", { replace: true });
       } else {
-        console.log("👤 Usuario cliente, redirigiendo a dashboard cliente");
+        console.log("👤 Usuario cliente, redirigiendo a /dashboard/inicio");
         navigate("/dashboard/inicio", { replace: true });
       }
     }
@@ -103,7 +105,6 @@ export default function Dashboard() {
     );
   }
 
-  // Si no hay usuario después de procesar, mostrar loading
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FFF8F0]">
