@@ -1,9 +1,9 @@
-// src/pages/dashboard/DashboardOrders.jsx
+// Frontend/panaderia-frontend/src/pages/dashboard/DashboardOrders.jsx
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../../services/api";
 import ImageModal from "../../components/ImageModal";
-import { FaClipboardList, FaClock, FaCheckCircle, FaTruck, FaBox, FaTag, FaPercentage } from "react-icons/fa";
+import { FaClipboardList, FaClock, FaCheckCircle, FaTruck, FaBox, FaTag, FaPercentage, FaStore } from "react-icons/fa";
 
 export default function DashboardOrders() {
   const [orders, setOrders] = useState([]);
@@ -100,32 +100,26 @@ export default function DashboardOrders() {
     return { tieneOferta, ahorro, porcentajeDescuento, totalEsperado };
   };
 
-  // Agrupar productos que parecen ser parte de una oferta
-  const agruparProductosOferta = (detalles, total) => {
+  // Agrupar productos por sucursal
+  const agruparPorSucursal = (detalles) => {
     if (!detalles || detalles.length === 0) return [];
     
-    // Si hay múltiples productos con la misma cantidad, probablemente son de una oferta
-    const cantidadMasComun = detalles.reduce((acc, item) => {
-      acc[item.cantidad] = (acc[item.cantidad] || 0) + 1;
-      return acc;
-    }, {});
+    const grupos = {};
     
-    const cantidadOferta = Object.keys(cantidadMasComun).find(
-      cant => cantidadMasComun[cant] > 1
-    );
-    
-    if (cantidadOferta) {
-      const productosOferta = detalles.filter(d => d.cantidad == cantidadOferta);
-      if (productosOferta.length > 1) {
-        return [{
-          esOferta: true,
-          productos: productosOferta,
-          cantidad: parseInt(cantidadOferta)
-        }];
+    detalles.forEach(detalle => {
+      const sucursalNombre = detalle.sucursal_nombre || 'Sin sucursal';
+      
+      if (!grupos[sucursalNombre]) {
+        grupos[sucursalNombre] = [];
       }
-    }
+      
+      grupos[sucursalNombre].push(detalle);
+    });
     
-    return detalles.map(d => ({ esOferta: false, productos: [d], cantidad: d.cantidad }));
+    return Object.entries(grupos).map(([sucursal, productos]) => ({
+      sucursal,
+      productos
+    }));
   };
 
   if (loading) {
@@ -177,7 +171,7 @@ export default function DashboardOrders() {
           const statusInfo = getStatusInfo(order.estado);
           const StatusIcon = statusInfo.icon;
           const { tieneOferta, ahorro, porcentajeDescuento, totalEsperado } = detectarOfertas(order);
-          const grupos = agruparProductosOferta(order.detalles, order.total);
+          const gruposSucursal = agruparPorSucursal(order.detalles);
 
           return (
             <motion.div
@@ -238,30 +232,33 @@ export default function DashboardOrders() {
                   </div>
                 )}
 
-                {/* Items agrupados */}
-                {grupos.map((grupo, gIdx) => (
+                {/* Items agrupados por sucursal */}
+                {gruposSucursal.map((grupo, gIdx) => (
                   <div
                     key={gIdx}
-                    className={`mb-4 ${
-                      grupo.esOferta 
-                        ? 'bg-gradient-to-r from-green-50 to-amber-50 border-2 border-green-200 rounded-lg p-4' 
-                        : ''
-                    }`}
+                    className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-lg p-4"
                   >
-                    {grupo.esOferta && (
-                      <div className="flex items-center gap-2 mb-3">
-                        <FaTag className="text-green-600" />
-                        <span className="font-bold text-green-800 text-sm">
-                          COMBO OFERTA - {grupo.productos.length} productos incluidos
-                        </span>
+                    {/* ⭐ NUEVO: Header con nombre de sucursal */}
+                    <div className="flex items-center gap-2 mb-3 pb-3 border-b border-amber-200">
+                      <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
+                        <FaStore className="text-white text-sm" />
                       </div>
-                    )}
+                      <div>
+                        <p className="font-bold text-amber-900 text-sm">
+                          Sucursal: {grupo.sucursal}
+                        </p>
+                        <p className="text-xs text-amber-700">
+                          {grupo.productos.length} producto{grupo.productos.length > 1 ? 's' : ''} de esta sucursal
+                        </p>
+                      </div>
+                    </div>
                     
+                    {/* Productos de esta sucursal */}
                     <div className="space-y-2">
                       {grupo.productos.map((item, idx) => (
                         <div
                           key={idx}
-                          className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+                          className="flex items-center justify-between py-2 border-b border-amber-100 last:border-0 bg-white rounded-lg px-3"
                         >
                           <div className="flex items-center gap-3">
                             {/* IMAGEN CLICKEABLE PARA ABRIR MODAL */}
@@ -297,7 +294,7 @@ export default function DashboardOrders() {
                             <div className="font-semibold text-amber-700">
                               ₡{((item.producto?.precio || 0) * item.cantidad).toFixed(2)}
                             </div>
-                            {grupo.esOferta && (
+                            {tieneOferta && (
                               <div className="text-xs text-green-600 font-medium">
                                 Precio de oferta
                               </div>

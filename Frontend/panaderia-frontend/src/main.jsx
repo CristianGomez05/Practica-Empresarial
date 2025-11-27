@@ -1,26 +1,29 @@
-// src/main.jsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-import App from "./App.jsx";
-import "./index.css";
-import { AuthProvider } from "./components/auth/AuthContext";
-import { CartProvider } from "./components/cart/CartContext";
-import { SnackbarProvider } from "notistack";
+// Frontend/panaderia-frontend/src/main.jsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App.jsx';
+import './index.css';
+import { AuthProvider } from './components/auth/AuthContext';
+import { CartProvider } from './components/cart/CartContext';
+import { BranchProvider } from './contexts/BranchContext'; // ⭐ NUEVO
+import { SnackbarProvider } from 'notistack';
 
-const root = createRoot(document.getElementById("root"));
-
-root.render(
+ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <SnackbarProvider 
-      maxSnack={3} 
-      anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      autoHideDuration={3000}
-    >
-      <AuthProvider>
+    <AuthProvider>
+      <BranchProvider> {/* ⭐ NUEVO */}
         <CartProvider>
-          <App />
+          <SnackbarProvider 
+            maxSnack={3}
+            anchorOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <App />
+          </SnackbarProvider>
         </CartProvider>
-      </AuthProvider>
-    </SnackbarProvider>
+      </BranchProvider>
+    </AuthProvider>
   </React.StrictMode>
 );

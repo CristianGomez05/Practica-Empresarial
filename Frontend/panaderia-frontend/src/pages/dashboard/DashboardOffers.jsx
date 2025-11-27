@@ -5,33 +5,43 @@ import api from "../../services/api";
 import { useCart } from "../../hooks/useCart";
 import { FaShoppingCart, FaTag, FaClock, FaCheck, FaBox, FaExclamationTriangle } from "react-icons/fa";
 import { useSnackbar } from "notistack";
+import { useBranch } from "../../contexts/BranchContext";
 
 export default function DashboardOffers() {
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const { add, addOffer } = useCart();
   const { enqueueSnackbar } = useSnackbar();
+  const { selectedBranch } = useBranch();
 
   useEffect(() => {
     async function fetchOffers() {
+      // ⭐ No cargar si no hay sucursal seleccionada
+      if (!selectedBranch) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const res = await api.get("/ofertas/");
+        // ⭐ Filtrar por sucursal
+        const res = await api.get("/ofertas/", {
+          params: { sucursal: selectedBranch.id }
+        });
         const data = res.data.results || res.data;
-        
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        
+
         const activeOffers = data.filter((offer) => {
           const startDate = new Date(offer.fecha_inicio + 'T00:00:00');
           const endDate = new Date(offer.fecha_fin + 'T00:00:00');
-          
+
           startDate.setHours(0, 0, 0, 0);
           endDate.setHours(23, 59, 59, 999);
-          
+
           return today >= startDate && today <= endDate;
         });
-        
-        console.log('📅 Ofertas activas:', activeOffers.length);
+
         setOffers(activeOffers);
       } catch (error) {
         console.error("Error cargando ofertas:", error);
@@ -41,7 +51,36 @@ export default function DashboardOffers() {
       }
     }
     fetchOffers();
-  }, [enqueueSnackbar]);
+  }, [selectedBranch, enqueueSnackbar]); // ⭐ Recargar cuando cambie sucursal
+
+  // ⭐ Mostrar mensaje si no hay sucursal seleccionada
+  if (!selectedBranch) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-lg p-12 text-center"
+        >
+          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FaStore className="text-5xl text-gray-300" />
+          </div>
+          <h2 className="text-2xl font-bold text-[#5D4037] mb-3">
+            Selecciona una sucursal
+          </h2>
+          <p className="text-[#8D6E63] mb-6">
+            Para ver las ofertas disponibles, primero selecciona una sucursal en el inicio
+          </p>
+          <button
+            onClick={() => window.location.href = '/dashboard/inicio'}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
+          >
+            Ir a Inicio
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   // ⭐ NUEVA FUNCIÓN: Obtener productos con cantidades
   const getProductosConCantidad = (offer) => {
@@ -51,20 +90,20 @@ export default function DashboardOffers() {
         cantidad_oferta: pc.cantidad
       }));
     }
-    
+
     if (offer.productos && Array.isArray(offer.productos)) {
       return offer.productos.map(p => ({
         ...p,
         cantidad_oferta: 1
       }));
     }
-    
+
     return [];
   };
 
   const handleAddAllToCart = (offer) => {
     const productos = getProductosConCantidad(offer);
-    
+
     if (productos.length === 0) {
       console.error('❌ Oferta sin productos:', offer);
       enqueueSnackbar("Error: La oferta no tiene productos", { variant: "error" });
@@ -73,17 +112,17 @@ export default function DashboardOffers() {
 
     // ⭐ VALIDACIÓN: Verificar stock considerando las cantidades
     const productosConProblemas = [];
-    
+
     productos.forEach(p => {
       const cantidadRequerida = p.cantidad_oferta || 1;
-      
+
       if (p.stock === 0) {
         productosConProblemas.push(`${p.nombre} (agotado)`);
       } else if (p.stock < cantidadRequerida) {
         productosConProblemas.push(`${p.nombre} (stock insuficiente: solo ${p.stock} disponible${p.stock > 1 ? 's' : ''}, se necesitan ${cantidadRequerida})`);
       }
     });
-    
+
     if (productosConProblemas.length > 0) {
       enqueueSnackbar(
         `No se puede agregar la oferta:\n${productosConProblemas.join('\n')}`,
@@ -94,9 +133,9 @@ export default function DashboardOffers() {
 
     console.log('🛒 Añadiendo oferta al carrito:', offer);
     addOffer(offer);
-    
+
     enqueueSnackbar(
-      `Oferta "${offer.titulo}" añadida al carrito por ₡${offer.precio_oferta}`, 
+      `Oferta "${offer.titulo}" añadida al carrito por ₡${offer.precio_oferta}`,
       {
         variant: "success",
         autoHideDuration: 3000,
@@ -134,7 +173,7 @@ export default function DashboardOffers() {
 
     add(producto, cantidad);
     enqueueSnackbar(
-      `${cantidad}x ${producto.nombre} añadido${cantidad > 1 ? 's' : ''} al carrito`, 
+      `${cantidad}x ${producto.nombre} añadido${cantidad > 1 ? 's' : ''} al carrito`,
       {
         variant: "success",
         autoHideDuration: 2000,
@@ -155,12 +194,12 @@ export default function DashboardOffers() {
   const calculateSavings = (offer) => {
     const productos = getProductosConCantidad(offer);
     if (productos.length === 0) return 0;
-    
+
     const totalRegular = productos.reduce((sum, p) => {
       const cantidad = p.cantidad_oferta || 1;
       return sum + (parseFloat(p.precio || 0) * cantidad);
     }, 0);
-    
+
     const savings = totalRegular - parseFloat(offer.precio_oferta || 0);
     return savings > 0 ? savings : 0;
   };
@@ -168,12 +207,12 @@ export default function DashboardOffers() {
   const calculateDiscountPercentage = (offer) => {
     const productos = getProductosConCantidad(offer);
     if (productos.length === 0) return 0;
-    
+
     const totalRegular = productos.reduce((sum, p) => {
       const cantidad = p.cantidad_oferta || 1;
       return sum + (parseFloat(p.precio || 0) * cantidad);
     }, 0);
-    
+
     if (totalRegular === 0) return 0;
     const savings = totalRegular - parseFloat(offer.precio_oferta || 0);
     return Math.round((savings / totalRegular) * 100);
@@ -184,17 +223,17 @@ export default function DashboardOffers() {
     const productos = getProductosConCantidad(offer);
     const agotados = [];
     const stockInsuficiente = [];
-    
+
     productos.forEach(p => {
       const cantidadRequerida = p.cantidad_oferta || 1;
-      
+
       if (p.stock === 0) {
         agotados.push(p);
       } else if (p.stock < cantidadRequerida) {
         stockInsuficiente.push({ ...p, cantidadRequerida });
       }
     });
-    
+
     return { agotados, stockInsuficiente, tieneProblemas: agotados.length > 0 || stockInsuficiente.length > 0 };
   };
 
@@ -237,13 +276,13 @@ export default function DashboardOffers() {
             const { agotados, stockInsuficiente, tieneProblemas } = verificarStockOferta(offer);
             const savings = calculateSavings(offer);
             const discountPercent = calculateDiscountPercentage(offer);
-            
+
             // ⭐ Calcular total regular considerando cantidades
             const totalRegular = productos.reduce((sum, p) => {
               const cantidad = p.cantidad_oferta || 1;
               return sum + (parseFloat(p.precio || 0) * cantidad);
             }, 0);
-            
+
             const firstProduct = productos[0];
 
             return (
@@ -252,11 +291,10 @@ export default function DashboardOffers() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className={`bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-300 group ${
-                  tieneProblemas 
-                    ? 'border-red-300 opacity-75' 
+                className={`bg-white rounded-2xl shadow-lg overflow-hidden border-2 transition-all duration-300 group ${tieneProblemas
+                    ? 'border-red-300 opacity-75'
                     : 'border-green-100 hover:border-green-300'
-                }`}
+                  }`}
               >
                 {/* ⭐ Alerta de Problemas de Stock */}
                 {tieneProblemas && (
@@ -301,18 +339,16 @@ export default function DashboardOffers() {
                   )}
 
                   {/* Ribbon */}
-                  <div className={`absolute top-4 left-0 ${
-                    tieneProblemas ? 'bg-gray-400' : 'bg-gradient-to-r from-green-600 to-green-500'
-                  } text-white px-6 py-2 rounded-r-full shadow-lg z-10`}>
+                  <div className={`absolute top-4 left-0 ${tieneProblemas ? 'bg-gray-400' : 'bg-gradient-to-r from-green-600 to-green-500'
+                    } text-white px-6 py-2 rounded-r-full shadow-lg z-10`}>
                     <span className="font-bold text-sm flex items-center gap-2">
                       <FaTag /> {tieneProblemas ? 'NO DISPONIBLE' : 'OFERTA'}
                     </span>
                   </div>
 
                   {/* Image */}
-                  <div className={`h-56 overflow-hidden bg-gradient-to-br from-green-50 to-yellow-50 ${
-                    tieneProblemas ? 'opacity-60 grayscale' : ''
-                  }`}>
+                  <div className={`h-56 overflow-hidden bg-gradient-to-br from-green-50 to-yellow-50 ${tieneProblemas ? 'opacity-60 grayscale' : ''
+                    }`}>
                     {firstProduct?.imagen ? (
                       <img
                         src={firstProduct.imagen}
@@ -343,7 +379,7 @@ export default function DashboardOffers() {
                           Productos incluidos ({productos.reduce((sum, p) => sum + (p.cantidad_oferta || 1), 0)} items)
                         </p>
                       </div>
-                      
+
                       <div className="space-y-2 mb-3">
                         {productos.map((producto, idx) => {
                           const cantidad = producto.cantidad_oferta || 1;
@@ -354,11 +390,10 @@ export default function DashboardOffers() {
                           return (
                             <div
                               key={idx}
-                              className={`flex items-center justify-between bg-white rounded-lg p-2 transition-colors group/item ${
-                                agotado || stockInsuf
-                                  ? 'opacity-50 bg-red-50' 
+                              className={`flex items-center justify-between bg-white rounded-lg p-2 transition-colors group/item ${agotado || stockInsuf
+                                  ? 'opacity-50 bg-red-50'
                                   : 'hover:bg-amber-50'
-                              }`}
+                                }`}
                             >
                               <div className="flex items-center gap-2 flex-1">
                                 {agotado || stockInsuf ? (
@@ -366,7 +401,7 @@ export default function DashboardOffers() {
                                 ) : (
                                   <FaCheck className="text-green-600 text-xs flex-shrink-0" />
                                 )}
-                                
+
                                 {/* ⭐ MOSTRAR CANTIDAD si es mayor a 1 */}
                                 <div className="flex items-center gap-2">
                                   {cantidad > 1 && (
@@ -374,9 +409,8 @@ export default function DashboardOffers() {
                                       {cantidad}x
                                     </span>
                                   )}
-                                  <span className={`text-sm font-medium ${
-                                    agotado || stockInsuf ? 'text-red-600' : 'text-[#5D4037]'
-                                  }`}>
+                                  <span className={`text-sm font-medium ${agotado || stockInsuf ? 'text-red-600' : 'text-[#5D4037]'
+                                    }`}>
                                     {producto.nombre}
                                   </span>
                                 </div>
@@ -459,16 +493,15 @@ export default function DashboardOffers() {
                     <button
                       onClick={() => handleAddAllToCart(offer)}
                       disabled={tieneProblemas}
-                      className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${
-                        tieneProblemas
+                      className={`w-full flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 ${tieneProblemas
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                           : 'bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 text-white hover:shadow-xl'
-                      }`}
+                        }`}
                     >
                       <FaShoppingCart className="text-lg" />
                       <span>
-                        {tieneProblemas 
-                          ? 'Oferta no disponible' 
+                        {tieneProblemas
+                          ? 'Oferta no disponible'
                           : 'Agregar todos al carrito'}
                       </span>
                     </button>

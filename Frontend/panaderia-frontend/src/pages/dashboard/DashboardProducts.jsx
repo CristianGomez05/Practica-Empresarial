@@ -6,6 +6,7 @@ import { useCart } from "../../hooks/useCart";
 import ImageModal from "../../components/ImageModal";
 import { FaShoppingCart, FaSearch, FaExclamationCircle, FaBox } from "react-icons/fa";
 import { useSnackbar } from "notistack";
+import { useBranch } from "../../contexts/BranchContext";
 
 export default function DashboardProducts() {
   const [products, setProducts] = useState([]);
@@ -17,11 +18,21 @@ export default function DashboardProducts() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const { add } = useCart();
   const { enqueueSnackbar } = useSnackbar();
+  const { selectedBranch } = useBranch();
 
   useEffect(() => {
     async function fetchProducts() {
+      // ⭐ No cargar si no hay sucursal seleccionada
+      if (!selectedBranch) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const res = await api.get("/productos/");
+        // ⭐ Filtrar por sucursal
+        const res = await api.get("/productos/", {
+          params: { sucursal: selectedBranch.id }
+        });
         const data = res.data.results || res.data;
         setProducts(data);
         setFilteredProducts(data);
@@ -33,7 +44,36 @@ export default function DashboardProducts() {
       }
     }
     fetchProducts();
-  }, [enqueueSnackbar]);
+  }, [selectedBranch, enqueueSnackbar]); // ⭐ Recargar cuando cambie sucursal
+
+  // ⭐ Mostrar mensaje si no hay sucursal seleccionada
+  if (!selectedBranch) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl shadow-lg p-12 text-center"
+        >
+          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <FaStore className="text-5xl text-gray-300" />
+          </div>
+          <h2 className="text-2xl font-bold text-[#5D4037] mb-3">
+            Selecciona una sucursal
+          </h2>
+          <p className="text-[#8D6E63] mb-6">
+            Para ver los productos disponibles, primero selecciona una sucursal en el inicio
+          </p>
+          <button
+            onClick={() => window.location.href = '/dashboard/inicio'}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
+          >
+            Ir a Inicio
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     let filtered = products.filter((p) =>
