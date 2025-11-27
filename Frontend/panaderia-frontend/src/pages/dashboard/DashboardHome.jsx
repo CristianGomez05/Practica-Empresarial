@@ -3,28 +3,30 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../components/auth/AuthContext";
 import { useCart } from "../../hooks/useCart";
-import { useBranch } from "../../contexts/BranchContext"; // ⭐ NUEVO
-import BranchSelectorClient from "../../components/dashboard/BranchSelectorClient"; // ⭐ NUEVO
+import { useBranch } from "../../contexts/BranchContext";
+import BranchSelectorClient from "../../components/dashboard/BranchSelectorClient";
 import { motion } from "framer-motion";
-import { FaShoppingCart, FaBox, FaTag, FaClipboardList, FaStore } from "react-icons/fa";
+import { FaShoppingCart, FaBox, FaTag, FaClipboardList, FaStore, FaInfoCircle } from "react-icons/fa";
 import api from "../../services/api";
 
 export default function DashboardHome() {
   const { user } = useAuth();
   const { items } = useCart();
-  const { selectedBranch } = useBranch(); // ⭐ NUEVO
+  const { selectedBranch } = useBranch();
   const [stats, setStats] = useState({ products: 0, offers: 0, orders: 0 });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
+      // ⭐ CAMBIO: Permitir cargar stats sin sucursal (mostrará totales)
+      setLoading(true);
       try {
-        // ⭐ Filtrar por sucursal seleccionada
         const params = selectedBranch ? { sucursal: selectedBranch.id } : {};
         
         const [productsRes, offersRes, ordersRes] = await Promise.all([
           api.get("/productos/", { params }),
           api.get("/ofertas/", { params }),
-          api.get("/pedidos/"), // Pedidos no se filtran por sucursal
+          api.get("/pedidos/"),
         ]);
         
         setStats({
@@ -34,13 +36,13 @@ export default function DashboardHome() {
         });
       } catch (error) {
         console.error("Error cargando estadísticas:", error);
+      } finally {
+        setLoading(false);
       }
     }
     
-    if (selectedBranch) {
-      fetchStats();
-    }
-  }, [selectedBranch]); // ⭐ Recargar cuando cambie la sucursal
+    fetchStats();
+  }, [selectedBranch]);
 
   const cards = [
     {
@@ -89,7 +91,7 @@ export default function DashboardHome() {
         </p>
       </motion.div>
 
-      {/* ⭐ NUEVO: Selector de Sucursal */}
+      {/* Selector de Sucursal */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -103,14 +105,14 @@ export default function DashboardHome() {
           <div>
             <h2 className="text-xl font-bold text-[#5D4037]">¿De qué sucursal deseas pedir?</h2>
             <p className="text-sm text-[#8D6E63]">
-              Los productos y ofertas se actualizarán según tu selección
+              Selecciona una sucursal para ver productos y ofertas específicos
             </p>
           </div>
         </div>
         
         <BranchSelectorClient showLabel={false} />
         
-        {selectedBranch && (
+        {selectedBranch ? (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -135,77 +137,120 @@ export default function DashboardHome() {
               </div>
             </div>
           </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4"
+          >
+            <div className="flex items-start gap-3">
+              <FaInfoCircle className="text-blue-600 text-xl flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-blue-800">
+                  Selecciona una sucursal para comenzar
+                </p>
+                <p className="text-sm text-blue-700 mt-1">
+                  Las estadísticas muestran totales de todas las sucursales
+                </p>
+              </div>
+            </div>
+          </motion.div>
         )}
       </motion.div>
 
-      {/* Stats Grid - Solo mostrar si hay sucursal seleccionada */}
-      {selectedBranch && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {cards.map((card, index) => (
-            <motion.div
-              key={card.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 + index * 0.1 }}
+      {/* Stats Grid - Siempre visible */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {cards.map((card, index) => (
+          <motion.div
+            key={card.title}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 + index * 0.1 }}
+          >
+            <Link
+              to={card.link}
+              className="block bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 group"
             >
-              <Link
-                to={card.link}
-                className="block bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 group"
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${card.color} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform`}>
-                    <card.icon className="text-xl" />
-                  </div>
-                  <div className="text-right">
-                    <div className="text-3xl font-bold text-[#5D4037]">
-                      {card.value}
-                    </div>
+              <div className="flex items-center justify-between mb-4">
+                <div className={`w-12 h-12 rounded-lg bg-gradient-to-br ${card.color} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform`}>
+                  <card.icon className="text-xl" />
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold text-[#5D4037]">
+                    {loading ? (
+                      <div className="animate-pulse bg-gray-200 h-8 w-12 rounded"></div>
+                    ) : (
+                      card.value
+                    )}
                   </div>
                 </div>
-                <h3 className="text-sm font-medium text-[#8D6E63] group-hover:text-amber-700 transition-colors">
-                  {card.title}
-                </h3>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
-      )}
+              </div>
+              <h3 className="text-sm font-medium text-[#8D6E63] group-hover:text-amber-700 transition-colors">
+                {card.title}
+              </h3>
+            </Link>
+          </motion.div>
+        ))}
+      </div>
 
-      {/* Quick Actions - Solo mostrar si hay sucursal seleccionada */}
-      {selectedBranch && (
+      {/* Quick Actions - Siempre visible */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
+        className="bg-white rounded-2xl p-8 shadow-md border border-gray-100"
+      >
+        <h2 className="text-2xl font-bold text-[#5D4037] mb-6">
+          Acciones Rápidas
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link
+            to="/dashboard/productos"
+            className="flex flex-col items-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all group"
+          >
+            <FaBox className="text-4xl text-blue-600 mb-3 group-hover:scale-110 transition-transform" />
+            <span className="font-semibold text-blue-800">Ver Productos</span>
+          </Link>
+          
+          <Link
+            to="/dashboard/ofertas"
+            className="flex flex-col items-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl hover:from-green-100 hover:to-green-200 transition-all group"
+          >
+            <FaTag className="text-4xl text-green-600 mb-3 group-hover:scale-110 transition-transform" />
+            <span className="font-semibold text-green-800">Ver Ofertas</span>
+          </Link>
+          
+          <Link
+            to="/dashboard/carrito"
+            className="flex flex-col items-center p-6 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl hover:from-amber-100 hover:to-amber-200 transition-all group"
+          >
+            <FaShoppingCart className="text-4xl text-amber-600 mb-3 group-hover:scale-110 transition-transform" />
+            <span className="font-semibold text-amber-800">Ir al Carrito</span>
+          </Link>
+        </div>
+      </motion.div>
+
+      {/* ⭐ NUEVO: Mensaje informativo si no hay sucursal seleccionada */}
+      {!selectedBranch && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="bg-white rounded-2xl p-8 shadow-md border border-gray-100"
+          transition={{ delay: 0.8 }}
+          className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-amber-300"
         >
-          <h2 className="text-2xl font-bold text-[#5D4037] mb-6">
-            Acciones Rápidas
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link
-              to="/dashboard/productos"
-              className="flex flex-col items-center p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl hover:from-blue-100 hover:to-blue-200 transition-all group"
-            >
-              <FaBox className="text-4xl text-blue-600 mb-3 group-hover:scale-110 transition-transform" />
-              <span className="font-semibold text-blue-800">Ver Productos</span>
-            </Link>
-            
-            <Link
-              to="/dashboard/ofertas"
-              className="flex flex-col items-center p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl hover:from-green-100 hover:to-green-200 transition-all group"
-            >
-              <FaTag className="text-4xl text-green-600 mb-3 group-hover:scale-110 transition-transform" />
-              <span className="font-semibold text-green-800">Ver Ofertas</span>
-            </Link>
-            
-            <Link
-              to="/dashboard/carrito"
-              className="flex flex-col items-center p-6 bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl hover:from-amber-100 hover:to-amber-200 transition-all group"
-            >
-              <FaShoppingCart className="text-4xl text-amber-600 mb-3 group-hover:scale-110 transition-transform" />
-              <span className="font-semibold text-amber-800">Ir al Carrito</span>
-            </Link>
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center flex-shrink-0">
+              <FaStore className="text-white text-xl" />
+            </div>
+            <div>
+              <h3 className="font-bold text-amber-900 text-lg mb-2">
+                💡 Consejo
+              </h3>
+              <p className="text-amber-800">
+                Para ver productos y ofertas específicos de una sucursal, selecciona una arriba. 
+                También podrás seleccionar o cambiar la sucursal desde las páginas de productos y ofertas.
+              </p>
+            </div>
           </div>
         </motion.div>
       )}

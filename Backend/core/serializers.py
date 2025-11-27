@@ -503,8 +503,8 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         write_only=True
     )
     producto_nombre = serializers.CharField(source='producto.nombre', read_only=True)
-    # ⭐ NUEVO: Agregar sucursal del producto
-    sucursal_nombre = serializers.CharField(source='producto.sucursal.nombre', read_only=True)
+    # ⭐ CAMBIO: Usar SerializerMethodField para manejar None de forma segura
+    sucursal_nombre = serializers.SerializerMethodField()
     precio_unitario = serializers.DecimalField(
         source='producto.precio', 
         read_only=True,
@@ -518,10 +518,32 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         model = DetallePedido
         fields = [
             'id', 'pedido', 'producto', 'producto_id', 
-            'producto_nombre', 'sucursal_nombre', 'cantidad', 'precio_unitario', 'precio_total',  # ⭐ Agregar sucursal_nombre
+            'producto_nombre', 'sucursal_nombre', 'cantidad', 'precio_unitario', 'precio_total',
             'es_oferta'
         ]
         read_only_fields = ['id', 'pedido']
+    
+    # ⭐ NUEVO: Método seguro para obtener sucursal_nombre
+    def get_sucursal_nombre(self, obj):
+        """Obtiene el nombre de la sucursal de forma segura"""
+        try:
+            if obj.producto and obj.producto.sucursal:
+                return obj.producto.sucursal.nombre
+            return "Sin sucursal"
+        except Exception as e:
+            return "Sin sucursal"
+    
+    def get_precio_total(self, obj):
+        """Calcula el precio total del detalle"""
+        return obj.producto.precio * obj.cantidad
+    
+    def get_es_oferta(self, obj):
+        """Verifica si el producto tiene una oferta activa"""
+        hoy = timezone.now().date()
+        return obj.producto.ofertas.filter(
+            fecha_inicio__lte=hoy,
+            fecha_fin__gte=hoy
+        ).exists()
 
 
 class PedidoSerializer(serializers.ModelSerializer):

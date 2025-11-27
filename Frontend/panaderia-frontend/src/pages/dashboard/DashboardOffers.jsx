@@ -1,11 +1,11 @@
-// src/pages/dashboard/DashboardOffers.jsx
+// Frontend/panaderia-frontend/src/pages/dashboard/DashboardOffers.jsx
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../../services/api";
 import { useCart } from "../../hooks/useCart";
-import { FaShoppingCart, FaTag, FaClock, FaCheck, FaBox, FaExclamationTriangle } from "react-icons/fa";
-import { useSnackbar } from "notistack";
 import { useBranch } from "../../contexts/BranchContext";
+import { FaShoppingCart, FaTag, FaClock, FaCheck, FaBox, FaExclamationTriangle, FaStore } from "react-icons/fa"; // ⭐ AGREGAR FaStore
+import { useSnackbar } from "notistack";
 
 export default function DashboardOffers() {
   const [offers, setOffers] = useState([]);
@@ -54,29 +54,28 @@ export default function DashboardOffers() {
   }, [selectedBranch, enqueueSnackbar]); // ⭐ Recargar cuando cambie sucursal
 
   // ⭐ Mostrar mensaje si no hay sucursal seleccionada
+   // ⭐ CAMBIO: Mostrar selector en lugar de bloquear
   if (!selectedBranch) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-2xl shadow-lg p-12 text-center"
+          className="bg-white rounded-2xl shadow-lg p-8"
         >
-          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <FaStore className="text-5xl text-gray-300" />
+          <div className="text-center mb-6">
+            <div className="w-24 h-24 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <FaStore className="text-5xl text-amber-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-[#5D4037] mb-3">
+              Selecciona una sucursal
+            </h2>
+            <p className="text-[#8D6E63]">
+              Para ver los productos disponibles, selecciona una sucursal
+            </p>
           </div>
-          <h2 className="text-2xl font-bold text-[#5D4037] mb-3">
-            Selecciona una sucursal
-          </h2>
-          <p className="text-[#8D6E63] mb-6">
-            Para ver las ofertas disponibles, primero selecciona una sucursal en el inicio
-          </p>
-          <button
-            onClick={() => window.location.href = '/dashboard/inicio'}
-            className="bg-amber-600 hover:bg-amber-700 text-white px-8 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all"
-          >
-            Ir a Inicio
-          </button>
+
+          <BranchSelectorClient />
         </motion.div>
       </div>
     );
