@@ -10,6 +10,7 @@ export default function BranchSelectorClient({ showLabel = true }) {
   const [sucursales, setSucursales] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // ⭐ NUEVO: Estado de error
 
   useEffect(() => {
     cargarSucursales();
@@ -17,28 +18,61 @@ export default function BranchSelectorClient({ showLabel = true }) {
 
   const cargarSucursales = async () => {
     try {
+      console.log('🔍 Cargando sucursales...'); // ⭐ DEBUG
       const response = await api.get('/sucursales/activas/');
       const data = response.data.results || response.data;
+      
+      console.log('✅ Sucursales cargadas:', data); // ⭐ DEBUG
+      
       setSucursales(data);
       
       // Si no hay sucursal seleccionada, seleccionar la primera
       if (!selectedBranch && data.length > 0) {
+        console.log('🏪 Auto-seleccionando primera sucursal:', data[0]); // ⭐ DEBUG
         setSelectedBranch(data[0]);
       }
     } catch (error) {
-      console.error('❌ Error cargando sucursales:', error);
+      console.error('❌ Error cargando sucursales:', error); // ⭐ DEBUG
+      console.error('   Detalles:', error.response?.data); // ⭐ DEBUG
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSelect = (sucursal) => {
+    console.log('🏪 Sucursal seleccionada:', sucursal); // ⭐ DEBUG
     setSelectedBranch(sucursal);
     setIsOpen(false);
   };
 
-  if (loading || sucursales.length === 0) {
-    return null;
+  // ⭐ NUEVO: Mostrar estado de loading
+  if (loading) {
+    return (
+      <div className="w-full bg-gray-100 rounded-xl p-4 animate-pulse">
+        <div className="h-6 bg-gray-300 rounded w-1/2"></div>
+      </div>
+    );
+  }
+
+  // ⭐ NUEVO: Mostrar error si hay
+  if (error) {
+    return (
+      <div className="w-full bg-red-50 border-2 border-red-300 rounded-xl p-4 text-red-800">
+        <p className="font-semibold">⚠️ Error al cargar sucursales</p>
+        <p className="text-sm">{error}</p>
+      </div>
+    );
+  }
+
+  // ⭐ NUEVO: Mostrar mensaje si no hay sucursales
+  if (sucursales.length === 0) {
+    return (
+      <div className="w-full bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-yellow-800">
+        <p className="font-semibold">⚠️ No hay sucursales disponibles</p>
+        <p className="text-sm">Por favor, contacta al administrador</p>
+      </div>
+    );
   }
 
   return (

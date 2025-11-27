@@ -10,9 +10,8 @@ from .emails import enviar_alerta_stock_bajo
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import Usuario, Producto, Oferta, ProductoOferta, Pedido, DetallePedido, Sucursal
 
-# ✅ CORRECCIÓN: Eliminar UsuarioRegistroSerializer de las importaciones
 from .serializers import (
-    UsuarioSerializer,  # ✅ Solo este necesitas
+    UsuarioSerializer,
     ProductoSerializer, 
     OfertaSerializer, 
     PedidoSerializer, 
@@ -30,18 +29,15 @@ def registro_usuario(request):
     print("📝 REGISTRO DE USUARIO")
     print("="*60)
     
-    # ✅ USAR UsuarioSerializer directamente
     serializer = UsuarioSerializer(data=request.data)
     
     if serializer.is_valid():
-        # ✅ Asegurar que se cree el password correctamente
         password = request.data.get('password')
         if not password:
             return Response({
                 'error': 'La contraseña es requerida'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Crear usuario con contraseña hasheada
         usuario = Usuario.objects.create_user(
             username=request.data['username'],
             email=request.data['email'],
@@ -74,105 +70,63 @@ def registro_usuario(request):
 # ============================================================================
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gestionar usuarios.
-    ⭐ NO filtra por sucursal - muestra TODOS los usuarios según rol del admin
-    """
+    """ViewSet para gestionar usuarios"""
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
-    permission_classes = [IsAuthenticated]  # ✅ Cambiar de EsAdministrador a IsAuthenticated
+    permission_classes = [IsAuthenticated]
     
     def get_permissions(self):
-        """
-        Solo admins pueden crear/editar/eliminar usuarios
-        """
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            # ✅ Validar que sea admin o admin general
             return [IsAuthenticated()]
         return [IsAuthenticated()]
     
     def get_queryset(self):
-        """
-        ⭐ CAMBIO IMPORTANTE: NO filtrar por sucursal
-        - Admin General: Ve TODOS los usuarios
-        - Admin Regular: Ve TODOS los usuarios (puede necesitar gestionar clientes de todas las sucursales)
-        - Cliente: Solo ve su propio perfil
-        """
         user = self.request.user
         
-        # ✅ Admin General - ve TODO
         if user.rol == 'administrador_general':
             print(f"🔓 Admin General - Mostrando TODOS los usuarios")
             return Usuario.objects.all().order_by('-date_joined')
         
-        # ✅ Admin Regular - TAMBIÉN ve TODO (sin filtro de sucursal)
         elif user.rol == 'administrador':
             print(f"🔓 Admin Regular - Mostrando TODOS los usuarios")
             return Usuario.objects.all().order_by('-date_joined')
         
-        # ✅ Cliente - solo ve su perfil
         elif user.rol == 'cliente':
             print(f"🔒 Cliente - Solo su perfil")
             return Usuario.objects.filter(id=user.id)
         
-        # Fallback
         return Usuario.objects.none()
     
     def create(self, request, *args, **kwargs):
-        """
-        Crear usuario - validar permisos
-        """
         user = request.user
         
-        # ✅ Solo admins pueden crear usuarios
         if user.rol not in ['administrador', 'administrador_general']:
             return Response({
                 'error': 'No tienes permisos para crear usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # ⭐ PERMITIR que cualquier admin cree admin_general
-        # (Sin restricción de rol)
-        
         return super().create(request, *args, **kwargs)
     
     def update(self, request, *args, **kwargs):
-        """
-        Actualizar usuario - validar permisos
-        """
         user = request.user
         instance = self.get_object()
         
-        # ✅ Solo admins pueden editar usuarios
         if user.rol not in ['administrador', 'administrador_general']:
             return Response({
                 'error': 'No tienes permisos para editar usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # ⭐ PERMITIR que cualquier admin asigne el rol admin_general
-        # (Sin restricción de rol)
-        
-        # ⭐ PERMITIR que cualquier admin edite admins generales
-        # (Sin restricción de rol)
-        
         return super().update(request, *args, **kwargs)
     
     def destroy(self, request, *args, **kwargs):
-        """
-        Eliminar usuario - validar permisos
-        """
         user = request.user
         instance = self.get_object()
         
-        # ✅ Solo admins pueden eliminar usuarios
         if user.rol not in ['administrador', 'administrador_general']:
             return Response({
                 'error': 'No tienes permisos para eliminar usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
-        # ⭐ PERMITIR que cualquier admin elimine admins generales
-        # (Sin restricción de rol)
-        
-        # ✅ No permitir auto-eliminación
         if instance.id == user.id:
             return Response({
                 'error': 'No puedes eliminar tu propia cuenta'
@@ -188,7 +142,6 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         
         elif request.method == 'PATCH':
-            # Solo permitir editar campos seguros
             allowed_fields = ['first_name', 'last_name', 'email']
             data = {k: v for k, v in request.data.items() if k in allowed_fields}
             
@@ -200,13 +153,9 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def stats(self, request):
-        """
-        Estadísticas de usuarios
-        ⭐ Sin filtro de sucursal
-        """
+        """Estadísticas de usuarios"""
         user = request.user
         
-        # Solo admins pueden ver stats
         if user.rol not in ['administrador', 'administrador_general']:
             return Response({
                 'error': 'No tienes permisos'
@@ -236,42 +185,65 @@ class SucursalViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar sucursales"""
     queryset = Sucursal.objects.all()
     serializer_class = SucursalSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]  # ⭐ CAMBIO: Permitir acceso sin autenticación
     
     def get_permissions(self):
         """Solo admins pueden crear/editar/eliminar sucursales"""
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated()]
-        return [IsAuthenticated()]
+        return [AllowAny()]  # ⭐ Permitir GET sin auth
     
     def get_queryset(self):
         """Filtrar sucursales según el rol del usuario"""
         user = self.request.user
         
-        # ✅ Admin general ve todas las sucursales
+        # ⭐ NUEVO: Si no está autenticado, mostrar todas las sucursales activas
+        if not user.is_authenticated:
+            print(f"🏪 Usuario no autenticado - Mostrando sucursales activas")
+            return Sucursal.objects.filter(activa=True).order_by('nombre')
+        
+        # Admin general ve todas las sucursales
         if user.rol == 'administrador_general':
             print(f"🏪 Admin General - Mostrando TODAS las sucursales")
             return Sucursal.objects.all().order_by('nombre')
         
-        # ✅ Admin regular ve su sucursal
-        elif user.rol == 'administrador' and user.sucursal:
-            print(f"🏪 Admin Regular - Mostrando su sucursal: {user.sucursal.nombre}")
-            return Sucursal.objects.filter(id=user.sucursal.id).order_by('nombre')
+        # Admin regular ve todas las sucursales activas (puede necesitar verlas para reportes)
+        elif user.rol == 'administrador':
+            print(f"🏪 Admin Regular - Mostrando sucursales activas")
+            return Sucursal.objects.filter(activa=True).order_by('nombre')
         
-        # ✅ Clientes no ven sucursales
+        # Clientes ven sucursales activas
+        elif user.rol == 'cliente':
+            print(f"🏪 Cliente - Mostrando sucursales activas")
+            return Sucursal.objects.filter(activa=True).order_by('nombre')
+        
         return Sucursal.objects.none()
     
     @action(detail=False, methods=['get'])
     def activas(self, request):
-        """Retorna solo sucursales activas"""
-        # ✅ Usar get_queryset para respetar permisos
-        sucursales = self.get_queryset().filter(activa=True)
+        """
+        Retorna solo sucursales activas.
+        Endpoint: /api/sucursales/activas/
+        """
+        print(f"\n{'='*60}")
+        print(f"🏪 GET /api/sucursales/activas/")
+        print(f"{'='*60}")
+        
+        # ⭐ IMPORTANTE: No usar get_queryset() aquí, sino filtrar directamente
+        # porque get_queryset() ya filtra por usuario
+        sucursales = Sucursal.objects.filter(activa=True).order_by('nombre')
+        
+        print(f"✅ Sucursales activas encontradas: {sucursales.count()}")
+        for s in sucursales:
+            print(f"   - {s.nombre} (ID: {s.id})")
+        print(f"{'='*60}\n")
+        
         serializer = self.get_serializer(sucursales, many=True)
         return Response(serializer.data)
 
 
 # ============================================================================
-# PRODUCTO VIEWSET (ACTUALIZADO CON FILTRO DE SUCURSAL)
+# PRODUCTO VIEWSET
 # ============================================================================
 
 class ProductoViewSet(viewsets.ModelViewSet):
@@ -284,19 +256,18 @@ class ProductoViewSet(viewsets.ModelViewSet):
         """Filtrar productos según sucursal del usuario"""
         user = self.request.user
         
-        # ⭐ Clientes ven productos de todas las sucursales activas
+        # Clientes ven productos de todas las sucursales activas
         if not user.is_authenticated or user.rol == 'cliente':
             return Producto.objects.filter(sucursal__activa=True).order_by('-id')
         
-        # ⭐ Admin general puede ver productos de todas las sucursales
+        # Admin general puede ver productos de todas las sucursales
         if user.rol == 'administrador_general':
-            # Si especifica una sucursal en query params, filtrar por ella
             sucursal_id = self.request.query_params.get('sucursal')
             if sucursal_id:
                 return Producto.objects.filter(sucursal_id=sucursal_id).order_by('-id')
             return Producto.objects.all().order_by('-id')
         
-        # ⭐ Admin regular solo ve productos de su sucursal
+        # Admin regular solo ve productos de su sucursal
         if user.rol == 'administrador' and user.sucursal:
             return Producto.objects.filter(sucursal=user.sucursal).order_by('-id')
         
@@ -311,7 +282,6 @@ class ProductoViewSet(viewsets.ModelViewSet):
         print(f"\n{'='*60}")
         print(f"📥 POST /api/productos/ - Creando producto")
         
-        # ⭐ Auto-asignar sucursal del admin si no viene en el request
         if 'sucursal' not in request.data and request.user.sucursal:
             request.data['sucursal'] = request.user.sucursal.id
             print(f"   Auto-asignando sucursal: {request.user.sucursal.nombre}")
@@ -399,8 +369,9 @@ class ProductoViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(productos, many=True)
         return Response(serializer.data)
 
+
 # ============================================================================
-# OFERTA VIEWSET (ACTUALIZADO CON FILTRO DE SUCURSAL)
+# OFERTA VIEWSET
 # ============================================================================
 
 class OfertaViewSet(viewsets.ModelViewSet):
@@ -420,19 +391,18 @@ class OfertaViewSet(viewsets.ModelViewSet):
             Prefetch('productooferta_set', queryset=ProductoOferta.objects.select_related('producto'))
         )
         
-        # ⭐ Clientes ven ofertas de todas las sucursales activas
+        # Clientes ven ofertas de todas las sucursales activas
         if not user.is_authenticated or user.rol == 'cliente':
             return base_queryset.filter(sucursal__activa=True).all()
         
-        # ⭐ Admin general puede ver ofertas de todas las sucursales
+        # Admin general puede ver ofertas de todas las sucursales
         if user.rol == 'administrador_general':
-            # Si especifica una sucursal en query params, filtrar por ella
             sucursal_id = self.request.query_params.get('sucursal')
             if sucursal_id:
                 return base_queryset.filter(sucursal_id=sucursal_id).all()
             return base_queryset.all()
         
-        # ⭐ Admin regular solo ve ofertas de su sucursal
+        # Admin regular solo ve ofertas de su sucursal
         if user.rol == 'administrador' and user.sucursal:
             return base_queryset.filter(sucursal=user.sucursal).all()
         
@@ -445,14 +415,11 @@ class OfertaViewSet(viewsets.ModelViewSet):
         print(f"📋 Data recibida: {request.data}")
         print(f"{'='*60}\n")
         
-        # ⭐ Auto-asignar sucursal del admin si no viene en el request
         if 'sucursal' not in request.data and request.user.sucursal:
             request.data['sucursal'] = request.user.sucursal.id
             print(f"   Auto-asignando sucursal: {request.user.sucursal.nombre}")
         
-        # ⭐ IMPORTANTE: Validar que productos_data existe
         if 'productos_data' not in request.data:
-            # Si viene productos_ids (formato antiguo), convertir a productos_data
             if 'productos_ids' in request.data:
                 print("⚠️  Detectado formato antiguo (productos_ids), convirtiendo...")
                 productos_ids = request.data.get('productos_ids', [])
@@ -497,7 +464,6 @@ class OfertaViewSet(viewsets.ModelViewSet):
         print(f"📋 Data recibida: {request.data}")
         print(f"{'='*60}\n")
         
-        # ⭐ Convertir productos_ids a productos_data si viene en formato antiguo
         if 'productos_ids' in request.data and 'productos_data' not in request.data:
             print("⚠️  Detectado formato antiguo (productos_ids), convirtiendo...")
             productos_ids = request.data.get('productos_ids', [])
@@ -543,7 +509,6 @@ class OfertaViewSet(viewsets.ModelViewSet):
         print(f"✅ Oferta creada: {oferta.titulo} (ID: {oferta.id})")
         print(f"   Sucursal: {oferta.sucursal.nombre}")
         
-        # Contar productos asociados
         productos_count = ProductoOferta.objects.filter(oferta=oferta).count()
         print(f"📦 Productos asociados: {productos_count}")
     
@@ -569,7 +534,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# PEDIDO VIEWSET (sin cambios en la lógica de sucursal)
+# PEDIDO VIEWSET
 # ============================================================================
 
 class PedidoViewSet(viewsets.ModelViewSet):
@@ -583,16 +548,13 @@ class PedidoViewSet(viewsets.ModelViewSet):
             Prefetch('detalles', queryset=DetallePedido.objects.select_related('producto'))
         )
         
-        # ⭐ Admins ven pedidos de productos de su sucursal o todas (admin general)
         if user.rol == 'administrador_general':
             return base_queryset.all().order_by('-fecha')
         elif user.rol == 'administrador' and user.sucursal:
-            # Filtrar pedidos que contengan productos de su sucursal
             return base_queryset.filter(
                 detalles__producto__sucursal=user.sucursal
             ).distinct().order_by('-fecha')
         
-        # Clientes solo ven sus propios pedidos
         return base_queryset.filter(usuario=user).order_by('-fecha')
 
     @transaction.atomic
