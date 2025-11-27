@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../components/auth/AuthContext";
 import { useCart } from "../../hooks/useCart";
 import { useBranch } from "../../contexts/BranchContext";
-import BranchSelectorClient from "../../components/dashboard/BranchSelectorClient";
+import BranchSelectorClient from "../../components/dashboard/BranchSelectorClient"; // ⭐ AGREGAR ESTA LÍNEA
 import { motion } from "framer-motion";
 import { FaShoppingCart, FaBox, FaTag, FaClipboardList, FaStore, FaInfoCircle } from "react-icons/fa";
 import api from "../../services/api";

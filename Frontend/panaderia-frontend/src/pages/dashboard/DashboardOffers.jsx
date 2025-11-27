@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import api from "../../services/api";
 import { useCart } from "../../hooks/useCart";
 import { useBranch } from "../../contexts/BranchContext";
-import { FaShoppingCart, FaTag, FaClock, FaCheck, FaBox, FaExclamationTriangle, FaStore } from "react-icons/fa"; // ⭐ AGREGAR FaStore
+import BranchSelectorClient from "../../components/dashboard/BranchSelectorClient"; // ⭐ AGREGAR ESTA LÍNEA
+import { FaShoppingCart, FaTag, FaClock, FaCheck, FaBox, FaExclamationTriangle, FaStore } from "react-icons/fa";
 import { useSnackbar } from "notistack";
 
 export default function DashboardOffers() {
