@@ -10,7 +10,7 @@ import useSmartRefresh from '../../hooks/useAutoRefresh';
 const AdminProducts = () => {
   // ⭐ NUEVO: Obtener sucursal seleccionada del contexto
   const { selectedBranch } = useOutletContext();
-
+  
   const [productos, setProductos] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,15 +43,15 @@ const AdminProducts = () => {
   const cargarProductos = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
-
+      
       // ⭐ Aplicar filtro de sucursal si está seleccionada
       const params = selectedBranch ? { sucursal: selectedBranch } : {};
       const response = await api.get('/productos/', { params });
-
+      
       const data = response.data.results || response.data;
       console.log('📦 Productos cargados:', data.length, selectedBranch ? `(Sucursal: ${selectedBranch})` : '(Todas)');
       setProductos(data);
-
+      
       if (refreshing) {
         enqueueSnackbar('Datos actualizados', { variant: 'info', autoHideDuration: 2000 });
       }
@@ -110,7 +110,7 @@ const AdminProducts = () => {
     }
 
     console.log('📷 Imagen seleccionada:', file.name, (file.size / 1024).toFixed(2), 'KB');
-
+    
     setArchivoImagen(file);
 
     const reader = new FileReader();
@@ -130,7 +130,7 @@ const AdminProducts = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    
     if (!formData.nombre.trim()) {
       enqueueSnackbar('El nombre es requerido', { variant: 'warning' });
       return;
@@ -143,13 +143,13 @@ const AdminProducts = () => {
       enqueueSnackbar('El stock no puede ser negativo', { variant: 'warning' });
       return;
     }
-
+    
     // ⭐ Validar sucursal
     if (!formData.sucursal) {
       enqueueSnackbar('Debes seleccionar una sucursal', { variant: 'warning' });
       return;
     }
-
+    
     try {
       setSubiendoImagen(true);
 
@@ -189,9 +189,9 @@ const AdminProducts = () => {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
         console.log('✅ Producto creado:', response.data);
-        enqueueSnackbar('✅ Producto creado y notificación enviada a clientes', {
+        enqueueSnackbar('✅ Producto creado y notificación enviada a clientes', { 
           variant: 'success',
-          autoHideDuration: 4000
+          autoHideDuration: 4000 
         });
       }
 
@@ -200,13 +200,13 @@ const AdminProducts = () => {
     } catch (error) {
       console.error('❌ Error completo:', error);
       console.error('❌ Response data:', error.response?.data);
-
-      const errorMsg = error.response?.data?.error
+      
+      const errorMsg = error.response?.data?.error 
         || error.response?.data?.detail
         || error.response?.data?.imagen?.[0]
         || error.response?.data?.sucursal?.[0]
         || 'Error al guardar producto';
-
+      
       enqueueSnackbar(errorMsg, { variant: 'error', autoHideDuration: 5000 });
     } finally {
       setSubiendoImagen(false);
@@ -228,14 +228,17 @@ const AdminProducts = () => {
 
   const abrirModalCrear = () => {
     setEditando(null);
-
+    
     // ⭐ Auto-asignar sucursal según el usuario
     let sucursalDefault = '';
     if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
-      // Admin regular: su sucursal (bloqueada)
+      // Admin regular: su sucursal
       sucursalDefault = currentUser.sucursal_id;
+    } else if (currentUser?.rol === 'administrador_general' && selectedBranch) {
+      // Admin general: la sucursal seleccionada
+      sucursalDefault = selectedBranch;
     }
-
+    
     setFormData({
       nombre: '',
       descripcion: '',
@@ -283,31 +286,31 @@ const AdminProducts = () => {
 
   const getEstadoProducto = (producto) => {
     if (producto.stock === 0) {
-      return {
-        text: 'Agotado',
-        bg: 'bg-red-100',
+      return { 
+        text: 'Agotado', 
+        bg: 'bg-red-100', 
         textColor: 'text-red-700',
         icon: <FaExclamationTriangle />
       };
     } else if (producto.stock <= 5) {
-      return {
-        text: 'Stock Bajo',
-        bg: 'bg-orange-100',
+      return { 
+        text: 'Stock Bajo', 
+        bg: 'bg-orange-100', 
         textColor: 'text-orange-700',
         icon: <FaExclamationTriangle />
       };
     } else if (producto.disponible) {
-      return {
-        text: 'Disponible',
-        bg: 'bg-green-100',
+      return { 
+        text: 'Disponible', 
+        bg: 'bg-green-100', 
         textColor: 'text-green-700',
         icon: <FaCheck />
       };
     } else {
-      return {
-        text: 'No Disponible',
-        bg: 'bg-gray-100',
-        textColor: 'text-gray-700'
+      return { 
+        text: 'No Disponible', 
+        bg: 'bg-gray-100', 
+        textColor: 'text-gray-700' 
       };
     }
   };
@@ -345,8 +348,9 @@ const AdminProducts = () => {
           <button
             onClick={cargarProductos}
             disabled={refreshing}
-            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-amber-500 transition-all ${refreshing ? 'animate-spin' : ''
-              }`}
+            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-amber-500 transition-all ${
+              refreshing ? 'animate-spin' : ''
+            }`}
             title="Actualizar datos"
           >
             <FaSync className="text-gray-600" />
@@ -376,7 +380,7 @@ const AdminProducts = () => {
             </div>
           </div>
         </motion.div>
-
+        
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -391,7 +395,7 @@ const AdminProducts = () => {
             </div>
           </div>
         </motion.div>
-
+        
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -406,7 +410,7 @@ const AdminProducts = () => {
             </div>
           </div>
         </motion.div>
-
+        
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -438,14 +442,16 @@ const AdminProducts = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ delay: index * 0.05 }}
-                className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 transition-all ${estaAgotado
-                  ? 'border-red-300 bg-red-50'
-                  : 'border-amber-100 hover:border-amber-300'
-                  }`}
+                className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 transition-all ${
+                  estaAgotado 
+                    ? 'border-red-300 bg-red-50' 
+                    : 'border-amber-100 hover:border-amber-300'
+                }`}
               >
                 {/* Imagen */}
-                <div className={`relative h-48 bg-gradient-to-br from-amber-100 to-orange-100 ${estaAgotado ? 'opacity-60' : ''
-                  }`}>
+                <div className={`relative h-48 bg-gradient-to-br from-amber-100 to-orange-100 ${
+                  estaAgotado ? 'opacity-60' : ''
+                }`}>
                   {producto.imagen ? (
                     <img
                       src={producto.imagen}
@@ -461,15 +467,16 @@ const AdminProducts = () => {
                       <FaBox className="text-6xl text-amber-300" />
                     </div>
                   )}
-
+                  
                   <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1`}>
                     {estado.icon}
                     <span>{estado.text}</span>
                   </div>
 
                   {!estaAgotado && (
-                    <div className={`absolute top-3 left-3 ${stockBajo ? 'bg-orange-500' : 'bg-green-500'
-                      } text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
+                    <div className={`absolute top-3 left-3 ${
+                      stockBajo ? 'bg-orange-500' : 'bg-green-500'
+                    } text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg`}>
                       Stock: {producto.stock}
                     </div>
                   )}
@@ -561,8 +568,8 @@ const AdminProducts = () => {
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <FaBox className="text-6xl text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">
-            {selectedBranch
-              ? 'No hay productos en esta sucursal'
+            {selectedBranch 
+              ? 'No hay productos en esta sucursal' 
               : 'No hay productos registrados'
             }
           </p>
@@ -600,19 +607,19 @@ const AdminProducts = () => {
                 </div>
 
                 <div className="space-y-6">
-                  {/* ⭐ ACTUALIZADO: Selector de Sucursal */}
+                  {/* ⭐ NUEVO: Selector de Sucursal */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
-                      Sucursal *
+                      Sucursal * 
                       {currentUser?.rol === 'administrador' && (
-                        <span className="text-xs text-gray-500 ml-2">(Tu sucursal - no editable)</span>
+                        <span className="text-xs text-gray-500 ml-2">(Tu sucursal)</span>
                       )}
                     </label>
                     <select
                       value={formData.sucursal}
                       onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      disabled={currentUser?.rol === 'administrador'} // ⭐ Bloqueado para admin regular
+                      disabled={currentUser?.rol === 'administrador'} // Admin regular no puede cambiar
                     >
                       <option value="">Seleccionar sucursal...</option>
                       {sucursales.map((sucursal) => (
@@ -621,9 +628,9 @@ const AdminProducts = () => {
                         </option>
                       ))}
                     </select>
-                    {currentUser?.rol === 'administrador' && (
-                      <p className="text-xs text-blue-600 mt-1">
-                        💡 Los productos se crean automáticamente en tu sucursal asignada
+                    {sucursales.length === 0 && (
+                      <p className="text-sm text-red-600 mt-1">
+                        ⚠️ No hay sucursales activas. Crea una primero.
                       </p>
                     )}
                   </div>
@@ -633,7 +640,7 @@ const AdminProducts = () => {
                       <FaImage className="text-amber-600" />
                       Imagen del Producto
                     </label>
-
+                    
                     {previewImagen ? (
                       <div className="relative">
                         <img
@@ -776,7 +783,7 @@ const AdminProducts = () => {
         )}
       </AnimatePresence>
     </div>
-
+    
   );
 };
 
