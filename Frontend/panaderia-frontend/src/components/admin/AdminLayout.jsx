@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  FaHome, FaBox, FaTag, FaShoppingCart, FaUsers, FaChartBar, 
-  FaSignOutAlt, FaBars, FaTimes, FaStore 
+import {
+  FaHome, FaBox, FaTag, FaShoppingCart, FaUsers, FaChartBar,
+  FaSignOutAlt, FaBars, FaTimes, FaStore
 } from 'react-icons/fa';
 import BranchSelector from './BranchSelector';
 
@@ -46,7 +46,6 @@ export default function AdminLayout() {
     { path: '/admin/productos', icon: FaBox, label: 'Productos' },
     { path: '/admin/ofertas', icon: FaTag, label: 'Ofertas' },
     { path: '/admin/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
-    { path: '/admin/usuarios', icon: FaUsers, label: 'Usuarios' },
     { path: '/admin/reportes', icon: FaChartBar, label: 'Reportes' },
   ];
 
@@ -134,16 +133,15 @@ export default function AdminLayout() {
             {menuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path, item.exact);
-              
+
               return (
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    active
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg'
                       : 'hover:bg-white/10'
-                  }`}
+                    }`}
                 >
                   <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
                   {sidebarOpen && (
