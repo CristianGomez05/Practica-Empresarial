@@ -34,60 +34,116 @@ export default function DashboardCart() {
 
     setLoading(true);
     try {
-      // Preparar items para el pedido
+      console.log('🛒 CREANDO PEDIDO');
+      console.log('📦 Items en carrito:', items);
+
+      // ⭐ CORRECCIÓN: Usar las cantidades correctas de productos_con_cantidad
       const orderItems = items.flatMap((item) => {
+        console.log('🔍 Procesando item:', item);
+
         if (item.isOffer) {
-          // Si es una oferta, necesitamos distribuir el precio entre los productos
-          console.log('🎁 Procesando oferta:', item);
+          console.log('   🎁 Es una OFERTA');
+
+          // ⭐ NUEVO: Extraer productos con cantidades
+          let productosConCantidad = [];
+
+          // Si tiene productos_con_cantidad (formato nuevo)
+          if (item.productos_con_cantidad && Array.isArray(item.productos_con_cantidad)) {
+            console.log('   ✅ Usando productos_con_cantidad (formato nuevo)');
+            productosConCantidad = item.productos_con_cantidad.map(pc => ({
+              id: pc.producto.id,
+              nombre: pc.producto.nombre,
+              cantidad_unitaria: pc.cantidad, // ⭐ Cantidad por unidad de oferta
+              precio: pc.producto.precio
+            }));
+          }
+          // Si tiene productos (formato antiguo)
+          else if (item.productos && Array.isArray(item.productos)) {
+            console.log('   ⚠️ Usando productos (formato antiguo, cantidad = 1)');
+            productosConCantidad = item.productos.map(p => ({
+              id: p.id,
+              nombre: p.nombre,
+              cantidad_unitaria: p.cantidad_oferta || 1, // ⭐ Intentar leer cantidad_oferta
+              precio: p.precio
+            }));
+          }
+
+          if (productosConCantidad.length === 0) {
+            console.error('   ❌ Oferta sin productos válidos');
+            throw new Error('Oferta sin productos válidos');
+          }
+
+          console.log('   📦 Productos extraídos:', productosConCantidad);
+
+          // ⭐ CRÍTICO: Multiplicar cantidad_unitaria por item.qty
           const precioOferta = parseFloat(item.precio);
-          const numProductos = item.productos.length;
-          const precioPorProducto = precioOferta / numProductos; // Dividir precio equitativamente
-          
-          return item.productos.map((producto) => ({
-            producto: producto.id,
-            cantidad: item.qty,
-            precio_unitario: precioPorProducto, // Precio prorrateado
-            es_oferta: true,
-            oferta_titulo: item.nombre
-          }));
+          const numProductos = productosConCantidad.length;
+          const precioPorProducto = precioOferta / numProductos;
+
+          return productosConCantidad.map((producto) => {
+            const cantidadTotal = producto.cantidad_unitaria * item.qty; // ⭐ MULTIPLICAR
+
+            const itemData = {
+              producto: producto.id,
+              cantidad: cantidadTotal, // ⭐ USAR CANTIDAD CORRECTA
+              precio_unitario: precioPorProducto,
+              es_oferta: true,
+              oferta_titulo: item.nombre
+            };
+
+            console.log(`   ➕ ${producto.nombre}: ${producto.cantidad_unitaria} x ${item.qty} = ${cantidadTotal} unidades`);
+            console.log('      Item generado:', itemData);
+
+            return itemData;
+          });
         } else {
-          // Si es un producto individual
-          console.log('📦 Procesando producto:', item);
-          return [{
+          // Producto individual
+          const itemData = {
             producto: item.id,
             cantidad: item.qty,
             precio_unitario: parseFloat(item.precio),
             es_oferta: false
-          }];
+          };
+          console.log('   ➕ Producto individual:', itemData);
+          return [itemData];
         }
       });
 
-      console.log('📋 Items del pedido:', orderItems);
+      console.log('📋 Items preparados para enviar:', orderItems);
+      console.log('💰 Total:', total);
 
-      const orderData = {
+      const body = {
         items: orderItems,
         total,
       };
 
-      const res = await api.post("/pedidos/", orderData);
-      
+      console.log('📤 Enviando al backend:', JSON.stringify(body, null, 2));
+
+      const res = await api.post("/pedidos/", body);
+
+      console.log('✅ Respuesta del servidor:', res.data);
+
       enqueueSnackbar("¡Pedido creado exitosamente!", {
         variant: "success",
         autoHideDuration: 3000,
       });
-      
+
       clear();
-      
-      // Redirigir a la página de pedidos
+
       setTimeout(() => {
         navigate("/dashboard/pedidos");
       }, 1000);
     } catch (error) {
-      console.error("Error creando pedido:", error);
-      enqueueSnackbar(
-        error.response?.data?.error || "Error al crear el pedido. Intenta nuevamente.", 
-        { variant: "error" }
-      );
+      console.error('❌ Error al crear pedido:', error);
+      console.error('   Detalles:', error.response?.data);
+
+      if (error.response?.data?.error) {
+        enqueueSnackbar(error.response.data.error, { variant: "error" });
+      } else if (error.message) {
+        enqueueSnackbar(error.message, { variant: "error" });
+      } else {
+        enqueueSnackbar("No se pudo crear el pedido. Intenta nuevamente.", { variant: "error" });
+      }
     } finally {
       setLoading(false);
     }
@@ -146,11 +202,10 @@ export default function DashboardCart() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className={`bg-white rounded-xl shadow-md p-6 border-2 transition-all ${
-                  item.isOffer 
-                    ? 'border-green-200 bg-gradient-to-r from-green-50 to-white' 
+                className={`bg-white rounded-xl shadow-md p-6 border-2 transition-all ${item.isOffer
+                    ? 'border-green-200 bg-gradient-to-r from-green-50 to-white'
                     : 'border-gray-100 hover:shadow-lg'
-                }`}
+                  }`}
               >
                 <div className="flex gap-4">
                   {/* Image */}
@@ -174,11 +229,11 @@ export default function DashboardCart() {
                         OFERTA ESPECIAL
                       </span>
                     )}
-                    
+
                     <h3 className="font-semibold text-lg text-[#5D4037] mb-1">
                       {item.nombre}
                     </h3>
-                    
+
                     {item.descripcion && (
                       <p className="text-sm text-[#8D6E63] mb-3 line-clamp-2">
                         {item.descripcion}
