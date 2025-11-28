@@ -66,16 +66,17 @@ def registro_usuario(request):
 
 
 # ============================================================================
-# USUARIO VIEWSET
+# USUARIO VIEWSET - ACTUALIZADO CON RESTRICCIONES
 # ============================================================================
 
 class UsuarioViewSet(viewsets.ModelViewSet):
-    """ViewSet para gestionar usuarios"""
+    """ViewSet para gestionar usuarios con restricciones por rol"""
     queryset = Usuario.objects.all()
     serializer_class = UsuarioSerializer
     permission_classes = [IsAuthenticated]
     
     def get_permissions(self):
+        # ⭐ NUEVO: Solo admin general puede crear/editar/eliminar usuarios
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated()]
         return [IsAuthenticated()]
@@ -83,14 +84,17 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         
+        # ⭐ Admin General: Ve TODOS los usuarios
         if user.rol == 'administrador_general':
             print(f"🔓 Admin General - Mostrando TODOS los usuarios")
             return Usuario.objects.all().order_by('-date_joined')
         
+        # ⭐ Admin Regular: Solo VE pero NO puede modificar
         elif user.rol == 'administrador':
-            print(f"🔓 Admin Regular - Mostrando TODOS los usuarios")
+            print(f"👁️ Admin Regular - Solo puede VER usuarios")
             return Usuario.objects.all().order_by('-date_joined')
         
+        # Cliente: Solo su perfil
         elif user.rol == 'cliente':
             print(f"🔒 Cliente - Solo su perfil")
             return Usuario.objects.filter(id=user.id)
@@ -98,33 +102,35 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         return Usuario.objects.none()
     
     def create(self, request, *args, **kwargs):
+        """Solo admin general puede crear usuarios"""
         user = request.user
         
-        if user.rol not in ['administrador', 'administrador_general']:
+        if user.rol != 'administrador_general':
             return Response({
-                'error': 'No tienes permisos para crear usuarios'
+                'error': 'Solo el administrador general puede crear usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
         return super().create(request, *args, **kwargs)
     
     def update(self, request, *args, **kwargs):
+        """Solo admin general puede editar usuarios"""
         user = request.user
-        instance = self.get_object()
         
-        if user.rol not in ['administrador', 'administrador_general']:
+        if user.rol != 'administrador_general':
             return Response({
-                'error': 'No tienes permisos para editar usuarios'
+                'error': 'Solo el administrador general puede modificar usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
         return super().update(request, *args, **kwargs)
     
     def destroy(self, request, *args, **kwargs):
+        """Solo admin general puede eliminar usuarios"""
         user = request.user
         instance = self.get_object()
         
-        if user.rol not in ['administrador', 'administrador_general']:
+        if user.rol != 'administrador_general':
             return Response({
-                'error': 'No tienes permisos para eliminar usuarios'
+                'error': 'Solo el administrador general puede eliminar usuarios'
             }, status=status.HTTP_403_FORBIDDEN)
         
         if instance.id == user.id:
@@ -133,48 +139,6 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_403_FORBIDDEN)
         
         return super().destroy(request, *args, **kwargs)
-    
-    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
-    def me(self, request):
-        """Endpoint para obtener/actualizar el usuario actual"""
-        if request.method == 'GET':
-            serializer = self.get_serializer(request.user)
-            return Response(serializer.data)
-        
-        elif request.method == 'PATCH':
-            allowed_fields = ['first_name', 'last_name', 'email']
-            data = {k: v for k, v in request.data.items() if k in allowed_fields}
-            
-            serializer = self.get_serializer(request.user, data=data, partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            
-            return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """Estadísticas de usuarios"""
-        user = request.user
-        
-        if user.rol not in ['administrador', 'administrador_general']:
-            return Response({
-                'error': 'No tienes permisos'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        total = Usuario.objects.count()
-        clientes = Usuario.objects.filter(rol='cliente').count()
-        admins = Usuario.objects.filter(rol='administrador').count()
-        admins_general = Usuario.objects.filter(rol='administrador_general').count()
-        activos = Usuario.objects.filter(is_active=True).count()
-        
-        return Response({
-            'total': total,
-            'clientes': clientes,
-            'administradores': admins,
-            'administradores_generales': admins_general,
-            'activos': activos,
-            'inactivos': total - activos
-        })
 
 
 # ============================================================================
@@ -243,17 +207,17 @@ class SucursalViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# PRODUCTO VIEWSET
+# PRODUCTO VIEWSET - ACTUALIZADO
 # ============================================================================
 
 class ProductoViewSet(viewsets.ModelViewSet):
-    """ViewSet para gestionar productos con soporte de imágenes en Cloudinary"""
+    """ViewSet para gestionar productos con filtro de sucursal"""
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_queryset(self):
-        """Filtrar productos según sucursal del usuario"""
+        """Filtrar productos según rol y sucursal del usuario"""
         user = self.request.user
         
         # Clientes ven productos de todas las sucursales activas
@@ -267,7 +231,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 return Producto.objects.filter(sucursal_id=sucursal_id).order_by('-id')
             return Producto.objects.all().order_by('-id')
         
-        # Admin regular solo ve productos de su sucursal
+        # ⭐ Admin regular SOLO ve productos de su sucursal
         if user.rol == 'administrador' and user.sucursal:
             return Producto.objects.filter(sucursal=user.sucursal).order_by('-id')
         
@@ -278,100 +242,27 @@ class ProductoViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         return [EsAdministrador()]
     
-    def create(self, request, *args, **kwargs):
-        print(f"\n{'='*60}")
-        print(f"📥 POST /api/productos/ - Creando producto")
-        
-        if 'sucursal' not in request.data and request.user.sucursal:
-            request.data['sucursal'] = request.user.sucursal.id
-            print(f"   Auto-asignando sucursal: {request.user.sucursal.nombre}")
-        
-        serializer = self.get_serializer(data=request.data)
-        
-        try:
-            serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
-            
-            print(f"✅ Producto creado exitosamente")
-            print(f"{'='*60}\n")
-            
-            headers = self.get_success_headers(serializer.data)
-            return Response(
-                serializer.data, 
-                status=status.HTTP_201_CREATED, 
-                headers=headers
-            )
-        except Exception as e:
-            print(f"❌ Error creando producto: {str(e)}")
-            print(f"{'='*60}\n")
-            raise
-    
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        
-        print(f"\n{'='*60}")
-        print(f"🔄 PUT /api/productos/{instance.id}/ - Actualizando producto")
-        
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        
-        try:
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
-            
-            if getattr(instance, '_prefetched_objects_cache', None):
-                instance._prefetched_objects_cache = {}
-            
-            print(f"✅ Producto actualizado exitosamente")
-            print(f"{'='*60}\n")
-            
-            return Response(serializer.data)
-        except Exception as e:
-            print(f"❌ Error actualizando producto: {str(e)}")
-            print(f"{'='*60}\n")
-            raise
-    
     def perform_create(self, serializer):
-        cache.delete('productos_list')
-        producto = serializer.save()
+        """Auto-asignar sucursal del admin regular al crear"""
+        user = self.request.user
         
+        # ⭐ Si es admin regular, forzar su sucursal
+        if user.rol == 'administrador' and user.sucursal:
+            serializer.save(sucursal=user.sucursal)
+            print(f"✅ Producto creado en sucursal: {user.sucursal.nombre}")
+        else:
+            cache.delete('productos_list')
+            producto = serializer.save()
+            
         try:
             from .emails import enviar_notificacion_nuevo_producto
             enviar_notificacion_nuevo_producto(producto.id)
         except Exception as e:
             print(f"⚠️  Error enviando notificación: {e}")
-    
-    def perform_update(self, serializer):
-        cache.delete('productos_list')
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        if instance.imagen:
-            try:
-                import cloudinary.uploader
-                if hasattr(instance.imagen, 'public_id'):
-                    cloudinary.uploader.destroy(instance.imagen.public_id)
-            except Exception as e:
-                print(f"⚠️  Error eliminando imagen: {e}")
-        
-        cache.delete('productos_list')
-        instance.delete()
-    
-    @action(detail=False, methods=['get'])
-    def disponibles(self, request):
-        productos = self.get_queryset().filter(stock__gt=0, disponible=True).order_by('nombre')
-        serializer = self.get_serializer(productos, many=True)
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def agotados(self, request):
-        productos = self.get_queryset().filter(stock=0).order_by('nombre')
-        serializer = self.get_serializer(productos, many=True)
-        return Response(serializer.data)
 
 
 # ============================================================================
-# OFERTA VIEWSET
+# OFERTA VIEWSET - ACTUALIZADO
 # ============================================================================
 
 class OfertaViewSet(viewsets.ModelViewSet):
@@ -384,7 +275,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
         return [EsAdministrador()]
     
     def get_queryset(self):
-        """Filtrar ofertas según sucursal del usuario"""
+        """Filtrar ofertas según rol y sucursal del usuario"""
         user = self.request.user
         
         base_queryset = Oferta.objects.prefetch_related(
@@ -402,112 +293,25 @@ class OfertaViewSet(viewsets.ModelViewSet):
                 return base_queryset.filter(sucursal_id=sucursal_id).all()
             return base_queryset.all()
         
-        # Admin regular solo ve ofertas de su sucursal
+        # ⭐ Admin regular SOLO ve ofertas de su sucursal
         if user.rol == 'administrador' and user.sucursal:
             return base_queryset.filter(sucursal=user.sucursal).all()
         
         return Oferta.objects.none()
     
-    def create(self, request, *args, **kwargs):
-        """Crear oferta con productos y cantidades"""
-        print(f"\n{'='*60}")
-        print(f"📥 POST /api/ofertas/ - Creando oferta")
-        print(f"📋 Data recibida: {request.data}")
-        print(f"{'='*60}\n")
-        
-        if 'sucursal' not in request.data and request.user.sucursal:
-            request.data['sucursal'] = request.user.sucursal.id
-            print(f"   Auto-asignando sucursal: {request.user.sucursal.nombre}")
-        
-        if 'productos_data' not in request.data:
-            if 'productos_ids' in request.data:
-                print("⚠️  Detectado formato antiguo (productos_ids), convirtiendo...")
-                productos_ids = request.data.get('productos_ids', [])
-                request.data['productos_data'] = [
-                    {'producto_id': pid, 'cantidad': 1}
-                    for pid in productos_ids
-                ]
-            else:
-                return Response({
-                    'error': 'Se requiere productos_data con formato: [{"producto_id": 1, "cantidad": 2}, ...]'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        
-        serializer = self.get_serializer(data=request.data)
-        
-        try:
-            serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
-            
-            headers = self.get_success_headers(serializer.data)
-            return Response(
-                serializer.data,
-                status=status.HTTP_201_CREATED,
-                headers=headers
-            )
-        except Exception as e:
-            print(f"❌ Error creando oferta: {str(e)}")
-            print(f"❌ Validation errors: {serializer.errors if hasattr(serializer, 'errors') else 'N/A'}")
-            print(f"{'='*60}\n")
-            
-            return Response({
-                'error': str(e),
-                'validation_errors': serializer.errors if hasattr(serializer, 'errors') else None
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    def update(self, request, *args, **kwargs):
-        """Actualizar oferta con productos y cantidades"""
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        
-        print(f"\n{'='*60}")
-        print(f"🔄 PUT /api/ofertas/{instance.id}/ - Actualizando oferta")
-        print(f"📋 Data recibida: {request.data}")
-        print(f"{'='*60}\n")
-        
-        if 'productos_ids' in request.data and 'productos_data' not in request.data:
-            print("⚠️  Detectado formato antiguo (productos_ids), convirtiendo...")
-            productos_ids = request.data.get('productos_ids', [])
-            request.data['productos_data'] = [
-                {'producto_id': pid, 'cantidad': 1}
-                for pid in productos_ids
-            ]
-        
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        
-        try:
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
-            
-            if getattr(instance, '_prefetched_objects_cache', None):
-                instance._prefetched_objects_cache = {}
-            
-            return Response(serializer.data)
-        except Exception as e:
-            print(f"❌ Error actualizando oferta: {str(e)}")
-            print(f"{'='*60}\n")
-            
-            return Response({
-                'error': str(e),
-                'validation_errors': serializer.errors if hasattr(serializer, 'errors') else None
-            }, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=False, methods=['get'])
-    def activas(self, request):
-        from django.utils import timezone
-        hoy = timezone.now().date()
-        ofertas = self.get_queryset().filter(
-            fecha_inicio__lte=hoy,
-            fecha_fin__gte=hoy
-        )
-        serializer = self.get_serializer(ofertas, many=True)
-        return Response(serializer.data)
-    
     def perform_create(self, serializer):
+        """Auto-asignar sucursal del admin regular al crear"""
+        user = self.request.user
+        
         print("\n🎉 Creando oferta...")
-        oferta = serializer.save()
-    
-        print(f"✅ Oferta creada: {oferta.titulo} (ID: {oferta.id})")
-        print(f"   Sucursal: {oferta.sucursal.nombre}")
+        
+        # ⭐ Si es admin regular, forzar su sucursal
+        if user.rol == 'administrador' and user.sucursal:
+            oferta = serializer.save(sucursal=user.sucursal)
+            print(f"✅ Oferta creada en sucursal: {user.sucursal.nombre}")
+        else:
+            oferta = serializer.save()
+            print(f"✅ Oferta creada: {oferta.titulo} (ID: {oferta.id})")
         
         productos_count = ProductoOferta.objects.filter(oferta=oferta).count()
         print(f"📦 Productos asociados: {productos_count}")

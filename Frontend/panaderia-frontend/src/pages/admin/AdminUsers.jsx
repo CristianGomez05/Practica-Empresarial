@@ -1,7 +1,7 @@
 // Frontend/src/pages/admin/AdminUsers.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
   FaUsers, FaUserPlus, FaEdit, FaTrash, FaSync, FaTimes, FaCheck,
   FaUserShield, FaUserTie, FaUser, FaEnvelope, FaStore
 } from 'react-icons/fa';
@@ -40,28 +40,28 @@ export default function AdminUsers() {
   const cargarDatos = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
-      
+
       console.log('📡 Cargando usuarios y sucursales...');
-      
+
       // ⭐ NO enviar parámetro de sucursal - queremos TODOS los usuarios
       const [usuariosRes, sucursalesRes] = await Promise.all([
         api.get('/usuarios/'),  // ✅ SIN parámetros de filtro
         api.get('/sucursales/') // ✅ Cargar todas las sucursales
       ]);
-      
+
       const usuariosData = usuariosRes.data.results || usuariosRes.data;
       const sucursalesData = sucursalesRes.data.results || sucursalesRes.data;
-      
+
       console.log('👥 Usuarios cargados:', usuariosData.length);
       console.log('🏪 Sucursales cargadas:', sucursalesData.length);
-      
+
       if (usuariosData.length === 0) {
         console.warn('⚠️ No se cargaron usuarios - verificar permisos');
       }
-      
+
       setUsuarios(usuariosData);
       setSucursales(sucursalesData);
-      
+
       if (refreshing) {
         enqueueSnackbar('Datos actualizados', { variant: 'info', autoHideDuration: 2000 });
       }
@@ -69,11 +69,11 @@ export default function AdminUsers() {
       console.error('❌ Error cargando datos:', error);
       console.error('❌ Response:', error.response?.data);
       console.error('❌ Status:', error.response?.status);
-      
-      const errorMsg = error.response?.data?.error || 
-                      error.response?.data?.detail ||
-                      'Error al cargar datos';
-      
+
+      const errorMsg = error.response?.data?.error ||
+        error.response?.data?.detail ||
+        'Error al cargar datos';
+
       enqueueSnackbar(errorMsg, { variant: 'error' });
     } finally {
       setLoading(false);
@@ -87,9 +87,9 @@ export default function AdminUsers() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     console.log('📤 Enviando datos:', formData);
-    
+
     // Validaciones básicas
     if (!formData.username.trim()) {
       enqueueSnackbar('El nombre de usuario es requerido', { variant: 'warning' });
@@ -99,7 +99,7 @@ export default function AdminUsers() {
       enqueueSnackbar('El email es requerido', { variant: 'warning' });
       return;
     }
-    
+
     // Validar contraseñas en creación
     if (!editando) {
       if (!formData.password) {
@@ -115,10 +115,10 @@ export default function AdminUsers() {
         return;
       }
     }
-    
+
     try {
       const dataToSend = { ...formData };
-      
+
       // ⭐ Limpiar sucursal según el rol
       if (dataToSend.rol === 'cliente' || dataToSend.rol === 'administrador_general') {
         // Clientes y admin general no necesitan sucursal
@@ -129,7 +129,7 @@ export default function AdminUsers() {
           return;
         }
       }
-      
+
       // Remover campos de contraseña si están vacíos en edición
       if (editando) {
         if (!dataToSend.password) {
@@ -139,9 +139,9 @@ export default function AdminUsers() {
       } else {
         delete dataToSend.password_confirm;
       }
-      
+
       console.log('📤 Data final a enviar:', dataToSend);
-      
+
       if (editando) {
         await api.put(`/usuarios/${editando.id}/`, dataToSend);
         enqueueSnackbar('✅ Usuario actualizado exitosamente', { variant: 'success' });
@@ -149,19 +149,19 @@ export default function AdminUsers() {
         await api.post('/usuarios/', dataToSend);
         enqueueSnackbar('✅ Usuario creado exitosamente', { variant: 'success' });
       }
-      
+
       await cargarDatos();
       cerrarModal();
     } catch (error) {
       console.error('❌ Error guardando usuario:', error);
       console.error('❌ Response:', error.response?.data);
-      
-      const errorMsg = error.response?.data?.error || 
-                      error.response?.data?.username?.[0] ||
-                      error.response?.data?.email?.[0] ||
-                      error.response?.data?.detail ||
-                      'Error al guardar usuario';
-      
+
+      const errorMsg = error.response?.data?.error ||
+        error.response?.data?.username?.[0] ||
+        error.response?.data?.email?.[0] ||
+        error.response?.data?.detail ||
+        'Error al guardar usuario';
+
       enqueueSnackbar(errorMsg, { variant: 'error' });
     }
   };
@@ -177,9 +177,9 @@ export default function AdminUsers() {
       await cargarDatos();
     } catch (error) {
       console.error('❌ Error eliminando usuario:', error);
-      const errorMsg = error.response?.data?.error || 
-                      error.response?.data?.detail ||
-                      'Error al eliminar usuario';
+      const errorMsg = error.response?.data?.error ||
+        error.response?.data?.detail ||
+        'Error al eliminar usuario';
       enqueueSnackbar(errorMsg, { variant: 'error' });
     }
   };
@@ -280,10 +280,14 @@ export default function AdminUsers() {
             <FaUsers className="text-white text-xl" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-[#5D4037]">Gestión de Usuarios</h1>
+            <h1 className="text-3xl font-bold text-[#5D4037]">
+              {currentUser?.rol === 'administrador_general' ? 'Gestión de Usuarios' : 'Usuarios Registrados'}
+            </h1>
             <p className="text-[#8D6E63]">
               {usuarios.length} usuarios registrados
-              <span className="text-purple-600 font-semibold ml-2">• Todas las sucursales</span>
+              {currentUser?.rol === 'administrador' && (
+                <span className="text-blue-600 font-semibold ml-2">• Solo lectura</span>
+              )}
             </p>
           </div>
         </div>
@@ -291,31 +295,31 @@ export default function AdminUsers() {
           <button
             onClick={cargarDatos}
             disabled={refreshing}
-            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-blue-500 transition-all ${
-              refreshing ? 'animate-spin' : ''
-            }`}
+            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-blue-500 transition-all ${refreshing ? 'animate-spin' : ''
+              }`}
             title="Actualizar datos"
           >
             <FaSync className="text-gray-600" />
           </button>
-          <button
-            onClick={abrirModalCrear}
-            className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
-          >
-            <FaUserPlus />
-            Nuevo Usuario
-          </button>
+
+          {/* ⭐ Solo mostrar botón si es Admin General */}
+          {currentUser?.rol === 'administrador_general' && (
+            <button
+              onClick={abrirModalCrear}
+              className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
+            >
+              <FaUserPlus />
+              Nuevo Usuario
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Info Box para Admin Regular */}
+      {/* ⭐ Alerta para Admin Regular */}
       {currentUser?.rol === 'administrador' && (
         <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
           <p className="text-blue-800 text-sm">
-            ℹ️ <strong>Gestión Global:</strong> Puedes ver y gestionar usuarios de todas las sucursales.
-            {currentUser.sucursal_nombre && (
-              <span className="ml-2">Tu sucursal asignada: <strong>{currentUser.sucursal_nombre}</strong></span>
-            )}
+            👁️ <strong>Vista de Solo Lectura:</strong> Puedes ver la lista de usuarios, pero solo el Administrador General puede crear, editar o eliminar usuarios.
           </p>
         </div>
       )}
@@ -331,7 +335,10 @@ export default function AdminUsers() {
                 <th className="px-6 py-4 text-left text-sm font-semibold">Rol</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold">Sucursal</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold">Estado</th>
-                <th className="px-6 py-4 text-right text-sm font-semibold">Acciones</th>
+                {/* ⭐ Solo mostrar columna de acciones si es Admin General */}
+                {currentUser?.rol === 'administrador_general' && (
+                  <th className="px-6 py-4 text-right text-sm font-semibold">Acciones</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -342,76 +349,53 @@ export default function AdminUsers() {
                   animate={{ opacity: 1 }}
                   className="hover:bg-gray-50 transition-colors"
                 >
+                  {/* ... columnas anteriores sin cambios ... */}
+
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        {getRolIcon(usuario.rol)}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-gray-800">{usuario.username}</p>
-                        {(usuario.first_name || usuario.last_name) && (
-                          <p className="text-sm text-gray-500">
-                            {usuario.first_name} {usuario.last_name}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <FaEnvelope className="text-gray-400" />
-                      {usuario.email}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {getRolBadge(usuario.rol)}
-                  </td>
-                  <td className="px-6 py-4">
-                    {usuario.sucursal_nombre ? (
-                      <div className="flex items-center gap-2">
-                        <FaStore className="text-purple-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          {usuario.sucursal_nombre}
-                        </span>
-                      </div>
+                    {/* ⭐ Botón de toggle solo para Admin General */}
+                    {currentUser?.rol === 'administrador_general' ? (
+                      <button
+                        onClick={() => handleToggleActive(usuario)}
+                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${usuario.is_active
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                            : 'bg-red-100 text-red-800 hover:bg-red-200'
+                          }`}
+                      >
+                        {usuario.is_active ? '✓ Activo' : '✗ Inactivo'}
+                      </button>
                     ) : (
-                      <span className="text-gray-400 text-sm">
-                        {usuario.rol === 'cliente' ? 'N/A' : 'Sin asignar'}
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${usuario.is_active
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                        }`}>
+                        {usuario.is_active ? '✓ Activo' : '✗ Inactivo'}
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => handleToggleActive(usuario)}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
-                        usuario.is_active
-                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                          : 'bg-red-100 text-red-800 hover:bg-red-200'
-                      }`}
-                    >
-                      {usuario.is_active ? '✓ Activo' : '✗ Inactivo'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => abrirModalEditar(usuario)}
-                        className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"
-                        title="Editar usuario"
-                      >
-                        <FaEdit />
-                      </button>
-                      {usuario.id !== currentUser?.id && (
+
+                  {/* ⭐ Solo mostrar botones de acción si es Admin General */}
+                  {currentUser?.rol === 'administrador_general' && (
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => handleEliminar(usuario.id, usuario.username)}
-                          className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
-                          title="Eliminar usuario"
+                          onClick={() => abrirModalEditar(usuario)}
+                          className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"
+                          title="Editar usuario"
                         >
-                          <FaTrash />
+                          <FaEdit />
                         </button>
-                      )}
-                    </div>
-                  </td>
+                        {usuario.id !== currentUser?.id && (
+                          <button
+                            onClick={() => handleEliminar(usuario.id, usuario.username)}
+                            className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
+                            title="Eliminar usuario"
+                          >
+                            <FaTrash />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </motion.tr>
               ))}
             </tbody>
