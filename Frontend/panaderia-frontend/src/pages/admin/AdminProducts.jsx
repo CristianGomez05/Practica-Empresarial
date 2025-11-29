@@ -1,14 +1,13 @@
-// Frontend/src/pages/admin/AdminProducts.jsx
+// Frontend/src/pages/admin/AdminProducts.jsx - COMPLETO Y CORREGIDO
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { FaPlus, FaEdit, FaTrash, FaBox, FaExclamationTriangle, FaUpload, FaImage, FaTimes, FaSync, FaCheck } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaBox, FaExclamationTriangle, FaUpload, FaImage, FaTimes, FaSync, FaCheck, FaStore } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../services/api';
 import { useSnackbar } from 'notistack';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
 
 const AdminProducts = () => {
-  // ⭐ NUEVO: Obtener sucursal seleccionada del contexto
   const { selectedBranch } = useOutletContext();
   
   const [productos, setProductos] = useState([]);
@@ -24,7 +23,7 @@ const AdminProducts = () => {
     stock: '',
     disponible: true,
     imagen: '',
-    sucursal: '' // ⭐ NUEVO
+    sucursal: ''
   });
   const [archivoImagen, setArchivoImagen] = useState(null);
   const [previewImagen, setPreviewImagen] = useState(null);
@@ -33,23 +32,22 @@ const AdminProducts = () => {
 
   const { enqueueSnackbar } = useSnackbar();
 
-  // Cargar usuario actual
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
     setCurrentUser(userData);
+    console.log('👤 Usuario actual:', userData);
+    console.log('🏪 Sucursal del usuario:', userData?.sucursal_nombre);
   }, []);
 
-  // ⭐ ACTUALIZADO: Cargar productos con filtro de sucursal
   const cargarProductos = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
       
-      // ⭐ Aplicar filtro de sucursal si está seleccionada
       const params = selectedBranch ? { sucursal: selectedBranch } : {};
       const response = await api.get('/productos/', { params });
       
       const data = response.data.results || response.data;
-      console.log('📦 Productos cargados:', data.length, selectedBranch ? `(Sucursal: ${selectedBranch})` : '(Todas)');
+      console.log('📦 Productos cargados:', data.length);
       setProductos(data);
       
       if (refreshing) {
@@ -64,14 +62,14 @@ const AdminProducts = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loading, refreshing, selectedBranch, enqueueSnackbar]); // ⭐ Agregar selectedBranch
+  }, [loading, refreshing, selectedBranch, enqueueSnackbar]);
 
-  // ⭐ NUEVO: Cargar sucursales
   const cargarSucursales = useCallback(async () => {
     try {
       const response = await api.get('/sucursales/activas/');
       const data = response.data.results || response.data;
       setSucursales(data);
+      console.log('🏪 Sucursales cargadas:', data.length);
     } catch (error) {
       console.error('❌ Error cargando sucursales:', error);
     }
@@ -82,7 +80,6 @@ const AdminProducts = () => {
     cargarSucursales();
   }, []);
 
-  // ⭐ Recargar cuando cambia la sucursal seleccionada
   useEffect(() => {
     if (!loading) {
       cargarProductos();
@@ -109,8 +106,7 @@ const AdminProducts = () => {
       return;
     }
 
-    console.log('📷 Imagen seleccionada:', file.name, (file.size / 1024).toFixed(2), 'KB');
-    
+    console.log('📷 Imagen seleccionada:', file.name);
     setArchivoImagen(file);
 
     const reader = new FileReader();
@@ -143,8 +139,6 @@ const AdminProducts = () => {
       enqueueSnackbar('El stock no puede ser negativo', { variant: 'warning' });
       return;
     }
-    
-    // ⭐ Validar sucursal
     if (!formData.sucursal) {
       enqueueSnackbar('Debes seleccionar una sucursal', { variant: 'warning' });
       return;
@@ -159,21 +153,12 @@ const AdminProducts = () => {
       formDataToSend.append('precio', parseFloat(formData.precio));
       formDataToSend.append('stock', parseInt(formData.stock) || 0);
       formDataToSend.append('disponible', formData.disponible);
-      formDataToSend.append('sucursal', formData.sucursal); // ⭐ NUEVO
+      formDataToSend.append('sucursal', formData.sucursal);
 
       if (archivoImagen) {
-        console.log('📤 Subiendo imagen:', archivoImagen.name, (archivoImagen.size / 1024).toFixed(2), 'KB');
+        console.log('📤 Subiendo imagen:', archivoImagen.name);
         formDataToSend.append('imagen', archivoImagen);
       }
-
-      console.log('📤 Enviando datos:', {
-        nombre: formData.nombre,
-        precio: formData.precio,
-        stock: formData.stock,
-        sucursal: formData.sucursal,
-        tiene_imagen_nueva: !!archivoImagen,
-        editando: !!editando
-      });
 
       let response;
       if (editando) {
@@ -181,18 +166,13 @@ const AdminProducts = () => {
         response = await api.put(`/productos/${editando.id}/`, formDataToSend, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        console.log('✅ Producto actualizado:', response.data);
         enqueueSnackbar('✅ Producto actualizado exitosamente', { variant: 'success' });
       } else {
         console.log('➕ Creando nuevo producto');
         response = await api.post('/productos/', formDataToSend, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
-        console.log('✅ Producto creado:', response.data);
-        enqueueSnackbar('✅ Producto creado y notificación enviada a clientes', { 
-          variant: 'success',
-          autoHideDuration: 4000 
-        });
+        enqueueSnackbar('✅ Producto creado exitosamente', { variant: 'success' });
       }
 
       await cargarProductos();
@@ -207,7 +187,7 @@ const AdminProducts = () => {
         || error.response?.data?.sucursal?.[0]
         || 'Error al guardar producto';
       
-      enqueueSnackbar(errorMsg, { variant: 'error', autoHideDuration: 5000 });
+      enqueueSnackbar(errorMsg, { variant: 'error' });
     } finally {
       setSubiendoImagen(false);
     }
@@ -229,13 +209,11 @@ const AdminProducts = () => {
   const abrirModalCrear = () => {
     setEditando(null);
     
-    // ⭐ Auto-asignar sucursal según el usuario
     let sucursalDefault = '';
     if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
-      // Admin regular: su sucursal
       sucursalDefault = currentUser.sucursal_id;
+      console.log('🔒 Admin regular - Sucursal pre-asignada:', currentUser.sucursal_id);
     } else if (currentUser?.rol === 'administrador_general' && selectedBranch) {
-      // Admin general: la sucursal seleccionada
       sucursalDefault = selectedBranch;
     }
     
@@ -256,6 +234,14 @@ const AdminProducts = () => {
   const abrirModalEditar = (producto) => {
     console.log('📝 Editando producto:', producto);
     setEditando(producto);
+    
+    // ⭐ Para admin regular, FORZAR su sucursal
+    let sucursalParaEditar = producto.sucursal || '';
+    if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
+      sucursalParaEditar = currentUser.sucursal_id;
+      console.log('🔒 Admin regular - Forzando sucursal:', currentUser.sucursal_id);
+    }
+    
     setFormData({
       nombre: producto.nombre,
       descripcion: producto.descripcion || '',
@@ -263,7 +249,7 @@ const AdminProducts = () => {
       stock: producto.stock,
       disponible: producto.disponible,
       imagen: producto.imagen || '',
-      sucursal: producto.sucursal || '' // ⭐ NUEVO
+      sucursal: sucursalParaEditar
     });
     setArchivoImagen(null);
     setPreviewImagen(producto.imagen || null);
@@ -335,7 +321,6 @@ const AdminProducts = () => {
             <h1 className="text-3xl font-bold text-[#5D4037]">Gestión de Productos</h1>
             <p className="text-[#8D6E63]">
               {productos.length} productos registrados
-              {/* ⭐ Mostrar filtro activo */}
               {selectedBranch && sucursales.length > 0 && (
                 <span className="ml-2 text-purple-600 font-semibold">
                   • {sucursales.find(s => s.id === selectedBranch)?.nombre || 'Filtrado'}
@@ -458,7 +443,6 @@ const AdminProducts = () => {
                       alt={producto.nombre}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        console.error('❌ Error cargando imagen:', producto.imagen);
                         e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ESin Imagen%3C/text%3E%3C/svg%3E';
                       }}
                     />
@@ -527,7 +511,6 @@ const AdminProducts = () => {
                       <span>ID:</span>
                       <span className="font-semibold">#{producto.id}</span>
                     </p>
-                    {/* ⭐ NUEVO: Mostrar sucursal */}
                     {producto.sucursal_nombre && (
                       <p className="flex justify-between">
                         <span>Sucursal:</span>
@@ -606,31 +589,48 @@ const AdminProducts = () => {
                   </button>
                 </div>
 
-                <div className="space-y-6">
-                  {/* ⭐ NUEVO: Selector de Sucursal */}
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* ⭐ Selector de Sucursal - MEJORADO */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
-                      Sucursal * 
-                      {currentUser?.rol === 'administrador' && (
-                        <span className="text-xs text-gray-500 ml-2">(Tu sucursal)</span>
-                      )}
+                      Sucursal *
                     </label>
-                    <select
-                      value={formData.sucursal}
-                      onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                      disabled={currentUser?.rol === 'administrador'} // Admin regular no puede cambiar
-                    >
-                      <option value="">Seleccionar sucursal...</option>
-                      {sucursales.map((sucursal) => (
-                        <option key={sucursal.id} value={sucursal.id}>
-                          {sucursal.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    {sucursales.length === 0 && (
-                      <p className="text-sm text-red-600 mt-1">
-                        ⚠️ No hay sucursales activas. Crea una primero.
+                    
+                    {currentUser?.rol === 'administrador' ? (
+                      // ⭐ Admin Regular: Campo BLOQUEADO
+                      <div className="w-full px-4 py-3 border-2 border-purple-300 bg-purple-50 rounded-lg text-gray-700 font-semibold flex items-center gap-2">
+                        <FaStore className="text-purple-600" />
+                        <span>{currentUser?.sucursal_nombre || 'Sin asignar'}</span>
+                        <span className="ml-auto text-xs bg-purple-600 text-white px-3 py-1 rounded-full">
+                          Tu sucursal
+                        </span>
+                      </div>
+                    ) : (
+                      // ⭐ Admin General: Selector normal
+                      <>
+                        <select
+                          value={formData.sucursal}
+                          onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                        >
+                          <option value="">Seleccionar sucursal...</option>
+                          {sucursales.map((sucursal) => (
+                            <option key={sucursal.id} value={sucursal.id}>
+                              {sucursal.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        {sucursales.length === 0 && (
+                          <p className="text-sm text-red-600 mt-1">
+                            ⚠️ No hay sucursales activas. Crea una primero.
+                          </p>
+                        )}
+                      </>
+                    )}
+                    
+                    {currentUser?.rol === 'administrador' && (
+                      <p className="text-xs text-purple-600 mt-1 font-semibold">
+                        💡 Los productos se crearán automáticamente en tu sucursal asignada
                       </p>
                     )}
                   </div>
@@ -649,6 +649,7 @@ const AdminProducts = () => {
                           className="w-full h-48 object-cover rounded-lg shadow-md"
                         />
                         <button
+                          type="button"
                           onClick={eliminarImagen}
                           className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-all hover:scale-110"
                         >
@@ -756,7 +757,7 @@ const AdminProducts = () => {
 
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={handleSubmit}
+                      type="submit"
                       disabled={subiendoImagen}
                       className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -770,20 +771,20 @@ const AdminProducts = () => {
                       )}
                     </button>
                     <button
+                      type="button"
                       onClick={cerrarModal}
                       className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
                     >
                       Cancelar
                     </button>
                   </div>
-                </div>
+                </form>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
-    
   );
 };
 

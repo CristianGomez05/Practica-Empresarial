@@ -10,7 +10,7 @@ import useSmartRefresh from '../../hooks/useAutoRefresh';
 export default function AdminOffersPanel() {
   // ⭐ NUEVO: Obtener sucursal seleccionada del contexto
   const { selectedBranch } = useOutletContext();
-  
+
   const [offers, setOffers] = useState([]);
   const [products, setProducts] = useState([]);
   const [sucursales, setSucursales] = useState([]);
@@ -21,7 +21,7 @@ export default function AdminOffersPanel() {
   const [offerToDelete, setOfferToDelete] = useState(null);
   const [editingOffer, setEditingOffer] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  
+
   const [formData, setFormData] = useState({
     titulo: '',
     descripcion: '',
@@ -31,7 +31,7 @@ export default function AdminOffersPanel() {
     fecha_fin: '',
     sucursal: '' // ⭐ NUEVO
   });
-  
+
   const { enqueueSnackbar } = useSnackbar();
 
   // Cargar usuario actual
@@ -44,22 +44,22 @@ export default function AdminOffersPanel() {
   const fetchData = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
-      
+
       // ⭐ Aplicar filtro de sucursal si está seleccionada
       const params = selectedBranch ? { sucursal: selectedBranch } : {};
-      
+
       const [offersRes, productsRes, sucursalesRes] = await Promise.all([
         api.get('/ofertas/', { params }),
         api.get('/productos/', { params }), // También filtrar productos por sucursal
         api.get('/sucursales/activas/')
       ]);
-      
+
       setOffers(offersRes.data.results || offersRes.data);
       setProducts(productsRes.data.results || productsRes.data);
       setSucursales(sucursalesRes.data.results || sucursalesRes.data);
-      
+
       console.log('🏷️ Ofertas cargadas:', offersRes.data.length, selectedBranch ? `(Sucursal: ${selectedBranch})` : '(Todas)');
-      
+
       if (refreshing) {
         enqueueSnackbar('Datos actualizados', { variant: 'info', autoHideDuration: 2000 });
       }
@@ -103,7 +103,7 @@ export default function AdminOffersPanel() {
   const handleOpenModal = (offer = null) => {
     if (offer) {
       setEditingOffer(offer);
-      
+
       let productosData = [];
       if (offer.productos_data && Array.isArray(offer.productos_data)) {
         productosData = offer.productos_data;
@@ -118,7 +118,14 @@ export default function AdminOffersPanel() {
           cantidad: 1
         }));
       }
-      
+
+      // ⭐ Para admin regular, forzar su sucursal al editar
+      let sucursalParaEditar = offer.sucursal || '';
+      if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
+        sucursalParaEditar = currentUser.sucursal_id;
+        console.log('🔒 Admin regular - Forzando sucursal en edición:', currentUser.sucursal_id);
+      }
+
       setFormData({
         titulo: offer.titulo,
         descripcion: offer.descripcion,
@@ -126,19 +133,20 @@ export default function AdminOffersPanel() {
         precio_oferta: offer.precio_oferta || '',
         fecha_inicio: formatDateForInput(offer.fecha_inicio),
         fecha_fin: formatDateForInput(offer.fecha_fin),
-        sucursal: offer.sucursal || '' // ⭐ NUEVO
+        sucursal: sucursalParaEditar
       });
     } else {
       setEditingOffer(null);
-      
+
       // ⭐ Auto-asignar sucursal según el usuario
       let sucursalDefault = '';
       if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
         sucursalDefault = currentUser.sucursal_id;
+        console.log('🔒 Admin regular - Sucursal pre-asignada:', currentUser.sucursal_id);
       } else if (currentUser?.rol === 'administrador_general' && selectedBranch) {
         sucursalDefault = selectedBranch;
       }
-      
+
       setFormData({
         titulo: '',
         descripcion: '',
@@ -160,7 +168,7 @@ export default function AdminOffersPanel() {
   const toggleProductSelection = (productId) => {
     setFormData(prev => {
       const exists = prev.productos_data.find(p => p.producto_id === productId);
-      
+
       if (exists) {
         return {
           ...prev,
@@ -214,7 +222,7 @@ export default function AdminOffersPanel() {
     const productosIds = formData.productos_data.map(p => p.producto_id);
     const productosSeleccionados = products.filter(p => productosIds.includes(p.id));
     const productosAgotados = productosSeleccionados.filter(p => p.stock === 0);
-    
+
     if (productosAgotados.length > 0) {
       enqueueSnackbar(
         `No puedes crear una oferta con productos agotados: ${productosAgotados.map(p => p.nombre).join(', ')}`,
@@ -231,7 +239,7 @@ export default function AdminOffersPanel() {
       enqueueSnackbar('Las fechas son requeridas', { variant: 'warning' });
       return;
     }
-    
+
     try {
       const payload = {
         titulo: formData.titulo,
@@ -253,22 +261,22 @@ export default function AdminOffersPanel() {
         enqueueSnackbar('Oferta actualizada exitosamente', { variant: 'success' });
       } else {
         await api.post('/ofertas/', payload);
-        enqueueSnackbar('✅ Oferta creada y correos enviados', { 
+        enqueueSnackbar('✅ Oferta creada y correos enviados', {
           variant: 'success',
-          autoHideDuration: 4000 
+          autoHideDuration: 4000
         });
       }
-      
+
       await fetchData();
       handleCloseModal();
     } catch (error) {
       console.error('Error guardando oferta:', error);
       console.error('Error response:', error.response?.data);
-      
-      const errorMsg = error.response?.data?.error 
+
+      const errorMsg = error.response?.data?.error
         || error.response?.data?.sucursal?.[0]
         || 'Error al guardar oferta';
-      
+
       enqueueSnackbar(errorMsg, { variant: 'error' });
     }
   };
@@ -280,7 +288,7 @@ export default function AdminOffersPanel() {
 
   const handleConfirmDelete = async () => {
     if (!offerToDelete) return;
-    
+
     try {
       await api.delete(`/ofertas/${offerToDelete.id}/`);
       enqueueSnackbar('Oferta eliminada exitosamente', { variant: 'success' });
@@ -297,16 +305,16 @@ export default function AdminOffersPanel() {
     const hoy = new Date().toISOString().split('T')[0];
     const offerProducts = getOfferProducts(oferta);
     const tieneAgotados = offerProducts.some(p => p.stock === 0);
-    
+
     if (tieneAgotados) {
-      return { 
-        text: 'Productos Agotados', 
-        bg: 'bg-red-100', 
+      return {
+        text: 'Productos Agotados',
+        bg: 'bg-red-100',
         textColor: 'text-red-700',
         icon: <FaExclamationTriangle />
       };
     }
-    
+
     if (oferta.fecha_inicio > hoy) {
       return { text: 'Próxima', bg: 'bg-blue-100', textColor: 'text-blue-700' };
     } else if (oferta.fecha_fin < hoy) {
@@ -373,9 +381,8 @@ export default function AdminOffersPanel() {
           <button
             onClick={fetchData}
             disabled={refreshing}
-            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-amber-500 transition-all ${
-              refreshing ? 'animate-spin' : ''
-            }`}
+            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-amber-500 transition-all ${refreshing ? 'animate-spin' : ''
+              }`}
             title="Actualizar datos"
           >
             <FaSync className="text-gray-600" />
@@ -399,7 +406,7 @@ export default function AdminOffersPanel() {
             const firstProduct = offerProducts[0];
             const productosAgotados = offerProducts.filter(p => p.stock === 0);
             const tieneAgotados = productosAgotados.length > 0;
-            
+
             return (
               <motion.div
                 key={offer.id}
@@ -407,16 +414,14 @@ export default function AdminOffersPanel() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ delay: index * 0.05 }}
-                className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 transition-all ${
-                  tieneAgotados 
-                    ? 'border-red-300 bg-red-50' 
-                    : 'border-orange-100 hover:border-orange-300'
-                }`}
+                className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 transition-all ${tieneAgotados
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-orange-100 hover:border-orange-300'
+                  }`}
               >
                 {/* Image */}
-                <div className={`relative h-48 bg-gradient-to-br from-orange-100 to-red-100 ${
-                  tieneAgotados ? 'opacity-60' : ''
-                }`}>
+                <div className={`relative h-48 bg-gradient-to-br from-orange-100 to-red-100 ${tieneAgotados ? 'opacity-60' : ''
+                  }`}>
                   {firstProduct?.imagen ? (
                     <img
                       src={firstProduct.imagen}
@@ -428,7 +433,7 @@ export default function AdminOffersPanel() {
                       <FaTag className="text-6xl text-orange-300" />
                     </div>
                   )}
-                  
+
                   <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1`}>
                     {estado.icon}
                     <span>{estado.text}</span>
@@ -476,7 +481,7 @@ export default function AdminOffersPanel() {
                     <p className="text-xs text-[#8D6E63] mb-2">
                       {offerProducts.length > 1 ? 'Productos incluidos' : 'Producto'}
                     </p>
-                    
+
                     {offerProducts.length > 0 ? (
                       <div className="space-y-2">
                         {offerProducts.map((producto, idx) => {
@@ -485,9 +490,8 @@ export default function AdminOffersPanel() {
                           const cantidad = producto.cantidad_oferta || 1;
 
                           return (
-                            <div key={idx} className={`flex justify-between items-center ${
-                              agotado ? 'opacity-60' : ''
-                            }`}>
+                            <div key={idx} className={`flex justify-between items-center ${agotado ? 'opacity-60' : ''
+                              }`}>
                               <div className="flex items-center gap-2">
                                 {cantidad > 1 && (
                                   <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
@@ -568,8 +572,8 @@ export default function AdminOffersPanel() {
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <FaTag className="text-6xl text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">
-            {selectedBranch 
-              ? 'No hay ofertas en esta sucursal' 
+            {selectedBranch
+              ? 'No hay ofertas en esta sucursal'
               : 'No hay ofertas registradas'
             }
           </p>
@@ -607,30 +611,47 @@ export default function AdminOffersPanel() {
                 </div>
 
                 <div className="space-y-6">
-                  {/* ⭐ NUEVO: Selector de Sucursal */}
+                  {/* ⭐ Selector de Sucursal - MEJORADO */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
                       Sucursal *
-                      {currentUser?.rol === 'administrador' && (
-                        <span className="text-xs text-gray-500 ml-2">(Tu sucursal)</span>
-                      )}
                     </label>
-                    <select
-                      value={formData.sucursal}
-                      onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                      disabled={currentUser?.rol === 'administrador'}
-                    >
-                      <option value="">Seleccionar sucursal...</option>
-                      {sucursales.map((sucursal) => (
-                        <option key={sucursal.id} value={sucursal.id}>
-                          {sucursal.nombre}
-                        </option>
-                      ))}
-                    </select>
-                    {sucursales.length === 0 && (
-                      <p className="text-sm text-red-600 mt-1">
-                        ⚠️ No hay sucursales activas. Crea una primero.
+
+                    {currentUser?.rol === 'administrador' ? (
+                      // ⭐ Admin Regular: Campo BLOQUEADO
+                      <div className="w-full px-4 py-3 border-2 border-purple-300 bg-purple-50 rounded-lg text-gray-700 font-semibold flex items-center gap-2">
+                        <FaStore className="text-purple-600" />
+                        <span>{currentUser?.sucursal_nombre || 'Sin asignar'}</span>
+                        <span className="ml-auto text-xs bg-purple-600 text-white px-3 py-1 rounded-full">
+                          Tu sucursal
+                        </span>
+                      </div>
+                    ) : (
+                      // ⭐ Admin General: Selector normal
+                      <>
+                        <select
+                          value={formData.sucursal}
+                          onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        >
+                          <option value="">Seleccionar sucursal...</option>
+                          {sucursales.map((sucursal) => (
+                            <option key={sucursal.id} value={sucursal.id}>
+                              {sucursal.nombre}
+                            </option>
+                          ))}
+                        </select>
+                        {sucursales.length === 0 && (
+                          <p className="text-sm text-red-600 mt-1">
+                            ⚠️ No hay sucursales activas. Crea una primero.
+                          </p>
+                        )}
+                      </>
+                    )}
+
+                    {currentUser?.rol === 'administrador' && (
+                      <p className="text-xs text-purple-600 mt-1 font-semibold">
+                        💡 Las ofertas se crearán automáticamente en tu sucursal asignada
                       </p>
                     )}
                   </div>
@@ -666,7 +687,7 @@ export default function AdminOffersPanel() {
                   {/* Selección de Productos CON CANTIDADES */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-3">
-                      Productos Incluidos en la Oferta * 
+                      Productos Incluidos en la Oferta *
                       <span className="text-xs text-gray-500 ml-2">(Selecciona y ajusta cantidades)</span>
                     </label>
                     {products.length === 0 ? (
@@ -688,30 +709,28 @@ export default function AdminOffersPanel() {
                           const cantidad = productoData?.cantidad || 1;
                           const agotado = product.stock === 0;
                           const stockBajo = product.stock > 0 && product.stock <= 5;
-                          
+
                           return (
                             <div
                               key={product.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
-                                agotado
-                                  ? 'border-red-200 bg-red-50 opacity-50'
-                                  : isSelected
+                              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${agotado
+                                ? 'border-red-200 bg-red-50 opacity-50'
+                                : isSelected
                                   ? 'border-orange-500 bg-orange-50 shadow-md'
                                   : 'border-gray-200 bg-white hover:border-orange-300'
-                              }`}
+                                }`}
                             >
                               {/* Checkbox */}
                               <button
                                 type="button"
                                 onClick={() => !agotado && toggleProductSelection(product.id)}
                                 disabled={agotado}
-                                className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
-                                  agotado
-                                    ? 'border-red-300 bg-red-100 cursor-not-allowed'
-                                    : isSelected 
-                                    ? 'bg-orange-500 border-orange-500 cursor-pointer' 
+                                className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${agotado
+                                  ? 'border-red-300 bg-red-100 cursor-not-allowed'
+                                  : isSelected
+                                    ? 'bg-orange-500 border-orange-500 cursor-pointer'
                                     : 'border-gray-300 cursor-pointer hover:border-orange-400'
-                                }`}
+                                  }`}
                               >
                                 {isSelected && !agotado && <FaCheck className="text-white text-xs" />}
                                 {agotado && <FaTimes className="text-red-600 text-xs" />}
@@ -719,13 +738,12 @@ export default function AdminOffersPanel() {
 
                               {/* Info del Producto */}
                               <div className="flex-1 min-w-0">
-                                <p className={`font-semibold text-sm truncate ${
-                                  agotado
-                                    ? 'text-red-600'
-                                    : isSelected 
-                                    ? 'text-orange-900' 
+                                <p className={`font-semibold text-sm truncate ${agotado
+                                  ? 'text-red-600'
+                                  : isSelected
+                                    ? 'text-orange-900'
                                     : 'text-gray-800'
-                                }`}>
+                                  }`}>
                                   {product.nombre}
                                 </p>
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -755,11 +773,10 @@ export default function AdminOffersPanel() {
                                     type="button"
                                     onClick={() => updateProductQuantity(product.id, cantidad - 1)}
                                     disabled={cantidad <= 1}
-                                    className={`w-6 h-6 flex items-center justify-center rounded ${
-                                      cantidad <= 1
-                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                        : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
-                                    }`}
+                                    className={`w-6 h-6 flex items-center justify-center rounded ${cantidad <= 1
+                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                      : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
+                                      }`}
                                   >
                                     <FaMinus className="text-xs" />
                                   </button>
@@ -899,7 +916,7 @@ export default function AdminOffersPanel() {
                   ¿Eliminar Oferta?
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  ¿Estás seguro de que deseas eliminar "<strong>{offerToDelete?.titulo}</strong>"? 
+                  ¿Estás seguro de que deseas eliminar "<strong>{offerToDelete?.titulo}</strong>"?
                   Esta acción no se puede deshacer.
                 </p>
                 <div className="flex gap-3">

@@ -1,4 +1,4 @@
-// src/pages/LoginPage.jsx - ACTUALIZADO
+// src/pages/LoginPage.jsx - COMPLETO Y CORREGIDO
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../components/auth/AuthContext";
@@ -33,7 +33,7 @@ export default function LoginPage() {
 
       const { access, refresh, user: userData } = res.data;
 
-      // Guardar en localStorage
+      // Guardar tokens
       localStorage.setItem('access', access);
       localStorage.setItem('refresh', refresh);
       console.log("💾 Tokens guardados en localStorage");
@@ -42,20 +42,33 @@ export default function LoginPage() {
       setAccessToken(access);
       setRefreshToken(refresh);
 
-      // Decodificar y guardar usuario
-      const decoded = jwtDecode(access);
-      console.log("🔍 Token decodificado:", decoded);
+      // ⭐⭐⭐ CRÍTICO: Guardar usuario con TODA la información
+      const userInfo = {
+        id: userData.id,
+        username: userData.username,
+        email: userData.email,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        rol: userData.rol,
+        sucursal_id: userData.sucursal_id,      // ⭐ CRÍTICO
+        sucursal_nombre: userData.sucursal_nombre, // ⭐ CRÍTICO
+        sucursal: userData.sucursal_id // ⭐ Para compatibilidad
+      };
       
-      const userInfo = userData || decoded;
+      console.log("✅ userInfo completo:", userInfo);
+      console.log("🏪 Sucursal ID:", userInfo.sucursal_id);
+      console.log("🏪 Sucursal Nombre:", userInfo.sucursal_nombre);
+      
+      // ⭐ Guardar en localStorage CON DATOS COMPLETOS
+      localStorage.setItem('user', JSON.stringify(userInfo));
+      
       setUser(userInfo);
+      console.log("✅ Usuario guardado con sucursal");
 
-      console.log("✅ Usuario guardado en contexto:", userInfo);
-      console.log("✅ Rol final del usuario:", userInfo.rol);
-
-      // ⭐ ACTUALIZADO: Redirigir según rol específico
+      // Redirigir según rol específico
       if (userInfo.rol === 'administrador_general') {
-        console.log("👑👑 Admin General detectado, redirigiendo a /admin-general");
-        navigate("/admin-general");
+        console.log("👑👑 Admin General detectado, redirigiendo a /admin/sucursales");
+        navigate("/admin/sucursales");
       } else if (userInfo.rol === 'administrador') {
         console.log("👑 Administrador Regular detectado, redirigiendo a /admin");
         navigate("/admin");

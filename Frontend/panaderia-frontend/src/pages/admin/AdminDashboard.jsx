@@ -1,4 +1,4 @@
-// Frontend/src/pages/admin/AdminDashboard.jsx - CORREGIDO
+// Frontend/src/pages/admin/AdminDashboard.jsx - COMPLETO Y CORREGIDO
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -19,15 +19,16 @@ export default function AdminDashboard() {
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
     setUser(userData);
-    
+
     console.log('👤 Usuario actual:', userData);
     console.log('🏪 Sucursal asignada:', userData?.sucursal_nombre);
+    console.log('🔑 Sucursal ID:', userData?.sucursal_id);
 
-    // ✅ ARREGLO: Redirigir ANTES de cargar estadísticas
+    // ✅ Redirigir Admin General
     if (userData?.rol === 'administrador_general') {
       console.log('🔀 Redirigiendo Admin General a /admin/sucursales');
       navigate('/admin/sucursales', { replace: true });
-      return; // ⭐ Importante: No continuar con el resto del código
+      return;
     }
 
     // Cargar estadísticas solo si NO es Admin General
@@ -62,7 +63,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // ✅ No mostrar nada mientras redirige
+  // No mostrar nada mientras redirige
   if (user?.rol === 'administrador_general') {
     return (
       <div className="flex justify-center items-center h-64">
@@ -71,7 +72,6 @@ export default function AdminDashboard() {
     );
   }
 
-  // ✅ Admin Regular - Dashboard de su sucursal
   return (
     <div className="space-y-6">
       {/* Bienvenida con Sucursal */}
