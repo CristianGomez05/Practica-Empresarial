@@ -1,4 +1,4 @@
-// Frontend/src/pages/admin/AdminUsers.jsx
+// Frontend/src/pages/admin/AdminUsers.jsx - CORREGIDO
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -36,17 +36,15 @@ export default function AdminUsers() {
     console.log('👤 Usuario actual:', userData);
   }, []);
 
-  // ⭐ Cargar datos SIN filtro de sucursal
   const cargarDatos = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
 
       console.log('📡 Cargando usuarios y sucursales...');
 
-      // ⭐ NO enviar parámetro de sucursal - queremos TODOS los usuarios
       const [usuariosRes, sucursalesRes] = await Promise.all([
-        api.get('/usuarios/'),  // ✅ SIN parámetros de filtro
-        api.get('/sucursales/') // ✅ Cargar todas las sucursales
+        api.get('/usuarios/'),
+        api.get('/sucursales/')
       ]);
 
       const usuariosData = usuariosRes.data.results || usuariosRes.data;
@@ -90,7 +88,6 @@ export default function AdminUsers() {
 
     console.log('📤 Enviando datos:', formData);
 
-    // Validaciones básicas
     if (!formData.username.trim()) {
       enqueueSnackbar('El nombre de usuario es requerido', { variant: 'warning' });
       return;
@@ -100,7 +97,6 @@ export default function AdminUsers() {
       return;
     }
 
-    // Validar contraseñas en creación
     if (!editando) {
       if (!formData.password) {
         enqueueSnackbar('La contraseña es requerida', { variant: 'warning' });
@@ -119,18 +115,14 @@ export default function AdminUsers() {
     try {
       const dataToSend = { ...formData };
 
-      // ⭐ Limpiar sucursal según el rol
       if (dataToSend.rol === 'cliente' || dataToSend.rol === 'administrador_general') {
-        // Clientes y admin general no necesitan sucursal
         delete dataToSend.sucursal;
       } else if (dataToSend.rol === 'administrador' && !dataToSend.sucursal) {
-        // Admin regular sin sucursal - advertir
         if (!window.confirm('⚠️ Estás creando un administrador sin sucursal asignada. ¿Continuar?')) {
           return;
         }
       }
 
-      // Remover campos de contraseña si están vacíos en edición
       if (editando) {
         if (!dataToSend.password) {
           delete dataToSend.password;
@@ -295,14 +287,12 @@ export default function AdminUsers() {
           <button
             onClick={cargarDatos}
             disabled={refreshing}
-            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-blue-500 transition-all ${refreshing ? 'animate-spin' : ''
-              }`}
+            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-blue-500 transition-all ${refreshing ? 'animate-spin' : ''}`}
             title="Actualizar datos"
           >
             <FaSync className="text-gray-600" />
           </button>
 
-          {/* ⭐ Solo mostrar botón si es Admin General */}
           {currentUser?.rol === 'administrador_general' && (
             <button
               onClick={abrirModalCrear}
@@ -315,7 +305,6 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      {/* ⭐ Alerta para Admin Regular */}
       {currentUser?.rol === 'administrador' && (
         <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
           <p className="text-blue-800 text-sm">
@@ -335,7 +324,6 @@ export default function AdminUsers() {
                 <th className="px-6 py-4 text-left text-sm font-semibold">Rol</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold">Sucursal</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold">Estado</th>
-                {/* ⭐ Solo mostrar columna de acciones si es Admin General */}
                 {currentUser?.rol === 'administrador_general' && (
                   <th className="px-6 py-4 text-right text-sm font-semibold">Acciones</th>
                 )}
@@ -349,31 +337,71 @@ export default function AdminUsers() {
                   animate={{ opacity: 1 }}
                   className="hover:bg-gray-50 transition-colors"
                 >
-                  {/* ... columnas anteriores sin cambios ... */}
-
+                  {/* ✅ COLUMNA: Usuario */}
                   <td className="px-6 py-4">
-                    {/* ⭐ Botón de toggle solo para Admin General */}
+                    <div className="flex items-center gap-3">
+                      {getRolIcon(usuario.rol)}
+                      <div>
+                        <p className="font-semibold text-gray-800">
+                          {usuario.first_name && usuario.last_name
+                            ? `${usuario.first_name} ${usuario.last_name}`
+                            : usuario.username}
+                        </p>
+                        <p className="text-sm text-gray-500">@{usuario.username}</p>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* ✅ COLUMNA: Email */}
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <FaEnvelope className="text-gray-400" />
+                      <span className="text-sm">{usuario.email}</span>
+                    </div>
+                  </td>
+
+                  {/* ✅ COLUMNA: Rol */}
+                  <td className="px-6 py-4">
+                    {getRolBadge(usuario.rol)}
+                  </td>
+
+                  {/* ✅ COLUMNA: Sucursal */}
+                  <td className="px-6 py-4">
+                    {usuario.sucursal_nombre ? (
+                      <div className="flex items-center gap-2">
+                        <FaStore className="text-purple-600" />
+                        <span className="text-sm text-gray-700">{usuario.sucursal_nombre}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400 italic">Sin asignar</span>
+                    )}
+                  </td>
+
+                  {/* ✅ COLUMNA: Estado */}
+                  <td className="px-6 py-4">
                     {currentUser?.rol === 'administrador_general' ? (
                       <button
                         onClick={() => handleToggleActive(usuario)}
-                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${usuario.is_active
+                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                          usuario.is_active
                             ? 'bg-green-100 text-green-800 hover:bg-green-200'
                             : 'bg-red-100 text-red-800 hover:bg-red-200'
-                          }`}
+                        }`}
                       >
                         {usuario.is_active ? '✓ Activo' : '✗ Inactivo'}
                       </button>
                     ) : (
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${usuario.is_active
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        usuario.is_active
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
-                        }`}>
+                      }`}>
                         {usuario.is_active ? '✓ Activo' : '✗ Inactivo'}
                       </span>
                     )}
                   </td>
 
-                  {/* ⭐ Solo mostrar botones de acción si es Admin General */}
+                  {/* ✅ COLUMNA: Acciones (solo Admin General) */}
                   {currentUser?.rol === 'administrador_general' && (
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">

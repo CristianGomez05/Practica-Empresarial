@@ -1,5 +1,6 @@
-// Frontend/src/pages/admin/AdminDashboard.jsx - ACTUALIZADO
+// Frontend/src/pages/admin/AdminDashboard.jsx - CORREGIDO
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaBox, FaTag, FaShoppingCart, FaUsers, FaStore } from 'react-icons/fa';
 import api from '../../services/api';
@@ -13,22 +14,28 @@ export default function AdminDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Obtener usuario actual
     const userData = JSON.parse(localStorage.getItem('user'));
     setUser(userData);
     
     console.log('👤 Usuario actual:', userData);
     console.log('🏪 Sucursal asignada:', userData?.sucursal_nombre);
 
-    // Cargar estadísticas
+    // ✅ ARREGLO: Redirigir ANTES de cargar estadísticas
+    if (userData?.rol === 'administrador_general') {
+      console.log('🔀 Redirigiendo Admin General a /admin/sucursales');
+      navigate('/admin/sucursales', { replace: true });
+      return; // ⭐ Importante: No continuar con el resto del código
+    }
+
+    // Cargar estadísticas solo si NO es Admin General
     fetchStats(userData);
-  }, []);
+  }, [navigate]);
 
   const fetchStats = async (userData) => {
     try {
-      // ⭐ NUEVO: Filtrar por sucursal del admin regular
       const params = {};
       if (userData?.rol === 'administrador' && userData?.sucursal_id) {
         params.sucursal = userData.sucursal_id;
@@ -38,7 +45,7 @@ export default function AdminDashboard() {
       const [productos, ofertas, pedidos, usuarios] = await Promise.all([
         api.get('/productos/', { params }),
         api.get('/ofertas/', { params }),
-        api.get('/pedidos/'), // Los pedidos ya se filtran en el backend
+        api.get('/pedidos/'),
         api.get('/usuarios/'),
       ]);
 
@@ -55,17 +62,16 @@ export default function AdminDashboard() {
     }
   };
 
-  // ⭐ Solo Admin General ve el panel de sucursales
+  // ✅ No mostrar nada mientras redirige
   if (user?.rol === 'administrador_general') {
     return (
-      <div className="space-y-6">
-        {/* Redirigir al panel de Admin General */}
-        {window.location.href = '/admin-general'}
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700"></div>
       </div>
     );
   }
 
-  // ⭐ Admin Regular - Dashboard de su sucursal
+  // ✅ Admin Regular - Dashboard de su sucursal
   return (
     <div className="space-y-6">
       {/* Bienvenida con Sucursal */}
