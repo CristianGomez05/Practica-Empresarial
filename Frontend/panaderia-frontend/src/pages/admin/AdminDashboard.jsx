@@ -1,4 +1,4 @@
-// Frontend/src/pages/admin/AdminDashboard.jsx - COMPLETO Y CORREGIDO
+// Frontend/src/pages/admin/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';

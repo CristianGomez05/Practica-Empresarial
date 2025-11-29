@@ -1,4 +1,4 @@
-// Frontend/src/pages/admin/AdminUsers.jsx - CORREGIDO
+// Frontend/src/pages/admin/AdminUsers.jsx - CORREGIDO Y COMPLETO
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -263,6 +263,9 @@ export default function AdminUsers() {
     );
   }
 
+  // ⭐ NUEVA VARIABLE: Determinar si el usuario puede editar
+  const puedeEditar = currentUser?.rol === 'administrador_general';
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -273,11 +276,11 @@ export default function AdminUsers() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[#5D4037]">
-              {currentUser?.rol === 'administrador_general' ? 'Gestión de Usuarios' : 'Usuarios Registrados'}
+              {puedeEditar ? 'Gestión de Usuarios' : 'Usuarios Registrados'}
             </h1>
             <p className="text-[#8D6E63]">
               {usuarios.length} usuarios registrados
-              {currentUser?.rol === 'administrador' && (
+              {!puedeEditar && (
                 <span className="text-blue-600 font-semibold ml-2">• Solo lectura</span>
               )}
             </p>
@@ -293,7 +296,8 @@ export default function AdminUsers() {
             <FaSync className="text-gray-600" />
           </button>
 
-          {currentUser?.rol === 'administrador_general' && (
+          {/* ⭐ Solo Admin General puede crear usuarios */}
+          {puedeEditar && (
             <button
               onClick={abrirModalCrear}
               className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
@@ -305,7 +309,8 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      {currentUser?.rol === 'administrador' && (
+      {/* ⭐ Alerta para Admin Regular */}
+      {!puedeEditar && (
         <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
           <p className="text-blue-800 text-sm">
             👁️ <strong>Vista de Solo Lectura:</strong> Puedes ver la lista de usuarios, pero solo el Administrador General puede crear, editar o eliminar usuarios.
@@ -324,7 +329,8 @@ export default function AdminUsers() {
                 <th className="px-6 py-4 text-left text-sm font-semibold">Rol</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold">Sucursal</th>
                 <th className="px-6 py-4 text-left text-sm font-semibold">Estado</th>
-                {currentUser?.rol === 'administrador_general' && (
+                {/* ⭐ Solo mostrar columna de Acciones si puede editar */}
+                {puedeEditar && (
                   <th className="px-6 py-4 text-right text-sm font-semibold">Acciones</th>
                 )}
               </tr>
@@ -337,7 +343,7 @@ export default function AdminUsers() {
                   animate={{ opacity: 1 }}
                   className="hover:bg-gray-50 transition-colors"
                 >
-                  {/* ✅ COLUMNA: Usuario */}
+                  {/* Usuario */}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       {getRolIcon(usuario.rol)}
@@ -352,7 +358,7 @@ export default function AdminUsers() {
                     </div>
                   </td>
 
-                  {/* ✅ COLUMNA: Email */}
+                  {/* Email */}
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-gray-700">
                       <FaEnvelope className="text-gray-400" />
@@ -360,12 +366,12 @@ export default function AdminUsers() {
                     </div>
                   </td>
 
-                  {/* ✅ COLUMNA: Rol */}
+                  {/* Rol */}
                   <td className="px-6 py-4">
                     {getRolBadge(usuario.rol)}
                   </td>
 
-                  {/* ✅ COLUMNA: Sucursal */}
+                  {/* Sucursal */}
                   <td className="px-6 py-4">
                     {usuario.sucursal_nombre ? (
                       <div className="flex items-center gap-2">
@@ -377,9 +383,9 @@ export default function AdminUsers() {
                     )}
                   </td>
 
-                  {/* ✅ COLUMNA: Estado */}
+                  {/* Estado */}
                   <td className="px-6 py-4">
-                    {currentUser?.rol === 'administrador_general' ? (
+                    {puedeEditar ? (
                       <button
                         onClick={() => handleToggleActive(usuario)}
                         className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
@@ -401,8 +407,8 @@ export default function AdminUsers() {
                     )}
                   </td>
 
-                  {/* ✅ COLUMNA: Acciones (solo Admin General) */}
-                  {currentUser?.rol === 'administrador_general' && (
+                  {/* ⭐ Acciones - Solo Admin General */}
+                  {puedeEditar && (
                     <td className="px-6 py-4">
                       <div className="flex items-center justify-end gap-2">
                         <button
@@ -441,9 +447,9 @@ export default function AdminUsers() {
         </div>
       )}
 
-      {/* Modal Crear/Editar */}
+      {/* Modal Crear/Editar - Solo Admin General */}
       <AnimatePresence>
-        {modalOpen && (
+        {modalOpen && puedeEditar && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

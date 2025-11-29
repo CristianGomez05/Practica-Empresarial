@@ -1,4 +1,4 @@
-// Frontend/src/components/admin/AdminLayout.jsx
+// Frontend/src/components/admin/AdminLayout.jsx - CORREGIDO
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -19,9 +19,10 @@ export default function AdminLayout() {
     const userData = JSON.parse(localStorage.getItem('user'));
     setUser(userData);
 
-    // Si es admin regular, establecer su sucursal
+    // ⭐ Si es admin regular, establecer su sucursal automáticamente
     if (userData?.rol === 'administrador' && userData?.sucursal_id) {
       setSelectedBranch(userData.sucursal_id);
+      console.log('🔒 Admin Regular - Sucursal asignada:', userData.sucursal_id);
     }
   }, []);
 
@@ -37,41 +38,27 @@ export default function AdminLayout() {
   const handleBranchChange = (branchId) => {
     setSelectedBranch(branchId);
     console.log('🏪 Sucursal seleccionada:', branchId);
-    // Aquí puedes recargar los datos filtrados por sucursal
-    window.location.reload(); // Temporal - puedes implementar algo más elegante
   };
 
-  // ⭐ NUEVO: Menú dinámico según rol
+  // Menú dinámico según rol
   const menuItems = user?.rol === 'administrador_general'
     ? [
-      // Admin General: Menú completo
-      { path: '/admin', icon: FaHome, label: 'Dashboard', exact: true },
-      { path: '/admin/productos', icon: FaBox, label: 'Productos' },
-      { path: '/admin/ofertas', icon: FaTag, label: 'Ofertas' },
-      { path: '/admin/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
-      { path: '/admin/usuarios', icon: FaUsers, label: 'Usuarios' },
-      { path: '/admin/reportes', icon: FaChartBar, label: 'Reportes' },
-    ]
+        { path: '/admin', icon: FaHome, label: 'Dashboard', exact: true },
+        { path: '/admin/sucursales', icon: FaStore, label: 'Sucursales', badge: 'Admin' },
+        { path: '/admin/productos', icon: FaBox, label: 'Productos' },
+        { path: '/admin/ofertas', icon: FaTag, label: 'Ofertas' },
+        { path: '/admin/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
+        { path: '/admin/usuarios', icon: FaUsers, label: 'Usuarios' },
+        { path: '/admin/reportes', icon: FaChartBar, label: 'Reportes' },
+      ]
     : [
-      // Admin Regular: Sin opción de Usuarios
-      { path: '/admin', icon: FaHome, label: 'Dashboard', exact: true },
-      { path: '/admin/productos', icon: FaBox, label: 'Productos' },
-      { path: '/admin/ofertas', icon: FaTag, label: 'Ofertas' },
-      { path: '/admin/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
-      { path: '/admin/reportes', icon: FaChartBar, label: 'Reportes' },
-    ];
-
-
-  // Si es Admin General, agregar opción de Sucursales
-  if (user?.rol === 'administrador_general') {
-    // Agregar después del Dashboard
-    menuItems.splice(1, 0, {
-      path: '/admin/sucursales',
-      icon: FaStore,
-      label: 'Sucursales',
-      badge: 'Admin'
-    });
-  }
+        // Admin Regular: Sin Usuarios
+        { path: '/admin', icon: FaHome, label: 'Dashboard', exact: true },
+        { path: '/admin/productos', icon: FaBox, label: 'Productos' },
+        { path: '/admin/ofertas', icon: FaTag, label: 'Ofertas' },
+        { path: '/admin/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
+        { path: '/admin/reportes', icon: FaChartBar, label: 'Reportes' },
+      ];
 
   const isActive = (path, exact = false) => {
     if (exact) {
@@ -132,14 +119,14 @@ export default function AdminLayout() {
                   </p>
                 </div>
               </div>
-              {/* ⭐ Mostrar sucursal para admin regular */}
+              {/* Mostrar sucursal para admin regular */}
               {user.sucursal_nombre && user.rol === 'administrador' && (
                 <div className="flex items-center gap-2 text-xs text-amber-200 mt-2 pt-2 border-t border-white/20">
                   <FaStore />
                   <span className="truncate">{user.sucursal_nombre}</span>
                 </div>
               )}
-              {/* ⭐ Indicador para admin general */}
+              {/* Indicador para admin general */}
               {user.rol === 'administrador_general' && (
                 <div className="mt-2 pt-2 border-t border-white/20">
                   <span className="text-xs bg-purple-500 px-2 py-1 rounded-full">
@@ -160,14 +147,18 @@ export default function AdminLayout() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                    active
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg'
                       : 'hover:bg-white/10'
-                    }`}
+                  }`}
                 >
                   <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
-                  {sidebarOpen && (
-                    <span className="font-medium">{item.label}</span>
+                  {sidebarOpen && <span className="font-medium">{item.label}</span>}
+                  {sidebarOpen && item.badge && (
+                    <span className="ml-auto text-xs bg-purple-500 px-2 py-0.5 rounded-full">
+                      {item.badge}
+                    </span>
                   )}
                 </Link>
               );
@@ -201,11 +192,14 @@ export default function AdminLayout() {
                 {menuItems.find(item => isActive(item.path, item.exact))?.label || 'Panel Administrativo'}
               </h2>
               <p className="text-sm text-gray-600">
-                Gestiona tu panadería de forma eficiente
+                {user?.rol === 'administrador' && user?.sucursal_nombre 
+                  ? `Gestionando: ${user.sucursal_nombre}`
+                  : 'Gestiona tu panadería de forma eficiente'
+                }
               </p>
             </div>
 
-            {/* Selector de Sucursal (solo Admin General) */}
+            {/* ⭐ Selector de Sucursal - SOLO para Admin General */}
             {user?.rol === 'administrador_general' && (
               <BranchSelector
                 currentBranch={selectedBranch}
@@ -217,7 +211,12 @@ export default function AdminLayout() {
 
         {/* Content Area */}
         <div className="p-8">
-          <Outlet context={{ selectedBranch }} />
+          {/* ⭐ Pasar sucursal del admin regular automáticamente */}
+          <Outlet context={{ 
+            selectedBranch: user?.rol === 'administrador' 
+              ? user.sucursal_id 
+              : selectedBranch 
+          }} />
         </div>
       </div>
     </div>
