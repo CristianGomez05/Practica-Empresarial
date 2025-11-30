@@ -1,4 +1,4 @@
-// Frontend/src/pages/admin/AdminOffersPanel.jsx
+// Frontend/src/pages/admin/AdminGeneralOffers.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,7 +7,7 @@ import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
 
-export default function AdminOffersPanel() {
+export default function AdminGeneralOffers() {
   // ⭐ NUEVO: Obtener sucursal seleccionada del contexto
   const { selectedBranch } = useOutletContext();
 

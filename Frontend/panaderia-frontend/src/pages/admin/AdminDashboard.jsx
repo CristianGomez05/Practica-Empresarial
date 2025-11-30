@@ -1,8 +1,8 @@
-// Frontend/src/pages/admin/AdminDashboard.jsx
+// Frontend/panaderia-frontend/src/pages/admin/AdminDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaBox, FaTag, FaShoppingCart, FaUsers, FaStore } from 'react-icons/fa';
+import { FaBox, FaTag, FaShoppingCart, FaStore } from 'react-icons/fa';
 import api from '../../services/api';
 
 export default function AdminDashboard() {
@@ -10,7 +10,6 @@ export default function AdminDashboard() {
     productos: 0,
     ofertas: 0,
     pedidos: 0,
-    usuarios: 0,
   });
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -24,37 +23,37 @@ export default function AdminDashboard() {
     console.log('🏪 Sucursal asignada:', userData?.sucursal_nombre);
     console.log('🔑 Sucursal ID:', userData?.sucursal_id);
 
-    // ✅ Redirigir Admin General
+    // ✅ Redirigir Admin General a su panel
     if (userData?.rol === 'administrador_general') {
-      console.log('🔀 Redirigiendo Admin General a /admin/sucursales');
-      navigate('/admin/sucursales', { replace: true });
+      console.log('🔀 Redirigiendo Admin General a /admin-general');
+      navigate('/admin-general', { replace: true });
       return;
     }
 
-    // Cargar estadísticas solo si NO es Admin General
+    // Cargar estadísticas solo si es Admin Regular
     fetchStats(userData);
   }, [navigate]);
 
   const fetchStats = async (userData) => {
     try {
       const params = {};
-      if (userData?.rol === 'administrador' && userData?.sucursal_id) {
+      
+      // ⭐ Admin Regular: SIEMPRE filtrar por su sucursal
+      if (userData?.sucursal_id) {
         params.sucursal = userData.sucursal_id;
         console.log('🔍 Filtrando por sucursal:', userData.sucursal_id);
       }
 
-      const [productos, ofertas, pedidos, usuarios] = await Promise.all([
+      const [productos, ofertas, pedidos] = await Promise.all([
         api.get('/productos/', { params }),
         api.get('/ofertas/', { params }),
-        api.get('/pedidos/'),
-        api.get('/usuarios/'),
+        api.get('/pedidos/', { params }),
       ]);
 
       setStats({
         productos: productos.data.results?.length || productos.data.length || 0,
         ofertas: ofertas.data.results?.length || ofertas.data.length || 0,
         pedidos: pedidos.data.results?.length || pedidos.data.length || 0,
-        usuarios: usuarios.data.results?.length || usuarios.data.length || 0,
       });
     } catch (error) {
       console.error('Error cargando estadísticas:', error);
@@ -63,8 +62,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // No mostrar nada mientras redirige
-  if (user?.rol === 'administrador_general') {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700"></div>
@@ -116,8 +114,8 @@ export default function AdminDashboard() {
       )}
 
       {/* Estadísticas */}
-      {!loading && user?.sucursal_nombre && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {user?.sucursal_nombre && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -165,92 +163,6 @@ export default function AdminDashboard() {
                 <p className="text-3xl font-bold text-gray-800">{stats.pedidos}</p>
                 <p className="text-sm text-gray-600">Pedidos</p>
               </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-purple-500"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                <FaUsers className="text-purple-600 text-xl" />
-              </div>
-              <div>
-                <p className="text-3xl font-bold text-gray-800">{stats.usuarios}</p>
-                <p className="text-sm text-gray-600">Usuarios</p>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Info Cards */}
-      {user?.sucursal_nombre && (
-        <div className="grid md:grid-cols-2 gap-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-white rounded-xl shadow-lg p-6 border-2 border-amber-100"
-          >
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <FaStore className="text-amber-600" />
-              Tu Sucursal
-            </h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">Nombre:</span>
-                <span className="font-semibold text-gray-800">{user.sucursal_nombre}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-600">ID:</span>
-                <span className="font-mono text-sm bg-gray-100 px-3 py-1 rounded">{user.sucursal_id}</span>
-              </div>
-              <div className="pt-3 border-t border-gray-200">
-                <p className="text-sm text-gray-500 text-center">
-                  Solo puedes gestionar productos, ofertas y pedidos de esta sucursal
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-6 border-2 border-blue-200"
-          >
-            <h3 className="text-lg font-bold text-blue-900 mb-4">
-              Acceso Rápido
-            </h3>
-            <div className="space-y-2">
-              <a
-                href="/admin/productos"
-                className="block p-3 bg-white hover:bg-blue-50 rounded-lg transition-colors text-gray-700 hover:text-blue-600 font-medium"
-              >
-                📦 Gestionar Productos
-              </a>
-              <a
-                href="/admin/ofertas"
-                className="block p-3 bg-white hover:bg-blue-50 rounded-lg transition-colors text-gray-700 hover:text-blue-600 font-medium"
-              >
-                🏷️ Gestionar Ofertas
-              </a>
-              <a
-                href="/admin/pedidos"
-                className="block p-3 bg-white hover:bg-blue-50 rounded-lg transition-colors text-gray-700 hover:text-blue-600 font-medium"
-              >
-                🛒 Ver Pedidos
-              </a>
-              <a
-                href="/admin/reportes"
-                className="block p-3 bg-white hover:bg-blue-50 rounded-lg transition-colors text-gray-700 hover:text-blue-600 font-medium"
-              >
-                📊 Ver Reportes
-              </a>
             </div>
           </motion.div>
         </div>
