@@ -26,8 +26,8 @@ import AdminReports from "./pages/admin/AdminReports";
 import AdminUsers from "./pages/admin/AdminUsers";
 
 // ⭐ NUEVO: Importar componentes de ADMIN GENERAL
-import AdminGeneralLayout from "./components/admin/AdminGeneralLayout";
-import AdminGeneralDashboard from "./pages/admin/AdminGeneralDashboard";
+import AdminGeneralLayout from "./components/admin_general/AdminGeneralLayout";
+import AdminGeneralDashboard from "./pages/admin_general/AdminGeneralDashboard";
 import AdminGeneralBranches from "./pages/admin_general/AdminGeneralBranches";
 import AdminGeneralProducts from "./pages/admin_general/AdminGeneralProducts";
 import AdminGeneralOffers from "./pages/admin_general/AdminGeneralOffers";
