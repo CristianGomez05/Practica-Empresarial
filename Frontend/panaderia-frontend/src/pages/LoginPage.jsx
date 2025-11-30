@@ -1,9 +1,8 @@
-// src/pages/LoginPage.jsx - COMPLETO Y CORREGIDO
+// src/pages/LoginPage.jsx - CORREGIDO
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../components/auth/AuthContext";
 import axios from "axios";
-import { jwtDecode } from "jwt-decode";
 import GoogleLoginButton from "../components/auth/GoogleLoginButton";
 
 export default function LoginPage() {
@@ -56,6 +55,7 @@ export default function LoginPage() {
       };
       
       console.log("✅ userInfo completo:", userInfo);
+      console.log("👤 Rol:", userInfo.rol);
       console.log("🏪 Sucursal ID:", userInfo.sucursal_id);
       console.log("🏪 Sucursal Nombre:", userInfo.sucursal_nombre);
       
@@ -63,17 +63,17 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(userInfo));
       
       setUser(userInfo);
-      console.log("✅ Usuario guardado con sucursal");
+      console.log("✅ Usuario guardado en contexto");
 
-      // Redirigir según rol específico
+      // ⭐⭐⭐ REDIRIGIR SEGÚN ROL - RUTAS CORREGIDAS
       if (userInfo.rol === 'administrador_general') {
-        console.log("👑👑 Admin General detectado, redirigiendo a /admin/sucursales");
-        navigate("/admin/sucursales");
+        console.log("👑👑 Admin General detectado → /admin-general");
+        navigate("/admin-general");
       } else if (userInfo.rol === 'administrador') {
-        console.log("👑 Administrador Regular detectado, redirigiendo a /admin");
+        console.log("👑 Administrador Regular detectado → /admin");
         navigate("/admin");
       } else {
-        console.log("👤 Cliente detectado, redirigiendo a /dashboard/inicio");
+        console.log("👤 Cliente detectado → /dashboard/inicio");
         navigate("/dashboard/inicio");
       }
     } catch (err) {
@@ -95,63 +95,57 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 px-4">
-      <div className="bg-white shadow-2xl rounded-2xl w-full max-w-md p-8 space-y-6 border-2 border-amber-100">
+    <div className="min-h-screen bg-gradient-to-br from-[#FFF8F0] via-[#FFE4CC] to-[#FFDAB9] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
         {/* Header */}
-        <div className="text-center">
-          <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-4xl">🥐</span>
-          </div>
-          <h2 className="text-3xl font-bold text-[#5C4033] mb-2">
-            Bienvenido
-          </h2>
-          <p className="text-[#8D6E63]">Panadería Santa Clara</p>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-[#5D4037] mb-2">¡Bienvenido! 🥐</h1>
+          <p className="text-[#6D4C41]">Inicia sesión en Panadería Santa Clara</p>
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Error */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+            <p className="text-red-700 text-sm">{error}</p>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-[#5C4033] mb-2">
-              Usuario o correo
+            <label className="block text-sm font-medium text-[#5D4037] mb-2">
+              Usuario o Email
             </label>
             <input
               type="text"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
-              className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-              placeholder="Ingresa tu usuario o correo"
+              className="w-full px-4 py-3 border border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
+              placeholder="usuario@ejemplo.com"
               required
               disabled={loading}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#5C4033] mb-2">
+            <label className="block text-sm font-medium text-[#5D4037] mb-2">
               Contraseña
             </label>
             <input
               type="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-              placeholder="********"
+              className="w-full px-4 py-3 border border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
+              placeholder="••••••••"
               required
               disabled={loading}
             />
           </div>
 
-          {/* Error Message */}
-          {error && (
-            <div className="bg-red-50 border-2 border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-to-r from-[#D2691E] to-[#8B4513] text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
@@ -159,38 +153,41 @@ export default function LoginPage() {
                 Iniciando sesión...
               </span>
             ) : (
-              "Iniciar Sesión"
+              'Iniciar Sesión'
             )}
           </button>
         </form>
 
-        {/* Separator */}
-        <div className="flex items-center my-6">
-          <div className="flex-grow border-t border-gray-300"></div>
-          <span className="mx-4 text-gray-500 text-sm font-medium">O continúa con</span>
-          <div className="flex-grow border-t border-gray-300"></div>
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-4">
+          <div className="flex-1 h-px bg-[#D2B48C]"></div>
+          <span className="text-sm text-[#6D4C41]">o</span>
+          <div className="flex-1 h-px bg-[#D2B48C]"></div>
         </div>
 
         {/* Google Login */}
         <GoogleLoginButton />
 
-        {/* Info Footer */}
-        <div className="text-center pt-4">
-          <p className="text-sm text-gray-600">
-            ¿No tienes cuenta?{" "}
-            <Link 
-              to="/register" 
-              className="text-amber-700 hover:text-amber-800 cursor-pointer hover:underline font-semibold"
-            >
-              Regístrate
-            </Link>
-          </p>
-        </div>
-      </div>
+        {/* Register Link */}
+        <p className="text-center text-sm text-[#6D4C41] mt-6">
+          ¿No tienes cuenta?{" "}
+          <Link
+            to="/register"
+            className="text-[#D2691E] font-semibold hover:text-[#8B4513] transition-colors"
+          >
+            Regístrate aquí
+          </Link>
+        </p>
 
-      {/* Debug Info */}
-      <div className="mt-4 text-xs text-gray-500 text-center">
-        <p>✅ Endpoint correcto: {API_BASE}/api/token/</p>
+        {/* Back to Home */}
+        <div className="text-center mt-4">
+          <Link
+            to="/"
+            className="text-sm text-[#6D4C41] hover:text-[#5D4037] transition-colors"
+          >
+            ← Volver al inicio
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-// src/components/auth/AuthContext.jsx
+// src/components/auth/AuthContext.jsx - CORREGIDO
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
@@ -14,18 +14,49 @@ export const AuthProvider = ({ children }) => {
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+  // ⭐ Cargar usuario desde localStorage si existe
+  const loadUserFromStorage = () => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        console.log("📦 Usuario cargado desde localStorage:", parsedUser);
+        setUser(parsedUser);
+        return parsedUser;
+      } catch (error) {
+        console.error("❌ Error parseando usuario de localStorage:", error);
+        localStorage.removeItem("user");
+        return null;
+      }
+    }
+    return null;
+  };
+
   // Decodificar token y setear usuario
   const decodeUser = (token) => {
     try {
       const decoded = jwtDecode(token);
-      console.log("🔍 Usuario decodificado:", decoded);
-      // Asegurar que el avatar se incluya si existe
-      const userWithAvatar = {
+      console.log("🔍 Token decodificado:", decoded);
+      
+      // Intentar cargar datos completos desde localStorage primero
+      const storedUser = loadUserFromStorage();
+      
+      // Si hay datos en localStorage, usarlos (tienen más información)
+      if (storedUser && storedUser.id === decoded.user_id) {
+        console.log("✅ Usando datos completos desde localStorage");
+        setUser(storedUser);
+        return storedUser;
+      }
+      
+      // Si no, usar datos del token
+      const userFromToken = {
         ...decoded,
+        id: decoded.user_id || decoded.id,
         avatar: decoded.avatar || null
       };
-      setUser(userWithAvatar);
-      return userWithAvatar;
+      console.log("✅ Usuario desde token:", userFromToken);
+      setUser(userFromToken);
+      return userFromToken;
     } catch (error) {
       console.error("❌ Error al decodificar token:", error);
       setUser(null);
@@ -79,6 +110,7 @@ export const AuthProvider = ({ children }) => {
     // Limpiar localStorage
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
+    localStorage.removeItem("user");
 
     // Limpiar estado
     setAccessToken(null);
@@ -88,10 +120,9 @@ export const AuthProvider = ({ children }) => {
     console.log("✅ Sesión cerrada - sin redirección automática");
   };
 
-  // Auto-verificación inicial - SOLO si hay token en localStorage
+  // Auto-verificación inicial - MEJORADA
   useEffect(() => {
     const verifyTokens = async () => {
-      // Si no hay token en localStorage, no hacer nada
       const storedAccess = localStorage.getItem("access");
 
       if (!storedAccess) {
@@ -102,12 +133,18 @@ export const AuthProvider = ({ children }) => {
 
       console.log("🔍 Verificando token existente...");
 
+      // ⭐ Primero intentar cargar usuario desde localStorage
+      const storedUser = loadUserFromStorage();
+
       if (isTokenExpired(storedAccess)) {
         console.log("⏰ Token expirado, intentando refrescar...");
         await refreshAccessToken();
       } else {
         console.log("✅ Token válido");
-        decodeUser(storedAccess);
+        // Si ya cargamos el usuario de localStorage, no decodificar de nuevo
+        if (!storedUser) {
+          decodeUser(storedAccess);
+        }
       }
 
       setLoading(false);
@@ -116,10 +153,15 @@ export const AuthProvider = ({ children }) => {
     verifyTokens();
   }, []); // Solo al montar
 
-  // Sincronizar cuando cambie accessToken externamente
+  // ⭐ Sincronizar cuando cambie accessToken o se actualice localStorage
   useEffect(() => {
     if (accessToken && !user) {
-      decodeUser(accessToken);
+      console.log("🔄 Token presente pero sin usuario, cargando...");
+      // Intentar cargar desde localStorage primero
+      const storedUser = loadUserFromStorage();
+      if (!storedUser) {
+        decodeUser(accessToken);
+      }
     }
   }, [accessToken]);
 
