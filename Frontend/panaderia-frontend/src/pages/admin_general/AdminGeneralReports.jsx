@@ -1,6 +1,4 @@
 // Frontend/src/pages/admin_general/AdminGeneralReports.jsx
-// COMPLETO Y FUNCIONAL - Sistema de reportes con gráficas
-
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -103,6 +101,7 @@ export default function AdminGeneralReports() {
     }
   };
 
+  // ⭐⭐⭐ FUNCIONES ACTUALIZADAS PARA CAMBIAR SEGÚN PERÍODO
   const getVentasPorPeriodo = () => {
     if (!estadisticas) return 0;
     switch (periodo) {
@@ -128,6 +127,19 @@ export default function AdminGeneralReports() {
         return estadisticas.pedidos_mes || 0;
       default:
         return 0;
+    }
+  };
+
+  const getPeriodoLabel = () => {
+    switch (periodo) {
+      case 'dia':
+        return 'Hoy';
+      case 'semana':
+        return 'Esta Semana';
+      case 'mes':
+        return 'Este Mes';
+      default:
+        return '';
     }
   };
 
@@ -212,17 +224,19 @@ export default function AdminGeneralReports() {
         </div>
       </div>
 
-      {/* Estadísticas Principales */}
+      {/* ⭐⭐⭐ ESTADÍSTICAS PRINCIPALES - ACTUALIZADAS DINÁMICAMENTE */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          key={`ventas-${periodo}`} // ⭐ Key para forzar re-render
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
           className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg p-6"
         >
           <div className="flex items-center justify-between mb-2">
             <FaMoneyBillWave className="text-3xl opacity-80" />
             <span className="text-sm bg-white bg-opacity-20 px-2 py-1 rounded">
-              {periodo === 'dia' ? 'Hoy' : periodo === 'semana' ? 'Semana' : 'Mes'}
+              {getPeriodoLabel()}
             </span>
           </div>
           <p className="text-sm opacity-90 mb-1">Ventas</p>
@@ -232,15 +246,16 @@ export default function AdminGeneralReports() {
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
+          key={`pedidos-${periodo}`} // ⭐ Key para forzar re-render
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
           className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl shadow-lg p-6"
         >
           <div className="flex items-center justify-between mb-2">
             <FaShoppingCart className="text-3xl opacity-80" />
             <span className="text-sm bg-white bg-opacity-20 px-2 py-1 rounded">
-              {periodo === 'dia' ? 'Hoy' : periodo === 'semana' ? 'Semana' : 'Mes'}
+              {getPeriodoLabel()}
             </span>
           </div>
           <p className="text-sm opacity-90 mb-1">Pedidos</p>
@@ -362,7 +377,7 @@ export default function AdminGeneralReports() {
           <div className="flex items-center gap-3 mb-3">
             <FaTrophy className="text-4xl" />
             <div>
-              <p className="text-sm opacity-90">Producto Estrella del {periodo === 'dia' ? 'Día' : periodo === 'semana' ? 'Semana' : 'Mes'}</p>
+              <p className="text-sm opacity-90">Producto Estrella de {getPeriodoLabel()}</p>
               <p className="text-2xl font-bold">{estadisticas.producto_mas_vendido.nombre}</p>
             </div>
           </div>
@@ -428,7 +443,7 @@ export default function AdminGeneralReports() {
         <ul className="list-disc list-inside space-y-1 text-blue-700">
           <li>Los datos se actualizan automáticamente cada minuto</li>
           <li>Puedes exportar reportes en formato PDF o HTML</li>
-          <li>Los reportes muestran solo pedidos completados</li>
+          <li>Los reportes muestran solo pedidos entregados</li>
           {selectedBranch && <li className="font-semibold">Filtrando por sucursal seleccionada</li>}
         </ul>
       </div>
