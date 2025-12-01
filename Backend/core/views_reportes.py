@@ -2,7 +2,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.db.models import Sum, Count, Avg, F
+from django.db.models import Sum, Count, Avg, F, Q
 from django.utils import timezone
 from datetime import timedelta
 from .models import Pedido, DetallePedido, Producto
@@ -24,13 +24,27 @@ def estadisticas(request):
     user = request.user
     sucursal_id = request.query_params.get('sucursal')
     
-    # Filtrar por sucursal si se proporciona
-    pedidos_queryset = Pedido.objects.filter(estado='completado')
-    detalles_queryset = DetallePedido.objects.filter(pedido__estado='completado')
+    # ⭐ Solo pedidos entregados para reportes
+    pedidos_queryset = Pedido.objects.filter(estado='entregado')
+    detalles_queryset = DetallePedido.objects.filter(pedido__estado='entregado')
     productos_queryset = Producto.objects.all()
     
+    # ⭐ DEBUG: Ver TODOS los pedidos antes de filtrar
+    todos_pedidos = Pedido.objects.all().order_by('-fecha')
+    print(f"\n📦 TODOS LOS PEDIDOS EN LA BD ({todos_pedidos.count()}):")
+    for p in todos_pedidos[:10]:  # Mostrar últimos 10
+        print(f"   #{p.id} | Estado: {p.estado} | Fecha: {p.fecha} | Total: ₡{p.total}")
+    
+    # Contar por estado
+    pedidos_por_estado = {}
+    for estado_code, estado_label in Pedido.ESTADOS:
+        count = Pedido.objects.filter(estado=estado_code).count()
+        if count > 0:
+            pedidos_por_estado[estado_label] = count
+    print(f"\n📊 Pedidos por estado: {pedidos_por_estado}")
+    
     if sucursal_id:
-        print(f"🔍 Filtrando por sucursal: {sucursal_id}")
+        print(f"\n🔍 Filtrando por sucursal: {sucursal_id}")
         pedidos_queryset = pedidos_queryset.filter(
             detalles__producto__sucursal_id=sucursal_id
         ).distinct()
@@ -40,7 +54,7 @@ def estadisticas(request):
         productos_queryset = productos_queryset.filter(sucursal_id=sucursal_id)
     elif user.rol == 'administrador' and user.sucursal:
         # Admin regular: solo su sucursal
-        print(f"🔒 Admin regular - Sucursal: {user.sucursal.id}")
+        print(f"\n🔒 Admin regular - Sucursal: {user.sucursal.id}")
         pedidos_queryset = pedidos_queryset.filter(
             detalles__producto__sucursal=user.sucursal
         ).distinct()
@@ -49,11 +63,18 @@ def estadisticas(request):
         )
         productos_queryset = productos_queryset.filter(sucursal=user.sucursal)
     
+    print(f"\n📊 Pedidos 'entregado' filtrados: {pedidos_queryset.count()}")
+    
     # Fechas
     hoy = timezone.now().date()
     hace_7_dias = hoy - timedelta(days=7)
     inicio_semana = hoy - timedelta(days=hoy.weekday())
     inicio_mes = hoy.replace(day=1)
+    
+    print(f"\n📅 Fechas de análisis:")
+    print(f"   Hoy: {hoy}")
+    print(f"   Inicio semana: {inicio_semana}")
+    print(f"   Inicio mes: {inicio_mes}")
     
     # Ventas por período
     ventas_hoy = pedidos_queryset.filter(fecha__date=hoy).aggregate(
@@ -72,6 +93,11 @@ def estadisticas(request):
     pedidos_hoy = pedidos_queryset.filter(fecha__date=hoy).count()
     pedidos_semana = pedidos_queryset.filter(fecha__date__gte=inicio_semana).count()
     pedidos_mes = pedidos_queryset.filter(fecha__date__gte=inicio_mes).count()
+    
+    print(f"\n💰 Ventas calculadas:")
+    print(f"   Hoy: ₡{ventas_hoy:,.2f} ({pedidos_hoy} pedidos)")
+    print(f"   Semana: ₡{ventas_semana:,.2f} ({pedidos_semana} pedidos)")
+    print(f"   Mes: ₡{ventas_mes:,.2f} ({pedidos_mes} pedidos)")
     
     # Promedio por venta
     promedio_venta = pedidos_queryset.aggregate(
@@ -136,7 +162,7 @@ def estadisticas(request):
         'producto_mas_vendido': producto_mas_vendido
     }
     
-    print(f"✅ Estadísticas calculadas:")
+    print(f"\n✅ Estadísticas calculadas:")
     print(f"   Ventas mes: ₡{ventas_mes:,.2f}")
     print(f"   Pedidos mes: {pedidos_mes}")
     print(f"   Productos: {total_productos}")
@@ -154,8 +180,6 @@ def exportar_reporte(request):
     """
     formato = request.query_params.get('formato', 'html')
     
-    # Por ahora, solo retornar un mensaje
-    # Puedes implementar generación de PDF con ReportLab o WeasyPrint
     return Response({
         'message': f'Exportación en formato {formato} no implementada aún',
         'formato': formato
