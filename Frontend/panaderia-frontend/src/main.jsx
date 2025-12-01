@@ -4,14 +4,14 @@ import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
 import { AuthProvider } from './components/auth/AuthContext';
-import { BranchProvider } from './contexts/BranchContext'; // ⭐ Importar
-import { CartProvider } from './contexts/CartContext';
+import { BranchProvider } from './contexts/BranchContext';
+import { CartProvider } from './components/cart/CartContext';
 import { SnackbarProvider } from 'notistack';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
-      <BranchProvider> {/* ⭐⭐⭐ AGREGAR ESTO */}
+      <BranchProvider>
         <CartProvider>
           <SnackbarProvider 
             maxSnack={3}
@@ -24,7 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <App />
           </SnackbarProvider>
         </CartProvider>
-      </BranchProvider> {/* ⭐⭐⭐ CERRAR AQUÍ */}
+      </BranchProvider>
     </AuthProvider>
   </React.StrictMode>,
 );
