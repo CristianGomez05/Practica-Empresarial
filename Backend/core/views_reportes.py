@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Sum, Count, Avg, F, Q
 from django.utils import timezone
+from django.http import HttpResponse
 from datetime import timedelta
 from .models import Pedido, DetallePedido, Producto
 from .permissions import EsAdministrador
@@ -175,12 +176,227 @@ def estadisticas(request):
 @permission_classes([IsAuthenticated, EsAdministrador])
 def exportar_reporte(request):
     """
-    Endpoint para exportar reportes en PDF o HTML.
-    GET /api/reportes/exportar/?formato=pdf
+    Endpoint para exportar reportes en HTML.
+    GET /api/reportes/exportar/?formato=html&sucursal=1
     """
     formato = request.query_params.get('formato', 'html')
+    sucursal_id = request.query_params.get('sucursal')
+    user = request.user
     
-    return Response({
-        'message': f'Exportación en formato {formato} no implementada aún',
-        'formato': formato
-    })
+    print(f"\n📥 Exportando reporte en formato: {formato}")
+    
+    # Obtener estadísticas
+    pedidos_queryset = Pedido.objects.filter(estado='entregado')
+    
+    if sucursal_id:
+        pedidos_queryset = pedidos_queryset.filter(
+            detalles__producto__sucursal_id=sucursal_id
+        ).distinct()
+        sucursal_nombre = Producto.objects.filter(sucursal_id=sucursal_id).first().sucursal.nombre if Producto.objects.filter(sucursal_id=sucursal_id).exists() else "Todas"
+    elif user.rol == 'administrador' and user.sucursal:
+        pedidos_queryset = pedidos_queryset.filter(
+            detalles__producto__sucursal=user.sucursal
+        ).distinct()
+        sucursal_nombre = user.sucursal.nombre
+    else:
+        sucursal_nombre = "Todas las Sucursales"
+    
+    # Calcular estadísticas
+    hoy = timezone.now().date()
+    inicio_mes = hoy.replace(day=1)
+    
+    ventas_mes = pedidos_queryset.filter(fecha__date__gte=inicio_mes).aggregate(
+        total=Sum('total')
+    )['total'] or 0
+    
+    pedidos_mes = pedidos_queryset.filter(fecha__date__gte=inicio_mes).count()
+    
+    # Top productos
+    detalles_queryset = DetallePedido.objects.filter(pedido__estado='entregado')
+    if sucursal_id:
+        detalles_queryset = detalles_queryset.filter(producto__sucursal_id=sucursal_id)
+    elif user.rol == 'administrador' and user.sucursal:
+        detalles_queryset = detalles_queryset.filter(producto__sucursal=user.sucursal)
+    
+    top_productos = detalles_queryset.values(
+        'producto__nombre'
+    ).annotate(
+        total_vendido=Sum('cantidad'),
+        total_ingresos=Sum(F('cantidad') * F('producto__precio'))
+    ).order_by('-total_vendido')[:5]
+    
+    # Generar HTML
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reporte de Ventas - Panadería Santa Clara</title>
+        <style>
+            body {{
+                font-family: 'Arial', sans-serif;
+                margin: 0;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #333;
+            }}
+            .container {{
+                max-width: 900px;
+                margin: 0 auto;
+                background: white;
+                padding: 40px;
+                border-radius: 10px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 40px;
+                border-bottom: 3px solid #667eea;
+                padding-bottom: 20px;
+            }}
+            .header h1 {{
+                color: #667eea;
+                margin: 0;
+                font-size: 32px;
+            }}
+            .header p {{
+                color: #666;
+                margin: 10px 0 0 0;
+            }}
+            .stats {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                margin-bottom: 40px;
+            }}
+            .stat-card {{
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                text-align: center;
+            }}
+            .stat-card h3 {{
+                margin: 0 0 10px 0;
+                font-size: 14px;
+                opacity: 0.9;
+            }}
+            .stat-card p {{
+                margin: 0;
+                font-size: 28px;
+                font-weight: bold;
+            }}
+            .section {{
+                margin-bottom: 30px;
+            }}
+            .section h2 {{
+                color: #667eea;
+                border-bottom: 2px solid #667eea;
+                padding-bottom: 10px;
+                margin-bottom: 20px;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 15px;
+            }}
+            th, td {{
+                padding: 12px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }}
+            th {{
+                background-color: #667eea;
+                color: white;
+                font-weight: bold;
+            }}
+            tr:hover {{
+                background-color: #f5f5f5;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 40px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+                color: #666;
+                font-size: 12px;
+            }}
+            .badge {{
+                display: inline-block;
+                background: #fbbf24;
+                color: #78350f;
+                padding: 5px 15px;
+                border-radius: 20px;
+                font-weight: bold;
+                font-size: 14px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🥐 Panadería Santa Clara</h1>
+                <p>Reporte de Ventas - {sucursal_nombre}</p>
+                <p style="font-size: 12px; color: #999;">Generado el {hoy.strftime('%d/%m/%Y')}</p>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <h3>Ventas del Mes</h3>
+                    <p>₡{ventas_mes:,.0f}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Pedidos</h3>
+                    <p>{pedidos_mes}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Promedio</h3>
+                    <p>₡{(ventas_mes / pedidos_mes if pedidos_mes > 0 else 0):,.0f}</p>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🏆 Top 5 Productos Más Vendidos</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Producto</th>
+                            <th>Unidades</th>
+                            <th>Ingresos</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    """
+    
+    for idx, producto in enumerate(top_productos, 1):
+        medalla = "🥇" if idx == 1 else "🥈" if idx == 2 else "🥉" if idx == 3 else "🏅"
+        html_content += f"""
+                        <tr>
+                            <td>{medalla}</td>
+                            <td><strong>{producto['producto__nombre']}</strong></td>
+                            <td>{producto['total_vendido']}</td>
+                            <td>₡{float(producto['total_ingresos'] or 0):,.0f}</td>
+                        </tr>
+        """
+    
+    html_content += """
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="footer">
+                <p><strong>Panadería Santa Clara</strong> - Sistema de Gestión</p>
+                <p>Este reporte fue generado automáticamente por el sistema</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    print(f"✅ Reporte HTML generado exitosamente")
+    
+    response = HttpResponse(html_content, content_type='text/html')
+    response['Content-Disposition'] = f'attachment; filename="reporte_{hoy}.html"'
+    return response

@@ -6,12 +6,12 @@ import {
   FaHome, FaBox, FaTag, FaShoppingCart, FaUsers, FaChartBar, 
   FaSignOutAlt, FaBars, FaTimes, FaStore 
 } from 'react-icons/fa';
-import BranchSelector from './BranchSelector'; // ⭐ IMPORTAR
+import BranchSelector from './BranchSelector';
 
 export default function AdminGeneralLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [user, setUser] = useState(null);
-  const [selectedBranch, setSelectedBranch] = useState(null); // ⭐ NUEVO
+  const [selectedBranch, setSelectedBranch] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -52,96 +52,103 @@ export default function AdminGeneralLayout() {
       <motion.aside
         initial={false}
         animate={{ width: sidebarOpen ? '280px' : '80px' }}
-        className="fixed left-0 top-0 h-screen bg-gradient-to-b from-purple-700 to-purple-900 text-white shadow-2xl z-50"
+        className="fixed left-0 top-0 h-screen bg-gradient-to-b from-purple-700 to-purple-900 text-white shadow-2xl z-50 flex flex-col"
       >
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            {sidebarOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-3"
+        {/* ⭐ Container con scroll */}
+        <div className="flex flex-col h-full overflow-hidden">
+          {/* Header - FIJO */}
+          <div className="flex-shrink-0 p-6">
+            <div className="flex items-center justify-between mb-8">
+              {sidebarOpen && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-3"
+                >
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                    <span className="text-xl">🥐</span>
+                  </div>
+                  <div>
+                    <h1 className="text-lg font-bold">Admin General</h1>
+                    <p className="text-xs text-purple-200">Santa Clara</p>
+                  </div>
+                </motion.div>
+              )}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors ml-auto"
               >
-                <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-xl">🥐</span>
+                {sidebarOpen ? <FaTimes /> : <FaBars />}
+              </button>
+            </div>
+
+            {/* User Info - FIJO */}
+            {sidebarOpen && user && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white/10 rounded-xl p-4 backdrop-blur-sm"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-xl font-bold shadow-lg">
+                    {user.first_name?.charAt(0) || user.username?.charAt(0) || 'A'}
+                  </div>
+                  <div>
+                    <p className="font-semibold">{user.first_name || user.username}</p>
+                    <p className="text-xs text-purple-200">Admin General</p>
+                  </div>
                 </div>
-                <div>
-                  <h1 className="text-lg font-bold">Admin General</h1>
-                  <p className="text-xs text-purple-200">Santa Clara</p>
+                <div className="flex items-center gap-2 text-xs text-purple-200 mt-2 pt-2 border-t border-white/20">
+                  <span className="px-2 py-1 bg-purple-500 rounded-full">🌟 Acceso Total</span>
                 </div>
               </motion.div>
             )}
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors ml-auto"
-            >
-              {sidebarOpen ? <FaTimes /> : <FaBars />}
-            </button>
           </div>
 
-          {/* User Info */}
-          {sidebarOpen && user && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white/10 rounded-xl p-4 mb-6 backdrop-blur-sm"
+          {/* ⭐ Navigation - CON SCROLL */}
+          <div className="flex-1 overflow-y-auto px-6 pb-6">
+            <nav className="space-y-2">
+              {menuItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.path, item.exact);
+                
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                      active
+                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg'
+                        : 'hover:bg-white/10'
+                    }`}
+                  >
+                    <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
+                    {sidebarOpen && (
+                      <div className="flex items-center justify-between flex-1">
+                        <span className="font-medium">{item.label}</span>
+                        {item.badge && (
+                          <span className="text-xs bg-purple-500 px-2 py-0.5 rounded-full">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* ⭐ Logout - FIJO AL FONDO */}
+          <div className="flex-shrink-0 p-6 border-t border-white/20">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/20 transition-all"
             >
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-xl font-bold shadow-lg">
-                  {user.first_name?.charAt(0) || user.username?.charAt(0) || 'A'}
-                </div>
-                <div>
-                  <p className="font-semibold">{user.first_name || user.username}</p>
-                  <p className="text-xs text-purple-200">Admin General</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-purple-200 mt-2 pt-2 border-t border-white/20">
-                <span className="px-2 py-1 bg-purple-500 rounded-full">🌟 Acceso Total</span>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Navigation */}
-          <nav className="space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.path, item.exact);
-              
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    active
-                      ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg'
-                      : 'hover:bg-white/10'
-                  }`}
-                >
-                  <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
-                  {sidebarOpen && (
-                    <div className="flex items-center justify-between flex-1">
-                      <span className="font-medium">{item.label}</span>
-                      {item.badge && (
-                        <span className="text-xs bg-purple-500 px-2 py-0.5 rounded-full">
-                          {item.badge}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/20 transition-all mt-8"
-          >
-            <FaSignOutAlt className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
-            {sidebarOpen && <span className="font-medium">Cerrar Sesión</span>}
-          </button>
+              <FaSignOutAlt className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
+              {sidebarOpen && <span className="font-medium">Cerrar Sesión</span>}
+            </button>
+          </div>
         </div>
       </motion.aside>
 
@@ -166,7 +173,6 @@ export default function AdminGeneralLayout() {
             </div>
             
             <div className="flex items-center gap-3">
-              {/* ⭐⭐⭐ AGREGAR SELECTOR DE SUCURSALES */}
               <BranchSelector 
                 onBranchChange={setSelectedBranch}
                 currentBranch={selectedBranch}
@@ -181,7 +187,6 @@ export default function AdminGeneralLayout() {
 
         {/* Content Area */}
         <div className="p-8">
-          {/* ⭐⭐⭐ PASAR selectedBranch AL OUTLET */}
           <Outlet context={{ selectedBranch }} />
         </div>
       </div>
