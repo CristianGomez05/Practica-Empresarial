@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FaChartBar, FaCalendar, FaMoneyBillWave, FaShoppingCart, FaBox, FaDownload, FaSync, FaTrophy, FaChartPie } from 'react-icons/fa';
+import { FaChartBar, FaCalendar, FaMoneyBillWave, FaShoppingCart, FaBox, FaDownload, FaSync, FaTrophy } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
@@ -11,11 +11,22 @@ export default function AdminGeneralReports() {
   const { selectedBranch } = useOutletContext();
   
   const [estadisticas, setEstadisticas] = useState(null);
+  const [sucursales, setSucursales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [periodo, setPeriodo] = useState('mes');
 
   const { enqueueSnackbar } = useSnackbar();
+
+  const cargarSucursales = useCallback(async () => {
+    try {
+      const response = await api.get('/sucursales/activas/');
+      const data = response.data.results || response.data;
+      setSucursales(data);
+    } catch (error) {
+      console.error('Error cargando sucursales:', error);
+    }
+  }, []);
 
   const cargarEstadisticas = useCallback(async () => {
     try {
@@ -43,6 +54,7 @@ export default function AdminGeneralReports() {
 
   useEffect(() => {
     cargarEstadisticas();
+    cargarSucursales();
   }, []);
 
   useEffect(() => {
@@ -57,7 +69,6 @@ export default function AdminGeneralReports() {
     refreshOnFocus: true
   });
 
-  // ⭐ FUNCIÓN MEJORADA: Exportar HTML (igual que Admin Regular)
   const exportarHTML = () => {
     if (!estadisticas) {
       enqueueSnackbar('No hay datos para exportar', { variant: 'warning' });
@@ -77,9 +88,15 @@ export default function AdminGeneralReports() {
                            periodo === 'semana' ? 'Semanal' : 
                            'Mensual';
 
-      const sucursalNombre = selectedBranch ? 
-        `Sucursal Filtrada` : 
-        'Todas las Sucursales';
+      // ⭐ Obtener nombre real de la sucursal
+      let sucursalNombre = 'Todas las Sucursales';
+      
+      if (selectedBranch && sucursales.length > 0) {
+        const sucursalEncontrada = sucursales.find(s => s.id === selectedBranch);
+        if (sucursalEncontrada) {
+          sucursalNombre = sucursalEncontrada.nombre;
+        }
+      }
       
       const contenidoHTML = `
         <!DOCTYPE html>
@@ -92,7 +109,7 @@ export default function AdminGeneralReports() {
               font-family: Arial, sans-serif;
               padding: 40px;
               color: #333;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
               min-height: 100vh;
             }
             .container {
@@ -105,28 +122,29 @@ export default function AdminGeneralReports() {
             }
             .header {
               text-align: center;
-              border-bottom: 3px solid #667eea;
+              border-bottom: 3px solid #f59e0b;
               padding-bottom: 20px;
               margin-bottom: 30px;
             }
             .header h1 {
-              color: #667eea;
+              color: #5D4037;
               margin: 0;
               font-size: 36px;
             }
             .header p {
-              color: #666;
+              color: #8D6E63;
               margin: 10px 0;
             }
             .badge {
               display: inline-block;
-              background: #fbbf24;
-              color: #78350f;
-              padding: 5px 15px;
+              background: #f59e0b;
+              color: white;
+              padding: 8px 20px;
               border-radius: 20px;
               font-weight: bold;
               font-size: 14px;
-              margin: 5px 0;
+              margin: 10px 0;
+              box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
             }
             .stats-grid {
               display: grid;
@@ -135,12 +153,12 @@ export default function AdminGeneralReports() {
               margin-bottom: 30px;
             }
             .stat-card {
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
               color: white;
               padding: 20px;
               border-radius: 10px;
               text-align: center;
-              box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+              box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
             }
             .stat-card h3 {
               margin: 0 0 10px 0;
@@ -155,8 +173,8 @@ export default function AdminGeneralReports() {
               margin-bottom: 30px;
             }
             .section h2 {
-              color: #667eea;
-              border-bottom: 2px solid #667eea;
+              color: #5D4037;
+              border-bottom: 2px solid #f59e0b;
               padding-bottom: 10px;
               margin-bottom: 20px;
               display: flex;
@@ -174,12 +192,12 @@ export default function AdminGeneralReports() {
               border-bottom: 1px solid #ddd;
             }
             th {
-              background-color: #667eea;
+              background-color: #f59e0b;
               color: white;
               font-weight: bold;
             }
             tr:hover {
-              background-color: #f5f5f5;
+              background-color: #fffbf0;
             }
             .chart-bar {
               display: flex;
@@ -190,18 +208,18 @@ export default function AdminGeneralReports() {
               margin-bottom: 8px;
             }
             .chart-bar:hover {
-              background-color: #f5f5f5;
+              background-color: #fffbf0;
             }
             .bar-container {
               flex: 1;
-              background: #e5e7eb;
+              background: #fed7aa;
               height: 25px;
               border-radius: 5px;
               overflow: hidden;
             }
             .bar-fill {
               height: 100%;
-              background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+              background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
               display: flex;
               align-items: center;
               justify-content: flex-end;
@@ -215,8 +233,16 @@ export default function AdminGeneralReports() {
               margin-top: 40px;
               padding-top: 20px;
               border-top: 1px solid #ddd;
-              color: #666;
+              color: #8D6E63;
               font-size: 12px;
+            }
+            .highlight-box {
+              background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+              color: white;
+              padding: 20px;
+              border-radius: 10px;
+              text-align: center;
+              box-shadow: 0 4px 15px rgba(251, 191, 36, 0.3);
             }
             @media print {
               body {
@@ -233,7 +259,7 @@ export default function AdminGeneralReports() {
           <div class="container">
             <div class="header">
               <h1>🥐 Panadería Santa Clara</h1>
-              <p style="font-size: 20px; font-weight: bold; color: #667eea;">
+              <p style="font-size: 20px; font-weight: bold; color: #5D4037;">
                 Reporte ${nombrePeriodo}
               </p>
               <span class="badge">${sucursalNombre}</span>
@@ -274,7 +300,7 @@ export default function AdminGeneralReports() {
                   const porcentaje = maxVenta > 0 ? (dia.total / maxVenta * 100) : 0;
                   return `
                     <div class="chart-bar">
-                      <span style="min-width: 100px; font-weight: bold;">
+                      <span style="min-width: 100px; font-weight: bold; color: #5D4037;">
                         ${new Date(dia.fecha + 'T00:00:00').toLocaleDateString('es-ES', { 
                           weekday: 'short', 
                           day: 'numeric', 
@@ -286,7 +312,7 @@ export default function AdminGeneralReports() {
                           ${porcentaje > 20 ? `₡${dia.total.toLocaleString('es-CR')}` : ''}
                         </div>
                       </div>
-                      <span style="min-width: 100px; text-align: right; font-weight: bold;">
+                      <span style="min-width: 100px; text-align: right; font-weight: bold; color: #5D4037;">
                         ₡${dia.total.toLocaleString('es-CR')}
                       </span>
                     </div>
@@ -315,7 +341,7 @@ export default function AdminGeneralReports() {
                           <td>${medalla}</td>
                           <td><strong>${producto.nombre}</strong></td>
                           <td>${producto.total_vendido} unidades</td>
-                          <td>₡${producto.total_ingresos.toLocaleString('es-CR', { maximumFractionDigits: 0 })}</td>
+                          <td style="color: #5D4037; font-weight: bold;">₡${producto.total_ingresos.toLocaleString('es-CR', { maximumFractionDigits: 0 })}</td>
                         </tr>
                       `;
                     }).join('')}
@@ -327,15 +353,15 @@ export default function AdminGeneralReports() {
             ${estadisticas.producto_mas_vendido ? `
               <div class="section">
                 <h2>⭐ Producto Estrella del Período</h2>
-                <div style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+                <div class="highlight-box">
                   <h3 style="margin: 0 0 15px 0; font-size: 24px;">${estadisticas.producto_mas_vendido.nombre}</h3>
                   <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                    <div>
-                      <p style="margin: 0; opacity: 0.9;">Unidades Vendidas</p>
+                    <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                      <p style="margin: 0; opacity: 0.9; font-size: 14px;">Unidades Vendidas</p>
                       <p style="margin: 5px 0 0 0; font-size: 28px; font-weight: bold;">${estadisticas.producto_mas_vendido.cantidad}</p>
                     </div>
-                    <div>
-                      <p style="margin: 0; opacity: 0.9;">Ingresos Generados</p>
+                    <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                      <p style="margin: 0; opacity: 0.9; font-size: 14px;">Ingresos Generados</p>
                       <p style="margin: 5px 0 0 0; font-size: 28px; font-weight: bold;">₡${(estadisticas.producto_mas_vendido.ingresos || 0).toLocaleString('es-CR')}</p>
                     </div>
                   </div>
@@ -356,17 +382,17 @@ export default function AdminGeneralReports() {
                 <tbody>
                   <tr>
                     <td><strong>Hoy</strong></td>
-                    <td>₡${(estadisticas.ventas_hoy || 0).toLocaleString('es-CR')}</td>
+                    <td style="color: #5D4037; font-weight: bold;">₡${(estadisticas.ventas_hoy || 0).toLocaleString('es-CR')}</td>
                     <td>${estadisticas.pedidos_hoy || 0}</td>
                   </tr>
                   <tr>
                     <td><strong>Esta Semana</strong></td>
-                    <td>₡${(estadisticas.ventas_semana || 0).toLocaleString('es-CR')}</td>
+                    <td style="color: #5D4037; font-weight: bold;">₡${(estadisticas.ventas_semana || 0).toLocaleString('es-CR')}</td>
                     <td>${estadisticas.pedidos_semana || 0}</td>
                   </tr>
                   <tr>
                     <td><strong>Este Mes</strong></td>
-                    <td>₡${(estadisticas.ventas_mes || 0).toLocaleString('es-CR')}</td>
+                    <td style="color: #5D4037; font-weight: bold;">₡${(estadisticas.ventas_mes || 0).toLocaleString('es-CR')}</td>
                     <td>${estadisticas.pedidos_mes || 0}</td>
                   </tr>
                 </tbody>
@@ -376,7 +402,9 @@ export default function AdminGeneralReports() {
             <div class="footer">
               <p><strong>Panadería Santa Clara</strong> - Sistema de Gestión</p>
               <p>Este reporte fue generado automáticamente por el sistema</p>
-              <p style="margin-top: 10px;">Para guardar como PDF: <strong>Archivo → Imprimir → Guardar como PDF</strong></p>
+              <p style="margin-top: 10px; color: #f59e0b; font-weight: bold;">
+                Para guardar como PDF: Archivo → Imprimir → Guardar como PDF
+              </p>
             </div>
           </div>
         </body>
@@ -388,7 +416,7 @@ export default function AdminGeneralReports() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `reporte_${periodo}_${new Date().toISOString().split('T')[0]}.html`;
+      a.download = `reporte_${nombrePeriodo.toLowerCase()}_${new Date().toISOString().split('T')[0]}.html`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -453,15 +481,6 @@ export default function AdminGeneralReports() {
         return '';
     }
   };
-
-  // ⭐ Colores para gráficas
-  const coloresGrafica = [
-    'from-blue-500 to-blue-600',
-    'from-green-500 to-green-600',
-    'from-yellow-500 to-yellow-600',
-    'from-purple-500 to-purple-600',
-    'from-pink-500 to-pink-600'
-  ];
 
   if (loading) {
     return (
