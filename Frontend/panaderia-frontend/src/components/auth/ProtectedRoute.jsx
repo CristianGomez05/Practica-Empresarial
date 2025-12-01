@@ -1,4 +1,4 @@
-// src/components/auth/ProtectedRoute.jsx
+// src/components/auth/ProtectedRoute.jsx - MEJORADO PARA OAUTH
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthContext";
@@ -19,13 +19,20 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
+  // ⭐ CRÍTICO: Si estamos en /dashboard con hash OAuth, NO redirigir
+  // Dejar que Dashboard.jsx procese los tokens primero
+  if (location.pathname === '/dashboard' && window.location.hash.includes('access=')) {
+    console.log("🔐 ProtectedRoute: Detectado OAuth, permitiendo acceso a Dashboard para procesar tokens");
+    return children;
+  }
+
   // Si después de loading NO hay token, redirigir a login
-  // Guardamos la ruta actual para redirigir después del login
   if (!accessToken) {
-    console.log("🚫 No autenticado, redirigiendo a /login");
+    console.log("🚫 ProtectedRoute: No autenticado, redirigiendo a /login");
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Si hay token, mostrar contenido protegido
+  console.log("✅ ProtectedRoute: Usuario autenticado, permitiendo acceso");
   return children;
 }

@@ -1,4 +1,4 @@
-// src/components/auth/AuthContext.jsx - CORREGIDO
+// src/components/auth/AuthContext.jsx - CORREGIDO PARA OAUTH
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 import { jwtDecode } from "jwt-decode";
@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }) => {
       const storedUser = loadUserFromStorage();
       
       // Si hay datos en localStorage, usarlos (tienen más información)
-      if (storedUser && storedUser.id === decoded.user_id) {
+      if (storedUser && storedUser.id === (decoded.user_id || decoded.id)) {
         console.log("✅ Usando datos completos desde localStorage");
         setUser(storedUser);
         return storedUser;
@@ -120,10 +120,18 @@ export const AuthProvider = ({ children }) => {
     console.log("✅ Sesión cerrada - sin redirección automática");
   };
 
-  // Auto-verificación inicial - MEJORADA
+  // ⭐⭐⭐ CRÍTICO: Auto-verificación inicial MEJORADA
   useEffect(() => {
     const verifyTokens = async () => {
       const storedAccess = localStorage.getItem("access");
+
+      // ⭐ Si estamos en /dashboard y hay un hash con tokens OAuth, NO hacer nada
+      // Dejar que Dashboard.jsx procese los tokens primero
+      if (window.location.pathname === '/dashboard' && window.location.hash.includes('access=')) {
+        console.log("🔐 Detectado OAuth en /dashboard, esperando a que Dashboard procese tokens...");
+        setLoading(false);
+        return;
+      }
 
       if (!storedAccess) {
         console.log("ℹ️ No hay token almacenado");
