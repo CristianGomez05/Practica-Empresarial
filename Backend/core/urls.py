@@ -6,6 +6,7 @@ from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
 from . import views
 from .views_auth import LoginView
 from .serializers import CustomTokenObtainPairSerializer
+from .views_reportes import estadisticas, exportar_reporte
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
@@ -28,6 +29,10 @@ urlpatterns = [
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('registro/', views.registro_usuario, name='registro'),
+
+    # NUEVAS RUTAS DE REPORTES
+    path('reportes/estadisticas/', estadisticas, name='reportes_estadisticas'),
+    path('reportes/exportar/', exportar_reporte, name='reportes_exportar'),
     
     # dj-rest-auth
     path('auth/', include('dj_rest_auth.urls')),
