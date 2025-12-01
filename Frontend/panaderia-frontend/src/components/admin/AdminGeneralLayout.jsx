@@ -6,10 +6,12 @@ import {
   FaHome, FaBox, FaTag, FaShoppingCart, FaUsers, FaChartBar, 
   FaSignOutAlt, FaBars, FaTimes, FaStore 
 } from 'react-icons/fa';
+import BranchSelector from './BranchSelector'; // ⭐ IMPORTAR
 
 export default function AdminGeneralLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [user, setUser] = useState(null);
+  const [selectedBranch, setSelectedBranch] = useState(null); // ⭐ NUEVO
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -164,6 +166,12 @@ export default function AdminGeneralLayout() {
             </div>
             
             <div className="flex items-center gap-3">
+              {/* ⭐⭐⭐ AGREGAR SELECTOR DE SUCURSALES */}
+              <BranchSelector 
+                onBranchChange={setSelectedBranch}
+                currentBranch={selectedBranch}
+              />
+              
               <div className="px-4 py-2 bg-purple-50 text-purple-700 rounded-lg border border-purple-200">
                 <span className="font-semibold">👑 Admin General</span>
               </div>
@@ -173,7 +181,8 @@ export default function AdminGeneralLayout() {
 
         {/* Content Area */}
         <div className="p-8">
-          <Outlet />
+          {/* ⭐⭐⭐ PASAR selectedBranch AL OUTLET */}
+          <Outlet context={{ selectedBranch }} />
         </div>
       </div>
     </div>
