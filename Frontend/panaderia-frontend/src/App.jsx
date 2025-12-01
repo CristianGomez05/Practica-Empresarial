@@ -40,7 +40,7 @@ import AdminGeneralReports from "./pages/admin_general/AdminGeneralReports";
 // Rutas protegidas
 import AdminRoute from "./components/auth/AdminRoute";
 import AdminGeneralRoute from "./components/auth/AdminGeneralRoute";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PrivateRoute from "./components/auth/PrivateRoute";
 
 import "./App.css";
 
@@ -62,9 +62,9 @@ function App() {
 
         {/* ==================== DASHBOARD DE CLIENTE ==================== */}
         <Route path="/dashboard" element={
-          <ProtectedRoute>
+          <PrivateRoute>
             <DashboardLayout />
-          </ProtectedRoute>
+          </PrivateRoute>
         }>
           <Route index element={<DashboardHome />} />
           <Route path="productos" element={<DashboardProducts />} />

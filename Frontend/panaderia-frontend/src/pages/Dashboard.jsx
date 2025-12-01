@@ -1,4 +1,4 @@
-// src/pages/Dashboard.jsx - ACTUALIZADO
+// src/pages/Dashboard.jsx - CORREGIDO COMPLETAMENTE
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../components/auth/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -29,16 +29,38 @@ export default function Dashboard() {
         console.log("🔑 Refresh token extraído:", refresh ? "✅ Presente" : "❌ Ausente");
 
         if (access) {
+          // Guardar token
           localStorage.setItem("access", access);
           setAccessToken(access);
           
-          // Decodificar y setear usuario inmediatamente
+          // ⭐⭐⭐ CRÍTICO: Decodificar, crear objeto de usuario y GUARDAR EN LOCALSTORAGE
           try {
             const decoded = jwtDecode(access);
             console.log("🔍 Token decodificado completo:", decoded);
             console.log("🔍 Rol del usuario:", decoded.rol);
-            setUser(decoded);
-            console.log("✅ Usuario autenticado:", decoded);
+            
+            // Crear objeto de usuario con TODA la información del token
+            const userInfo = {
+              id: decoded.user_id || decoded.id,
+              username: decoded.username,
+              email: decoded.email,
+              first_name: decoded.first_name || '',
+              last_name: decoded.last_name || '',
+              rol: decoded.rol,
+              sucursal_id: decoded.sucursal_id || null,
+              sucursal_nombre: decoded.sucursal_nombre || null,
+              avatar: decoded.avatar || null
+            };
+            
+            console.log("✅ userInfo completo:", userInfo);
+            
+            // ⭐⭐⭐ GUARDAR EN LOCALSTORAGE (esto faltaba!)
+            localStorage.setItem('user', JSON.stringify(userInfo));
+            console.log("💾 Usuario guardado en localStorage");
+            
+            // Actualizar contexto
+            setUser(userInfo);
+            console.log("✅ Usuario autenticado en contexto");
           } catch (error) {
             console.error("❌ Error al decodificar token:", error);
           }
@@ -71,23 +93,30 @@ export default function Dashboard() {
     processTokens();
   }, [setUser, setAccessToken, setRefreshToken, navigate]);
 
-  // ⭐ ACTUALIZADO: Redirigir según rol específico
+  // ⭐ Redirigir según rol específico DESPUÉS de procesar tokens
   useEffect(() => {
-    if (!processing && !accessToken && !window.location.hash.includes("access=")) {
-      console.log("⚠️ No autenticado después de procesar, redirigiendo...");
+    // Solo redirigir cuando YA no esté procesando
+    if (processing) return;
+
+    // Si no hay token y no hay hash con tokens, redirigir a login
+    if (!accessToken && !window.location.hash.includes("access=")) {
+      console.log("⚠️ No autenticado después de procesar, redirigiendo a login");
       navigate("/login", { replace: true });
-    } else if (!processing && accessToken && user) {
+      return;
+    }
+
+    // Si hay token y usuario, redirigir según rol
+    if (accessToken && user) {
       console.log("✅ Autenticado, verificando rol:", user.rol);
       
-      // ⭐ NUEVA LÓGICA: Diferenciar entre admin general y admin regular
       if (user.rol === 'administrador_general') {
-        console.log("👑👑 Admin General detectado, redirigiendo a /admin-general");
+        console.log("👑👑 Admin General detectado → /admin-general");
         navigate("/admin-general", { replace: true });
       } else if (user.rol === 'administrador') {
-        console.log("👑 Admin Regular detectado, redirigiendo a /admin");
+        console.log("👑 Admin Regular detectado → /admin");
         navigate("/admin", { replace: true });
       } else {
-        console.log("👤 Usuario cliente, redirigiendo a /dashboard/inicio");
+        console.log("👤 Cliente detectado → /dashboard/inicio");
         navigate("/dashboard/inicio", { replace: true });
       }
     }
