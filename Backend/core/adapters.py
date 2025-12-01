@@ -3,16 +3,20 @@ from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from rest_framework_simplejwt.tokens import RefreshToken
 from urllib.parse import urlencode
-from django.conf import settings  # ✅ Importar settings
+from django.conf import settings
 
 class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
     """
-    Genera tokens JWT y redirige al frontend con el fragmento #access=...&refresh=...
+    Genera tokens JWT y redirige al frontend según el rol del usuario
     """
     def get_login_redirect_url(self, request):
         user = request.user
         if not user or not user.is_authenticated:
             return super().get_login_redirect_url(request)
+
+        print(f"\n{'='*60}")
+        print(f"🔐 OAUTH LOGIN - Generando tokens")
+        print(f"{'='*60}")
 
         # Generar tokens con información personalizada
         refresh = RefreshToken.for_user(user)
@@ -24,6 +28,16 @@ class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
         refresh['first_name'] = user.first_name
         refresh['last_name'] = user.last_name
         
+        # ⭐ Agregar información de sucursal si existe
+        if hasattr(user, 'sucursal') and user.sucursal:
+            refresh['sucursal_id'] = user.sucursal.id
+            refresh['sucursal_nombre'] = user.sucursal.nombre
+            print(f"🏪 Sucursal: {user.sucursal.nombre} (ID: {user.sucursal.id})")
+        else:
+            refresh['sucursal_id'] = None
+            refresh['sucursal_nombre'] = None
+            print(f"⚠️ Usuario sin sucursal asignada")
+        
         access = str(refresh.access_token)
         refresh_str = str(refresh)
 
@@ -32,12 +46,15 @@ class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
             "refresh": refresh_str,
         })
 
-        # ✅ CORRECTO: Usar variable de entorno
         frontend_url = settings.FRONTEND_URL
+        
+        # ⭐ Redirigir a /dashboard SIEMPRE
+        # Dashboard.jsx se encargará de procesar tokens y redirigir según rol
         redirect_url = f"{frontend_url}/dashboard#{fragment}"
         
         print(f"🔗 Redirigiendo a: {redirect_url}")
         print(f"👤 Usuario: {user.username} | Email: {user.email} | Rol: {user.rol}")
+        print(f"{'='*60}\n")
         
         return redirect_url
 
