@@ -10,6 +10,9 @@ import RegisterPage from './pages/RegisterPage';
 import ProductDetail from "./components/products/ProductDetail";
 import OrderConfirmation from "./pages/OrderConfirmation";
 
+// ⭐ NUEVO: Importar Dashboard para OAuth
+import Dashboard from "./pages/Dashboard";
+
 // Dashboard de Cliente
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
@@ -19,7 +22,7 @@ import DashboardCart from "./pages/dashboard/DashboardCart";
 import DashboardOrders from "./pages/dashboard/DashboardOrders";
 import DashboardProfile from "./pages/dashboard/DashboardProfile";
 
-// ⭐ ADMIN REGULAR - Solo gestiona SU sucursal
+// Admin
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
@@ -27,7 +30,7 @@ import AdminOffers from "./pages/admin/AdminOffers";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminReports from "./pages/admin/AdminReports";
 
-// ⭐ ADMIN GENERAL - Gestiona TODAS las sucursales
+// Admin General
 import AdminGeneralLayout from "./components/admin/AdminGeneralLayout";
 import AdminGeneralDashboard from "./pages/admin_general/AdminGeneralDashboard";
 import AdminGeneralBranches from "./pages/admin_general/AdminGeneralBranches";
@@ -53,20 +56,27 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ==================== RUTAS PÚBLICAS ==================== */}
+        {/* RUTAS PÚBLICAS */}
         <Route path="/" element={<Landing />} />
         <Route path="/productos" element={<Catalog />} />
         <Route path="/productos/:id" element={<ProductDetail />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* ==================== DASHBOARD DE CLIENTE ==================== */}
+        {/* ⭐⭐⭐ CRÍTICO: Ruta /dashboard SIN Layout para OAuth */}
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+
+        {/* DASHBOARD DE CLIENTE CON SUBRUTAS */}
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <DashboardLayout />
           </ProtectedRoute>
         }>
-          <Route index element={<DashboardHome />} />
+          <Route path="inicio" element={<DashboardHome />} />
           <Route path="productos" element={<DashboardProducts />} />
           <Route path="ofertas" element={<DashboardOffers />} />
           <Route path="carrito" element={<DashboardCart />} />
@@ -75,8 +85,7 @@ function App() {
           <Route path="pedido-confirmado/:id" element={<OrderConfirmation />} />
         </Route>
 
-        {/* ==================== PANEL DE ADMINISTRADOR REGULAR ==================== */}
-        {/* 🔒 Solo para administradores de sucursal específica */}
+        {/* PANEL DE ADMINISTRADOR REGULAR */}
         <Route path="/admin" element={
           <AdminRoute>
             <AdminLayout />
@@ -89,8 +98,7 @@ function App() {
           <Route path="reportes" element={<AdminReports />} />
         </Route>
 
-        {/* ==================== PANEL DE ADMINISTRADOR GENERAL ==================== */}
-        {/* 👑 Solo para administrador general (acceso total a todas las sucursales) */}
+        {/* PANEL DE ADMINISTRADOR GENERAL */}
         <Route path="/admin-general" element={
           <AdminGeneralRoute>
             <AdminGeneralLayout />
