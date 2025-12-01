@@ -1,9 +1,6 @@
 // Frontend/src/pages/admin_general/AdminGeneralUsers.jsx
 // VERSIÓN PARA ADMIN GENERAL - CRUD COMPLETO
 
-// Este archivo es IDÉNTICO al AdminUsers.jsx que me compartiste
-// Ya tiene toda la funcionalidad de crear, editar y eliminar usuarios
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
