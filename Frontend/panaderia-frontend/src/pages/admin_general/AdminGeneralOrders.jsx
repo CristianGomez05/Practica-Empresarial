@@ -1,5 +1,5 @@
 // Frontend/src/pages/admin_general/AdminGeneralOrders.jsx
-// COMPLETO Y FUNCIONAL - Gestión de pedidos
+// COMPLETO Y FUNCIONAL - Gestión de pedidos (CORREGIDO)
 
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
@@ -29,6 +29,7 @@ export default function AdminGeneralOrders() {
       
       const data = response.data.results || response.data;
       console.log('🛒 Pedidos cargados:', data.length);
+      console.log('📊 Ejemplo pedido:', data[0]); // Debug
       setPedidos(data);
       
       if (refreshing) {
@@ -63,8 +64,13 @@ export default function AdminGeneralOrders() {
 
   const cambiarEstado = async (pedidoId, nuevoEstado) => {
     try {
-      await api.patch(`/pedidos/${pedidoId}/`, { estado: nuevoEstado });
-      enqueueSnackbar(`Estado actualizado a: ${nuevoEstado}`, { variant: 'success' });
+      // ⭐ Usar el endpoint correcto igual que AdminOrders
+      await api.patch(`/pedidos/${pedidoId}/cambiar_estado/`, { 
+        estado: nuevoEstado 
+      });
+      enqueueSnackbar(`Estado actualizado a: ${getEstadoConfig(nuevoEstado).text}`, { 
+        variant: 'success' 
+      });
       await cargarPedidos();
       if (selectedPedido?.id === pedidoId) {
         setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
@@ -85,23 +91,26 @@ export default function AdminGeneralOrders() {
     setSelectedPedido(null);
   };
 
+  // ⭐ Estados corregidos para coincidir con el backend
   const getEstadoConfig = (estado) => {
     const configs = {
-      pendiente: {
-        text: 'Pendiente',
-        bg: 'bg-yellow-100',
-        textColor: 'text-yellow-700',
-        borderColor: 'border-yellow-300',
-        icon: <FaClock />,
-        buttonColor: 'bg-yellow-500 hover:bg-yellow-600'
-      },
-      en_preparacion: {
-        text: 'En Preparación',
+      recibido: {
+        text: 'Recibido',
         bg: 'bg-blue-100',
         textColor: 'text-blue-700',
         borderColor: 'border-blue-300',
+        icon: <FaClock />,
+        buttonColor: 'bg-blue-500 hover:bg-blue-600',
+        label: '📋 Recibido'
+      },
+      en_preparacion: {
+        text: 'En Preparación',
+        bg: 'bg-yellow-100',
+        textColor: 'text-yellow-700',
+        borderColor: 'border-yellow-300',
         icon: <FaBox />,
-        buttonColor: 'bg-blue-500 hover:bg-blue-600'
+        buttonColor: 'bg-yellow-500 hover:bg-yellow-600',
+        label: '👨‍🍳 En Preparación'
       },
       listo: {
         text: 'Listo',
@@ -109,15 +118,17 @@ export default function AdminGeneralOrders() {
         textColor: 'text-purple-700',
         borderColor: 'border-purple-300',
         icon: <FaCheck />,
-        buttonColor: 'bg-purple-500 hover:bg-purple-600'
+        buttonColor: 'bg-purple-500 hover:bg-purple-600',
+        label: '✅ Listo'
       },
-      completado: {
-        text: 'Completado',
+      entregado: {
+        text: 'Entregado',
         bg: 'bg-green-100',
         textColor: 'text-green-700',
         borderColor: 'border-green-300',
         icon: <FaCheck />,
-        buttonColor: 'bg-green-500 hover:bg-green-600'
+        buttonColor: 'bg-green-500 hover:bg-green-600',
+        label: '🎉 Entregado'
       },
       cancelado: {
         text: 'Cancelado',
@@ -125,18 +136,20 @@ export default function AdminGeneralOrders() {
         textColor: 'text-red-700',
         borderColor: 'border-red-300',
         icon: <FaTimes />,
-        buttonColor: 'bg-red-500 hover:bg-red-600'
+        buttonColor: 'bg-red-500 hover:bg-red-600',
+        label: '❌ Cancelado'
       }
     };
-    return configs[estado] || configs.pendiente;
+    return configs[estado] || configs.recibido;
   };
 
+  // ⭐ Flujo de estados corregido
   const getEstadosSiguientes = (estadoActual) => {
     const flujo = {
-      pendiente: ['en_preparacion', 'cancelado'],
+      recibido: ['en_preparacion', 'cancelado'],
       en_preparacion: ['listo', 'cancelado'],
-      listo: ['completado', 'cancelado'],
-      completado: [],
+      listo: ['entregado', 'cancelado'],
+      entregado: [],
       cancelado: []
     };
     return flujo[estadoActual] || [];
@@ -144,11 +157,12 @@ export default function AdminGeneralOrders() {
 
   const stats = {
     total: pedidos.length,
-    pendientes: pedidos.filter(p => p.estado === 'pendiente').length,
+    recibidos: pedidos.filter(p => p.estado === 'recibido').length,
     en_preparacion: pedidos.filter(p => p.estado === 'en_preparacion').length,
-    completados: pedidos.filter(p => p.estado === 'completado').length,
+    listos: pedidos.filter(p => p.estado === 'listo').length,
+    entregados: pedidos.filter(p => p.estado === 'entregado').length,
     totalVentas: pedidos
-      .filter(p => p.estado === 'completado')
+      .filter(p => p.estado === 'entregado')
       .reduce((sum, p) => sum + parseFloat(p.total || 0), 0)
   };
 
@@ -186,22 +200,22 @@ export default function AdminGeneralOrders() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
           <p className="text-sm text-gray-600">Total</p>
           <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
         </div>
-        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500">
-          <p className="text-sm text-gray-600">Pendientes</p>
-          <p className="text-2xl font-bold text-gray-800">{stats.pendientes}</p>
+        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-400">
+          <p className="text-sm text-gray-600">Recibidos</p>
+          <p className="text-2xl font-bold text-gray-800">{stats.recibidos}</p>
         </div>
-        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-purple-500">
+        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-yellow-500">
           <p className="text-sm text-gray-600">En Preparación</p>
           <p className="text-2xl font-bold text-gray-800">{stats.en_preparacion}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
-          <p className="text-sm text-gray-600">Completados</p>
-          <p className="text-2xl font-bold text-gray-800">{stats.completados}</p>
+          <p className="text-sm text-gray-600">Entregados</p>
+          <p className="text-2xl font-bold text-gray-800">{stats.entregados}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow border-l-4 border-amber-500">
           <p className="text-sm text-gray-600">Total Ventas</p>
@@ -242,11 +256,22 @@ export default function AdminGeneralOrders() {
                         <div className="grid md:grid-cols-2 gap-3 text-sm text-[#8D6E63]">
                           <div className="flex items-center gap-2">
                             <FaUser className="text-purple-600" />
-                            <span className="font-semibold">{pedido.usuario_nombre || 'Cliente'}</span>
+                            <span className="font-semibold">
+                              {pedido.usuario?.username || 'Cliente'}
+                            </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <FaCalendar className="text-blue-600" />
-                            <span>{new Date(pedido.fecha_pedido).toLocaleString('es-ES')}</span>
+                            {/* ⭐ CORREGIDO: usar pedido.fecha en lugar de pedido.fecha_pedido */}
+                            <span>
+                              {new Date(pedido.fecha).toLocaleString('es-ES', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
                           </div>
                           {pedido.telefono && (
                             <div className="flex items-center gap-2">
@@ -260,10 +285,12 @@ export default function AdminGeneralOrders() {
                               <span className="truncate">{pedido.direccion}</span>
                             </div>
                           )}
-                          {pedido.sucursal_nombre && (
+                          {pedido.sucursal?.nombre && (
                             <div className="flex items-center gap-2">
                               <FaBox className="text-amber-600" />
-                              <span className="font-semibold text-purple-600">{pedido.sucursal_nombre}</span>
+                              <span className="font-semibold text-purple-600">
+                                {pedido.sucursal.nombre}
+                              </span>
                             </div>
                           )}
                           <div className="flex items-center gap-2">
@@ -276,14 +303,15 @@ export default function AdminGeneralOrders() {
 
                         {/* Items Preview */}
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {pedido.items?.slice(0, 3).map((item, idx) => (
+                          {/* ⭐ CORREGIDO: usar pedido.detalles en lugar de pedido.items */}
+                          {pedido.detalles?.slice(0, 3).map((item, idx) => (
                             <span key={idx} className="bg-gray-100 px-3 py-1 rounded-full text-xs text-gray-700">
-                              {item.cantidad}x {item.producto_nombre || item.oferta_nombre || 'Producto'}
+                              {item.cantidad}x {item.producto?.nombre || 'Producto'}
                             </span>
                           ))}
-                          {pedido.items?.length > 3 && (
+                          {pedido.detalles?.length > 3 && (
                             <span className="bg-purple-100 px-3 py-1 rounded-full text-xs text-purple-700 font-semibold">
-                              +{pedido.items.length - 3} más
+                              +{pedido.detalles.length - 3} más
                             </span>
                           )}
                         </div>
@@ -375,7 +403,7 @@ export default function AdminGeneralOrders() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <FaUser className="text-purple-600" />
-                        <span>{selectedPedido.usuario_nombre || 'Cliente'}</span>
+                        <span>{selectedPedido.usuario?.username || 'Cliente'}</span>
                       </div>
                       {selectedPedido.telefono && (
                         <div className="flex items-center gap-2">
@@ -391,12 +419,23 @@ export default function AdminGeneralOrders() {
                       )}
                       <div className="flex items-center gap-2">
                         <FaCalendar className="text-blue-600" />
-                        <span>{new Date(selectedPedido.fecha_pedido).toLocaleString('es-ES')}</span>
+                        {/* ⭐ CORREGIDO: usar selectedPedido.fecha */}
+                        <span>
+                          {new Date(selectedPedido.fecha).toLocaleString('es-ES', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
                       </div>
-                      {selectedPedido.sucursal_nombre && (
+                      {selectedPedido.sucursal?.nombre && (
                         <div className="flex items-center gap-2">
                           <FaBox className="text-amber-600" />
-                          <span className="font-semibold text-purple-600">{selectedPedido.sucursal_nombre}</span>
+                          <span className="font-semibold text-purple-600">
+                            {selectedPedido.sucursal.nombre}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -409,18 +448,19 @@ export default function AdminGeneralOrders() {
                       Items del Pedido
                     </p>
                     <div className="space-y-3">
-                      {selectedPedido.items?.map((item, idx) => (
+                      {/* ⭐ CORREGIDO: usar selectedPedido.detalles */}
+                      {selectedPedido.detalles?.map((item, idx) => (
                         <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-lg">
                           <div>
                             <p className="font-semibold text-[#5D4037]">
-                              {item.producto_nombre || item.oferta_nombre || 'Producto'}
+                              {item.producto?.nombre || 'Producto'}
                             </p>
                             <p className="text-sm text-gray-600">
-                              Cantidad: {item.cantidad} • Precio: ₡{parseFloat(item.precio).toLocaleString('es-CR')}
+                              Cantidad: {item.cantidad} • Precio: ₡{parseFloat(item.precio_unitario || 0).toLocaleString('es-CR')}
                             </p>
                           </div>
                           <p className="font-bold text-[#5D4037]">
-                            ₡{(parseFloat(item.precio) * item.cantidad).toLocaleString('es-CR')}
+                            ₡{(parseFloat(item.precio_unitario || 0) * item.cantidad).toLocaleString('es-CR')}
                           </p>
                         </div>
                       ))}
