@@ -154,14 +154,6 @@ export default function DashboardProfile() {
 
             <div className="pt-6 border-t border-gray-200">
               <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-[#8D6E63] uppercase">
-                    Rol
-                  </span>
-                  <span className="px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">
-                    {user?.rol === 'cliente' ? 'Cliente' : 'Administrador'}
-                  </span>
-                </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-[#8D6E63] uppercase">
                     Miembro desde

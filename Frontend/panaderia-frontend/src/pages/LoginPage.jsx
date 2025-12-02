@@ -1,19 +1,36 @@
-// src/pages/LoginPage.jsx - CORREGIDO
-import React, { useState } from "react";
+// Frontend/src/pages/LoginPage.jsx
+// ⭐ COMPLETO: Incluye manejo de OAuth cancelado y domicilio
+
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../components/auth/AuthContext";
+import { useSnackbar } from "notistack";
 import axios from "axios";
 import GoogleLoginButton from "../components/auth/GoogleLoginButton";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setUser, setAccessToken, setRefreshToken } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
 
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
+  // ⭐ NUEVO: Detectar si viene de cancelación de OAuth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('cancelled') === 'true') {
+      enqueueSnackbar('Has cancelado el inicio de sesión. Puedes intentar nuevamente.', { 
+        variant: 'info',
+        autoHideDuration: 3000 
+      });
+      // Limpiar URL
+      window.history.replaceState({}, '', '/login');
+    }
+  }, [enqueueSnackbar]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -41,7 +58,7 @@ export default function LoginPage() {
       setAccessToken(access);
       setRefreshToken(refresh);
 
-      // ⭐⭐⭐ CRÍTICO: Guardar usuario con TODA la información
+      // ⭐ CRÍTICO: Guardar usuario con TODA la información
       const userInfo = {
         id: userData.id,
         username: userData.username,
@@ -49,23 +66,33 @@ export default function LoginPage() {
         first_name: userData.first_name,
         last_name: userData.last_name,
         rol: userData.rol,
-        sucursal_id: userData.sucursal_id,      // ⭐ CRÍTICO
-        sucursal_nombre: userData.sucursal_nombre, // ⭐ CRÍTICO
-        sucursal: userData.sucursal_id // ⭐ Para compatibilidad
+        domicilio: userData.domicilio || null,              // ⭐ NUEVO
+        tiene_domicilio: userData.tiene_domicilio || false, // ⭐ NUEVO
+        sucursal_id: userData.sucursal_id,
+        sucursal_nombre: userData.sucursal_nombre,
+        sucursal: userData.sucursal_id // Para compatibilidad
       };
       
       console.log("✅ userInfo completo:", userInfo);
       console.log("👤 Rol:", userInfo.rol);
       console.log("🏪 Sucursal ID:", userInfo.sucursal_id);
       console.log("🏪 Sucursal Nombre:", userInfo.sucursal_nombre);
+      console.log("🏠 Domicilio:", userInfo.domicilio || 'No configurado'); // ⭐ NUEVO
+      console.log("✅ Tiene domicilio:", userInfo.tiene_domicilio);           // ⭐ NUEVO
       
-      // ⭐ Guardar en localStorage CON DATOS COMPLETOS
+      // Guardar en localStorage CON DATOS COMPLETOS
       localStorage.setItem('user', JSON.stringify(userInfo));
       
       setUser(userInfo);
       console.log("✅ Usuario guardado en contexto");
 
-      // ⭐⭐⭐ REDIRIGIR SEGÚN ROL - RUTAS CORREGIDAS
+      // Mostrar notificación de éxito
+      enqueueSnackbar(`¡Bienvenido ${userInfo.first_name || userInfo.username}!`, { 
+        variant: 'success',
+        autoHideDuration: 2000 
+      });
+
+      // ⭐ Redirigir según rol
       if (userInfo.rol === 'administrador_general') {
         console.log("👑👑 Admin General detectado → /admin-general");
         navigate("/admin-general");
@@ -82,12 +109,16 @@ export default function LoginPage() {
       
       if (err.response?.status === 401) {
         setError("Usuario o contraseña incorrectos");
+        enqueueSnackbar("Credenciales incorrectas", { variant: 'error' });
       } else if (err.response?.status === 400) {
         setError("Por favor ingresa usuario y contraseña");
+        enqueueSnackbar("Completa todos los campos", { variant: 'warning' });
       } else if (err.response?.status === 404) {
         setError("Endpoint no encontrado. Verifica la configuración del servidor.");
+        enqueueSnackbar("Error de configuración", { variant: 'error' });
       } else {
         setError("Error de conexión. Verifica que el servidor esté corriendo.");
+        enqueueSnackbar("Error de conexión con el servidor", { variant: 'error' });
       }
     } finally {
       setLoading(false);
@@ -99,14 +130,17 @@ export default function LoginPage() {
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-[#5D4037] mb-2">¡Bienvenido! 🥐</h1>
+          <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <span className="text-4xl">🥐</span>
+          </div>
+          <h1 className="text-4xl font-bold text-[#5D4037] mb-2">¡Bienvenido!</h1>
           <p className="text-[#6D4C41]">Inicia sesión en Panadería Santa Clara</p>
         </div>
 
         {/* Error */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
-            <p className="text-red-700 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg animate-shake">
+            <p className="text-red-700 text-sm font-medium">{error}</p>
           </div>
         )}
 
@@ -120,7 +154,7 @@ export default function LoginPage() {
               type="text"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
-              className="w-full px-4 py-3 border border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
+              className="w-full px-4 py-3 border-2 border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
               placeholder="usuario@ejemplo.com"
               required
               disabled={loading}
@@ -135,7 +169,7 @@ export default function LoginPage() {
               type="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full px-4 py-3 border border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
+              className="w-full px-4 py-3 border-2 border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
               placeholder="••••••••"
               required
               disabled={loading}
@@ -161,7 +195,7 @@ export default function LoginPage() {
         {/* Divider */}
         <div className="my-6 flex items-center gap-4">
           <div className="flex-1 h-px bg-[#D2B48C]"></div>
-          <span className="text-sm text-[#6D4C41]">o</span>
+          <span className="text-sm text-[#6D4C41] font-medium">o</span>
           <div className="flex-1 h-px bg-[#D2B48C]"></div>
         </div>
 
@@ -173,7 +207,7 @@ export default function LoginPage() {
           ¿No tienes cuenta?{" "}
           <Link
             to="/register"
-            className="text-[#D2691E] font-semibold hover:text-[#8B4513] transition-colors"
+            className="text-[#D2691E] font-semibold hover:text-[#8B4513] transition-colors underline-offset-2 hover:underline"
           >
             Regístrate aquí
           </Link>
@@ -183,9 +217,10 @@ export default function LoginPage() {
         <div className="text-center mt-4">
           <Link
             to="/"
-            className="text-sm text-[#6D4C41] hover:text-[#5D4037] transition-colors"
+            className="text-sm text-[#6D4C41] hover:text-[#5D4037] transition-colors inline-flex items-center gap-1"
           >
-            ← Volver al inicio
+            <span>←</span>
+            <span>Volver al inicio</span>
           </Link>
         </div>
       </div>

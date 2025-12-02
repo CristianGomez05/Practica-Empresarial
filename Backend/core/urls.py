@@ -1,9 +1,11 @@
 # Backend/core/urls.py
-# ⭐ COMPLETO: Incluye todos los endpoints incluyendo /usuarios/me/
+# ⭐ COMPLETO: Incluye todos los endpoints + OAuth cancelled fix
 
 from django.urls import path, include
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenRefreshView, TokenObtainPairView
+from django.shortcuts import redirect
+from django.views.generic import View
 from . import views
 from .views_auth import LoginView
 from .serializers import CustomTokenObtainPairSerializer
@@ -13,6 +15,25 @@ from .views_reportes import estadisticas, exportar_reporte
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Vista personalizada para login con serializer customizado"""
     serializer_class = CustomTokenObtainPairSerializer
+
+
+# ============================================================================
+# VISTA PARA OAUTH CANCELADO
+# ============================================================================
+
+class LoginCancelledView(View):
+    """
+    Redirecciona al login del frontend cuando el usuario cancela el OAuth
+    """
+    def get(self, request):
+        print("⚠️ Usuario canceló el login de Google")
+        
+        # URL del frontend en producción
+        from django.conf import settings
+        frontend_url = settings.FRONTEND_URL
+        
+        # Redireccionar con parámetro
+        return redirect(f'{frontend_url}/login?cancelled=true')
 
 
 # ============================================================================
@@ -41,6 +62,14 @@ urlpatterns = [
     path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('registro/', views.registro_usuario, name='registro'),
+
+    # ⭐ PERSONALIZACIÓN OAuth: DEBE ir ANTES de 'accounts/'
+    path('accounts/3rdparty/login/cancelled/', 
+         LoginCancelledView.as_view(), 
+         name='socialaccount_login_cancelled'),
+    
+    # Allauth (debe ir DESPUÉS de las personalizaciones)
+    path('accounts/', include('allauth.urls')),
 
     # Reportes endpoints
     path('reportes/estadisticas/', estadisticas, name='reportes_estadisticas'),
@@ -102,10 +131,14 @@ DETALLES PEDIDO:
   GET     /api/detalles-pedido/{id}/  - Ver detalle específico
 
 AUTH:
-  POST    /api/auth/login/            - Login con username o email
-  POST    /api/token/                 - Obtener token JWT
+  POST    /api/auth/login/            - Login con username o email ⭐ RETORNA DOMICILIO
+  POST    /api/token/                 - Obtener token JWT ⭐ RETORNA DOMICILIO
   POST    /api/token/refresh/         - Refrescar token JWT
   POST    /api/registro/              - Registrar nuevo usuario
+
+OAUTH:
+  GET     /api/accounts/google/login/          - Iniciar login con Google
+  GET     /api/accounts/3rdparty/login/cancelled/ - Redirección cuando se cancela ⭐ NUEVO
 
 REPORTES:
   GET     /api/reportes/estadisticas/ - Estadísticas generales

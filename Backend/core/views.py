@@ -547,3 +547,23 @@ class DetallePedidoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DetallePedido.objects.select_related('producto', 'pedido').all()
     serializer_class = DetallePedidoSerializer
     permission_classes = [IsAuthenticated]
+
+# ============================================================================
+# VISTA PARA OAUTH CANCELADO
+# ============================================================================
+
+from django.shortcuts import redirect
+from django.views.generic import View
+
+class LoginCancelledView(View):
+    """
+    Redirecciona al login del frontend cuando el usuario cancela el OAuth
+    """
+    def get(self, request):
+        print("⚠️ Usuario canceló el login de Google")
+        
+        # URL del frontend en producción
+        frontend_url = 'https://practica-empresarial-production.up.railway.app'
+        
+        # Redireccionar con parámetro
+        return redirect(f'{frontend_url}/login?cancelled=true')
