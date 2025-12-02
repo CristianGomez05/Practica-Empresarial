@@ -1,4 +1,5 @@
 // Frontend/src/components/admin/AdminGeneralLayout.jsx
+// ✨ ESTILO RESPONSIVO IGUAL AL DASHBOARD DE CLIENTE
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -9,7 +10,7 @@ import {
 import BranchSelector from './BranchSelector';
 
 export default function AdminGeneralLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const navigate = useNavigate();
@@ -47,121 +48,193 @@ export default function AdminGeneralLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={{ width: sidebarOpen ? '280px' : '80px' }}
-        className="fixed left-0 top-0 h-screen bg-gradient-to-b from-purple-700 to-purple-900 text-white shadow-2xl z-50 flex flex-col"
-      >
-        {/* ⭐ Container con scroll */}
-        <div className="flex flex-col h-full overflow-hidden">
-          {/* Header - FIJO */}
-          <div className="flex-shrink-0 p-6">
-            <div className="flex items-center justify-between mb-8">
-              {sidebarOpen && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-3"
-                >
-                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                    <span className="text-xl">🥐</span>
-                  </div>
-                  <div>
-                    <h1 className="text-lg font-bold">Admin General</h1>
-                    <p className="text-xs text-purple-200">Santa Clara</p>
-                  </div>
-                </motion.div>
-              )}
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors ml-auto"
-              >
-                {sidebarOpen ? <FaTimes /> : <FaBars />}
-              </button>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-purple-50 flex">
+      {/* Sidebar Desktop */}
+      <aside className="hidden lg:flex flex-col w-64 bg-white/95 backdrop-blur-sm border-r border-purple-200/50 shadow-xl">
+        {/* Logo */}
+        <div className="p-6 border-b border-purple-100 bg-gradient-to-r from-purple-50 to-pink-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-lg">👑</span>
             </div>
-
-            {/* User Info - FIJO */}
-            {sidebarOpen && user && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white/10 rounded-xl p-4 backdrop-blur-sm"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-xl font-bold shadow-lg">
-                    {user.first_name?.charAt(0) || user.username?.charAt(0) || 'A'}
-                  </div>
-                  <div>
-                    <p className="font-semibold">{user.first_name || user.username}</p>
-                    <p className="text-xs text-purple-200">Admin General</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-purple-200 mt-2 pt-2 border-t border-white/20">
-                  <span className="px-2 py-1 bg-purple-500 rounded-full">🌟 Acceso Total</span>
-                </div>
-              </motion.div>
-            )}
-          </div>
-
-          {/* ⭐ Navigation - CON SCROLL */}
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
-            <nav className="space-y-2">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path, item.exact);
-                
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      active
-                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg'
-                        : 'hover:bg-white/10'
-                    }`}
-                  >
-                    <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
-                    {sidebarOpen && (
-                      <div className="flex items-center justify-between flex-1">
-                        <span className="font-medium">{item.label}</span>
-                        {item.badge && (
-                          <span className="text-xs bg-purple-500 px-2 py-0.5 rounded-full">
-                            {item.badge}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-
-          {/* ⭐ Logout - FIJO AL FONDO */}
-          <div className="flex-shrink-0 p-6 border-t border-white/20">
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/20 transition-all"
-            >
-              <FaSignOutAlt className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
-              {sidebarOpen && <span className="font-medium">Cerrar Sesión</span>}
-            </button>
+            <div>
+              <h2 className="font-bold text-purple-900 text-lg">Admin General</h2>
+              <p className="text-xs text-purple-700">Santa Clara</p>
+            </div>
           </div>
         </div>
-      </motion.aside>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path, item.exact);
+            
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                  active
+                    ? 'bg-gradient-to-r from-purple-100 to-purple-50 text-purple-800 font-semibold shadow-sm'
+                    : 'text-[#6D4C41] hover:bg-purple-50 hover:text-purple-700'
+                }`}
+              >
+                <Icon className="text-lg" />
+                <span className="flex-1">{item.label}</span>
+                {item.badge && (
+                  <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full">
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User Info & Logout */}
+        <div className="p-4 border-t border-[#E8D5C4]">
+          <div className="flex items-center gap-3 mb-3 px-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-600 rounded-full flex items-center justify-center text-white font-bold">
+              {user?.first_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'A'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#5D4037] truncate">
+                {user?.first_name || user?.username}
+              </p>
+              <p className="text-xs text-[#8D6E63] truncate">Admin General</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
+          >
+            <FaSignOutAlt />
+            <span className="font-medium">Cerrar sesión</span>
+          </button>
+        </div>
+      </aside>
 
       {/* Main Content */}
-      <div
-        style={{
-          marginLeft: sidebarOpen ? '280px' : '80px',
-          transition: 'margin-left 0.3s ease',
-        }}
-        className="min-h-screen"
-      >
-        {/* Top Bar */}
-        <div className="bg-white shadow-sm border-b border-gray-200 px-8 py-4">
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Header */}
+        <header className="lg:hidden bg-white border-b border-[#E8D5C4] px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-[#5D4037] text-xl p-2 hover:bg-purple-50 rounded-lg transition-colors"
+            >
+              {sidebarOpen ? <FaTimes /> : <FaBars />}
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">👑</span>
+              <h1 className="font-bold text-[#5D4037]">Admin General</h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Badge de Admin General */}
+            <div className="hidden sm:flex items-center bg-purple-50 px-3 py-1.5 rounded-lg">
+              <span className="text-xs font-semibold text-purple-700">
+                Acceso Total
+              </span>
+            </div>
+
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+            >
+              <FaSignOutAlt />
+              <span className="hidden sm:inline">Salir</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Mobile Sidebar */}
+        {sidebarOpen && (
+          <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setSidebarOpen(false)}>
+            <aside
+              className="w-64 h-full bg-white shadow-xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Logo */}
+              <div className="p-6 border-b border-[#E8D5C4] bg-gradient-to-r from-purple-50 to-pink-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-pink-600 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">👑</span>
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-[#5D4037] text-lg">Admin General</h2>
+                      <p className="text-xs text-[#8D6E63]">Santa Clara</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="text-[#8D6E63] hover:text-[#5D4037] p-1"
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+                {menuItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path, item.exact);
+
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                        active
+                          ? 'bg-gradient-to-r from-purple-100 to-purple-50 text-purple-800 font-semibold'
+                          : 'text-[#6D4C41] hover:bg-purple-50'
+                      }`}
+                    >
+                      <Icon className="text-lg" />
+                      <span className="flex-1">{item.label}</span>
+                      {item.badge && (
+                        <span className="text-xs bg-purple-500 text-white px-2 py-0.5 rounded-full">
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* User Info & Logout */}
+              <div className="p-4 border-t border-[#E8D5C4]">
+                <div className="flex items-center gap-3 mb-3 px-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-600 rounded-full flex items-center justify-center text-white font-bold">
+                    {user?.first_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'A'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#5D4037] truncate">
+                      {user?.first_name || user?.username}
+                    </p>
+                    <p className="text-xs text-[#8D6E63] truncate">Admin General</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                >
+                  <FaSignOutAlt />
+                  <span>Cerrar sesión</span>
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* Top Bar con BranchSelector */}
+        <div className="hidden lg:block bg-white shadow-sm border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-purple-800">
@@ -185,10 +258,18 @@ export default function AdminGeneralLayout() {
           </div>
         </div>
 
-        {/* Content Area */}
-        <div className="p-8">
-          <Outlet context={{ selectedBranch }} />
+        {/* BranchSelector para móvil */}
+        <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3">
+          <BranchSelector 
+            onBranchChange={setSelectedBranch}
+            currentBranch={selectedBranch}
+          />
         </div>
+
+        {/* Page Content */}
+        <main className="flex-1 p-4 lg:p-8 overflow-auto">
+          <Outlet context={{ selectedBranch }} />
+        </main>
       </div>
     </div>
   );

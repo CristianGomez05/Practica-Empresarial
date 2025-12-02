@@ -1,5 +1,6 @@
 // Frontend/src/components/admin/AdminLayout.jsx
 // 🔒 EXCLUSIVO PARA ADMINISTRADOR REGULAR DE SUCURSAL
+// ✨ ESTILO RESPONSIVO IGUAL AL DASHBOARD DE CLIENTE
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -9,7 +10,7 @@ import {
 } from 'react-icons/fa';
 
 export default function AdminLayout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -18,7 +19,6 @@ export default function AdminLayout() {
     const userData = JSON.parse(localStorage.getItem('user'));
     setUser(userData);
     
-    // Log para debugging
     if (userData?.rol === 'administrador') {
       console.log('🔒 Admin Regular - Sucursal asignada:', userData.sucursal_nombre);
     }
@@ -33,7 +33,6 @@ export default function AdminLayout() {
     }
   };
 
-  // 📌 Menú EXCLUSIVO para Admin Regular (SIN Usuarios, SIN Sucursales)
   const menuItems = [
     { path: '/admin', icon: FaHome, label: 'Dashboard', exact: true },
     { path: '/admin/productos', icon: FaBox, label: 'Productos' },
@@ -50,144 +49,195 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={{ width: sidebarOpen ? 280 : 80 }}
-        className="fixed left-0 top-0 h-screen bg-gradient-to-b from-amber-700 to-orange-800 text-white shadow-2xl z-50"
-      >
-        <div className="flex flex-col h-full p-4">
-          {/* Header con Toggle */}
-          <div className="flex items-center justify-between mb-8">
-            {sidebarOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-3"
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 flex">
+      {/* Sidebar Desktop */}
+      <aside className="hidden lg:flex flex-col w-64 bg-white/95 backdrop-blur-sm border-r border-amber-200/50 shadow-xl">
+        {/* Logo */}
+        <div className="p-6 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-orange-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-lg">🥐</span>
+            </div>
+            <div>
+              <h2 className="font-bold text-amber-900 text-lg">Admin Panel</h2>
+              <p className="text-xs text-amber-700">Sucursal</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-1">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path, item.exact);
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                  active
+                    ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 font-semibold shadow-sm'
+                    : 'text-[#6D4C41] hover:bg-[#FFF8F0] hover:text-amber-700'
+                }`}
               >
-                <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                  <FaStore className="text-2xl text-amber-200" />
-                </div>
-                <div>
-                  <h1 className="font-bold text-lg">Admin Panel</h1>
-                  <p className="text-xs text-amber-200">Sucursal</p>
-                </div>
-              </motion.div>
-            )}
+                <Icon className="text-lg" />
+                <span className="flex-1">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* User Info & Logout */}
+        <div className="p-4 border-t border-[#E8D5C4]">
+          <div className="flex items-center gap-3 mb-3 px-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold">
+              {user?.first_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'A'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#5D4037] truncate">
+                {user?.first_name || user?.username}
+              </p>
+              <p className="text-xs text-[#8D6E63] truncate">
+                {user?.sucursal_nombre || 'Administrador'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
+          >
+            <FaSignOutAlt />
+            <span className="font-medium">Cerrar sesión</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Header */}
+        <header className="lg:hidden bg-white border-b border-[#E8D5C4] px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-all"
+              className="text-[#5D4037] text-xl p-2 hover:bg-amber-50 rounded-lg transition-colors"
             >
               {sidebarOpen ? <FaTimes /> : <FaBars />}
             </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🥐</span>
+              <h1 className="font-bold text-[#5D4037]">Admin Panel</h1>
+            </div>
           </div>
 
-          {/* Info del Usuario y Sucursal */}
-          {sidebarOpen && user && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white/10 backdrop-blur-sm rounded-xl p-4 mb-6 border border-white/20"
+          <div className="flex items-center gap-2">
+            {/* Info de Sucursal en móvil */}
+            {user?.sucursal_nombre && (
+              <div className="hidden sm:flex items-center gap-2 bg-purple-50 px-3 py-1.5 rounded-lg">
+                <FaStore className="text-purple-600 text-sm" />
+                <span className="text-xs font-semibold text-purple-700">
+                  {user.sucursal_nombre}
+                </span>
+              </div>
+            )}
+
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center font-bold text-lg shadow-lg">
-                  {user.first_name?.[0] || user.username?.[0] || 'A'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">
-                    {user.first_name || user.username}
-                  </p>
-                  <p className="text-xs text-amber-200 truncate">
-                    Administrador
-                  </p>
-                </div>
-              </div>
-              
-              {/* Mostrar Sucursal Asignada */}
-              {user.sucursal_nombre && (
-                <div className="flex items-center gap-2 text-xs text-amber-200 mt-3 pt-3 border-t border-white/20">
-                  <FaStore />
-                  <span className="truncate font-medium">{user.sucursal_nombre}</span>
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {/* Navigation */}
-          <nav className="space-y-2 flex-1">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.path, item.exact);
-
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    active
-                      ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg'
-                      : 'hover:bg-white/10'
-                  }`}
-                >
-                  <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
-                  {sidebarOpen && <span className="font-medium">{item.label}</span>}
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/20 transition-all mt-4"
-          >
-            <FaSignOutAlt className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
-            {sidebarOpen && <span className="font-medium">Cerrar Sesión</span>}
-          </button>
-        </div>
-      </motion.aside>
-
-      {/* Main Content */}
-      <div
-        style={{
-          marginLeft: sidebarOpen ? '280px' : '80px',
-          transition: 'margin-left 0.3s ease',
-        }}
-        className="min-h-screen"
-      >
-        {/* Top Bar */}
-        <div className="bg-white shadow-sm border-b border-gray-200 px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-amber-800">
-                {menuItems.find(item => isActive(item.path, item.exact))?.label || 'Panel Administrativo'}
-              </h2>
-              <p className="text-sm text-gray-600">
-                {user?.sucursal_nombre 
-                  ? `Gestionando: ${user.sucursal_nombre}`
-                  : 'Gestiona tu sucursal de forma eficiente'
-                }
-              </p>
-            </div>
-
-            {/* Badge de Rol */}
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-2 bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
-                <span className="font-semibold">👤 Administrador</span>
-              </div>
-            </div>
+              <FaSignOutAlt />
+              <span className="hidden sm:inline">Salir</span>
+            </button>
           </div>
-        </div>
+        </header>
 
-        {/* Content Area */}
-        <div className="p-8">
-          {/* ⭐ Pasar la sucursal del admin automáticamente */}
+        {/* Mobile Sidebar */}
+        {sidebarOpen && (
+          <div className="lg:hidden fixed inset-0 z-50 bg-black bg-opacity-50" onClick={() => setSidebarOpen(false)}>
+            <aside
+              className="w-64 h-full bg-white shadow-xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Logo */}
+              <div className="p-6 border-b border-[#E8D5C4] bg-gradient-to-r from-amber-50 to-orange-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-amber-600 to-amber-800 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">🥐</span>
+                    </div>
+                    <div>
+                      <h2 className="font-bold text-[#5D4037] text-lg">Admin Panel</h2>
+                      <p className="text-xs text-[#8D6E63]">Sucursal</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="text-[#8D6E63] hover:text-[#5D4037] p-1"
+                  >
+                    <FaTimes />
+                  </button>
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+                {menuItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path, item.exact);
+
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+                        active
+                          ? 'bg-gradient-to-r from-amber-100 to-amber-50 text-amber-800 font-semibold'
+                          : 'text-[#6D4C41] hover:bg-[#FFF8F0]'
+                      }`}
+                    >
+                      <Icon className="text-lg" />
+                      <span className="flex-1">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* User Info & Logout */}
+              <div className="p-4 border-t border-[#E8D5C4]">
+                <div className="flex items-center gap-3 mb-3 px-2">
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-white font-bold">
+                    {user?.first_name?.[0]?.toUpperCase() || user?.username?.[0]?.toUpperCase() || 'A'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#5D4037] truncate">
+                      {user?.first_name || user?.username}
+                    </p>
+                    <p className="text-xs text-[#8D6E63] truncate">
+                      {user?.sucursal_nombre || 'Administrador'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
+                >
+                  <FaSignOutAlt />
+                  <span>Cerrar sesión</span>
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* Page Content */}
+        <main className="flex-1 p-4 lg:p-8 overflow-auto">
           <Outlet context={{ 
             selectedBranch: user?.sucursal_id || null,
             branchName: user?.sucursal_nombre || null
           }} />
-        </div>
+        </main>
       </div>
     </div>
   );
