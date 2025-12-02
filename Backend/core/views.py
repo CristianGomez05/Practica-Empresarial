@@ -1,8 +1,11 @@
 # Backend/core/views.py
+# ⭐ ACTUALIZADO: Incluye validación de domicilio y endpoint /usuarios/me/
+
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from django.db.models import Q, Prefetch
 from django.db import transaction
 from django.core.cache import cache
@@ -66,7 +69,7 @@ def registro_usuario(request):
 
 
 # ============================================================================
-# USUARIO VIEWSET - COMPLETO Y CORREGIDO
+# USUARIO VIEWSET (⭐ ACTUALIZADO CON ENDPOINT /me/)
 # ============================================================================
 
 class UsuarioViewSet(viewsets.ModelViewSet):
@@ -157,6 +160,37 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_403_FORBIDDEN)
         
         return super().destroy(request, *args, **kwargs)
+    
+    # ⭐ NUEVO: Endpoint para gestionar el perfil propio
+    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
+    def me(self, request):
+        """
+        Endpoint para que el usuario gestione su propio perfil
+        GET /api/usuarios/me/ - Ver perfil
+        PATCH /api/usuarios/me/ - Actualizar perfil (first_name, last_name, domicilio)
+        """
+        user = request.user
+        
+        if request.method == 'GET':
+            serializer = self.get_serializer(user)
+            return Response(serializer.data)
+        
+        elif request.method == 'PATCH':
+            # Solo permitir actualizar estos campos
+            allowed_fields = ['first_name', 'last_name', 'domicilio']
+            data = {k: v for k, v in request.data.items() if k in allowed_fields}
+            
+            print(f"\n{'='*60}")
+            print(f"🔄 Actualizando perfil de: {user.username}")
+            if 'domicilio' in data:
+                print(f"📍 Nuevo domicilio: {data['domicilio'][:50]}...")
+            print(f"{'='*60}\n")
+            
+            serializer = self.get_serializer(user, data=data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            
+            return Response(serializer.data)
 
 
 # ============================================================================
@@ -219,7 +253,7 @@ class SucursalViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# PRODUCTO VIEWSET - CORREGIDO
+# PRODUCTO VIEWSET
 # ============================================================================
 
 class ProductoViewSet(viewsets.ModelViewSet):
@@ -259,7 +293,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
         print(f"📦 CREANDO PRODUCTO - Usuario: {user.username} (Rol: {user.rol})")
         print(f"{'='*60}")
         
-        # ⭐ FIX: Si es admin regular, forzar su sucursal
+        # Si es admin regular, forzar su sucursal
         if user.rol == 'administrador' and user.sucursal:
             producto = serializer.save(sucursal=user.sucursal)
             print(f"✅ Producto creado en sucursal: {user.sucursal.nombre}")
@@ -355,7 +389,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# PEDIDO VIEWSET
+# PEDIDO VIEWSET (⭐ ACTUALIZADO CON VALIDACIÓN DE DOMICILIO)
 # ============================================================================
 
 class PedidoViewSet(viewsets.ModelViewSet):
@@ -380,6 +414,14 @@ class PedidoViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_create(self, serializer):
+        # ⭐ NUEVO: Validación de domicilio ANTES de crear el pedido
+        user = self.request.user
+        if not user.tiene_domicilio:
+            raise ValidationError({
+                'domicilio': 'Debes configurar tu domicilio antes de realizar un pedido',
+                'codigo': 'DOMICILIO_REQUERIDO'
+            })
+        
         items_data = self.request.data.get('items', [])
         
         if not items_data:
@@ -387,6 +429,7 @@ class PedidoViewSet(viewsets.ModelViewSet):
         
         print(f"\n{'='*60}")
         print(f"🛒 CREANDO PEDIDO - Usuario: {self.request.user.username}")
+        print(f"📍 Domicilio: {user.domicilio}")  # ⭐ NUEVO log
         print(f"{'='*60}\n")
         
         productos_ids = [item['producto'] for item in items_data]
@@ -412,8 +455,13 @@ class PedidoViewSet(viewsets.ModelViewSet):
             if not producto.disponible:
                 raise Exception(f'Producto {producto.nombre} no disponible')
         
-        pedido = serializer.save(usuario=self.request.user)
-        print(f"✅ Pedido #{pedido.id} creado\n")
+        # ⭐ NUEVO: Guardar con direccion_entrega
+        pedido = serializer.save(
+            usuario=self.request.user,
+            direccion_entrega=user.domicilio
+        )
+        print(f"✅ Pedido #{pedido.id} creado")
+        print(f"📍 Dirección de entrega: {pedido.direccion_entrega}\n")
         
         from decimal import Decimal
         total = Decimal('0.00')

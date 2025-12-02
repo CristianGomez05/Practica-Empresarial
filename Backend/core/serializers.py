@@ -1,4 +1,6 @@
 # Backend/core/serializers.py
+# ⭐ ACTUALIZADO: Incluye domicilio en Usuario y validación en Pedido
+
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.password_validation import validate_password
@@ -9,7 +11,7 @@ import cloudinary.uploader
 
 
 # ============================================================================
-# SUCURSAL SERIALIZER (NUEVO)
+# SUCURSAL SERIALIZER
 # ============================================================================
 
 class SucursalSerializer(serializers.ModelSerializer):
@@ -40,7 +42,7 @@ class SucursalSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
-# USUARIO SERIALIZERS (ACTUALIZADOS)
+# USUARIO SERIALIZERS (⭐ ACTUALIZADO CON DOMICILIO)
 # ============================================================================
 
 class UsuarioSerializer(serializers.ModelSerializer):
@@ -48,17 +50,19 @@ class UsuarioSerializer(serializers.ModelSerializer):
     sucursal_nombre = serializers.CharField(source='sucursal.nombre', read_only=True)
     sucursal_data = SucursalSerializer(source='sucursal', read_only=True)
     password = serializers.CharField(write_only=True, required=False)
+    tiene_domicilio = serializers.BooleanField(read_only=True)  # ⭐ NUEVO
     
     class Meta:
         model = Usuario
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 
             'rol', 'is_active', 'date_joined', 'sucursal', 
-            'sucursal_nombre', 'sucursal_data', 'password'
+            'sucursal_nombre', 'sucursal_data', 'password',
+            'domicilio', 'tiene_domicilio'  # ⭐ NUEVOS CAMPOS
         ]
-        read_only_fields = ['date_joined']
+        read_only_fields = ['date_joined', 'tiene_domicilio']
         extra_kwargs = {
-            'sucursal': {'required': False, 'allow_null': True}  # ⭐ Permitir null
+            'sucursal': {'required': False, 'allow_null': True}
         }
     
     def validate(self, data):
@@ -66,9 +70,8 @@ class UsuarioSerializer(serializers.ModelSerializer):
         rol = data.get('rol', self.instance.rol if self.instance else None)
         sucursal = data.get('sucursal', self.instance.sucursal if self.instance else None)
         
-        # ⭐ Solo validar sucursal para administradores regulares
+        # Solo validar sucursal para administradores regulares
         if rol == 'administrador' and not sucursal:
-            # Advertencia, pero no error - permitir crear sin sucursal
             print(f"⚠️ Creando administrador sin sucursal asignada")
         
         return data
@@ -85,6 +88,7 @@ class UsuarioSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
             rol=validated_data.get('rol', 'cliente'),
             sucursal=validated_data.get('sucursal', None),
+            domicilio=validated_data.get('domicilio', ''),  # ⭐ NUEVO
             is_active=validated_data.get('is_active', True)
         )
         
@@ -113,13 +117,11 @@ class UsuarioSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
-# PRODUCTO SERIALIZER (ACTUALIZADO CON SUCURSAL)
+# PRODUCTO SERIALIZER
 # ============================================================================
 
 class ProductoSerializer(serializers.ModelSerializer):
-    """
-    Serializer para productos con soporte completo para Cloudinary y Sucursal
-    """
+    """Serializer para productos con soporte completo para Cloudinary y Sucursal"""
     imagen_url = serializers.SerializerMethodField(read_only=True)
     tiene_oferta = serializers.SerializerMethodField()
     oferta_activa = serializers.SerializerMethodField()
@@ -257,7 +259,7 @@ class ProductoSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
-# OFERTA SERIALIZERS (ACTUALIZADOS CON SUCURSAL)
+# OFERTA SERIALIZERS
 # ============================================================================
 
 class ProductoOfertaSerializer(serializers.ModelSerializer):
@@ -375,7 +377,7 @@ class OfertaSerializer(serializers.ModelSerializer):
                 'precio_oferta': 'El precio debe ser mayor a 0'
             })
         
-        # ⭐ VALIDAR: Que los productos pertenezcan a la misma sucursal de la oferta
+        # Validar que los productos pertenezcan a la misma sucursal de la oferta
         sucursal = data.get('sucursal')
         productos_data = data.get('productos_data', [])
         
@@ -491,7 +493,7 @@ class OfertaSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
-# PEDIDO SERIALIZERS (sin cambios en la estructura)
+# PEDIDO SERIALIZERS
 # ============================================================================
 
 class DetallePedidoSerializer(serializers.ModelSerializer):
@@ -503,7 +505,6 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         write_only=True
     )
     producto_nombre = serializers.CharField(source='producto.nombre', read_only=True)
-    # ⭐ CAMBIO: Usar SerializerMethodField para manejar None de forma segura
     sucursal_nombre = serializers.SerializerMethodField()
     precio_unitario = serializers.DecimalField(
         source='producto.precio', 
@@ -523,7 +524,6 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'pedido']
     
-    # ⭐ NUEVO: Método seguro para obtener sucursal_nombre
     def get_sucursal_nombre(self, obj):
         """Obtiene el nombre de la sucursal de forma segura"""
         try:
@@ -561,9 +561,10 @@ class PedidoSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'usuario', 'usuario_nombre', 'fecha', 'estado', 
             'estado_display', 'detalles', 'total', 
-            'cantidad_items', 'tiempo_transcurrido', 'es_oferta'
+            'cantidad_items', 'tiempo_transcurrido', 'es_oferta',
+            'direccion_entrega'  # ⭐ NUEVO CAMPO
         ]
-        read_only_fields = ['id', 'fecha', 'usuario', 'total']
+        read_only_fields = ['id', 'fecha', 'usuario', 'total', 'direccion_entrega']
     
     def get_cantidad_items(self, obj):
         """Cuenta la cantidad total de items en el pedido"""
@@ -632,6 +633,19 @@ class PedidoCreateSerializer(serializers.Serializer):
         
         return items
     
+    def validate(self, data):
+        """⭐ NUEVO: Validación de domicilio"""
+        request = self.context.get('request')
+        
+        if request and request.user:
+            if not request.user.tiene_domicilio:
+                raise serializers.ValidationError({
+                    'domicilio': 'Debes configurar tu domicilio antes de realizar un pedido',
+                    'codigo': 'DOMICILIO_REQUERIDO'
+                })
+        
+        return data
+    
     def create(self, validated_data):
         """Crea el pedido con sus detalles"""
         items_data = validated_data.pop('items')
@@ -640,7 +654,8 @@ class PedidoCreateSerializer(serializers.Serializer):
         pedido = Pedido.objects.create(
             usuario=usuario,
             estado='recibido',
-            total=0
+            total=0,
+            direccion_entrega=usuario.domicilio  # ⭐ NUEVO: Copiar domicilio
         )
         
         total = 0
@@ -667,11 +682,11 @@ class PedidoCreateSerializer(serializers.Serializer):
 
 
 # ============================================================================
-# CUSTOM JWT SERIALIZER (ACTUALIZADO CON SUCURSAL)
+# CUSTOM JWT SERIALIZER (⭐ ACTUALIZADO CON DOMICILIO)
 # ============================================================================
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """Serializer personalizado que permite login con username O email e incluye sucursal"""
+    """Serializer personalizado que permite login con username O email e incluye domicilio"""
     username_field = 'username'
     
     @classmethod
@@ -684,7 +699,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
         
-        # ⭐ NUEVO: Agregar información de sucursal al token
+        # Agregar información de sucursal al token
         if user.sucursal:
             token['sucursal_id'] = user.sucursal.id
             token['sucursal_nombre'] = user.sucursal.nombre
@@ -705,7 +720,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         print(f"🔐 INTENTO DE LOGIN: {username_or_email}")
         print(f"{'='*60}")
         
-        # ⭐ FIX 1: Primero verificar si es un email
         user = None
         
         # Si contiene @, es un email
@@ -715,10 +729,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 usuario_obj = Usuario.objects.get(email=username_or_email.lower())
                 print(f"✅ Usuario encontrado: {usuario_obj.username}")
                 
-                # ⭐ FIX 2: Autenticar con el USERNAME del objeto, no con el email
                 user = authenticate(
                     request=self.context.get('request'),
-                    username=usuario_obj.username,  # ⭐ USAR USERNAME, NO EMAIL
+                    username=usuario_obj.username,
                     password=password
                 )
                 
@@ -780,6 +793,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'last_name': user.last_name,
                 'sucursal_id': user.sucursal.id if user.sucursal else None,
                 'sucursal_nombre': user.sucursal.nombre if user.sucursal else None,
+                'domicilio': user.domicilio,  # ⭐ NUEVO
+                'tiene_domicilio': user.tiene_domicilio  # ⭐ NUEVO
             }
         }
         

@@ -1,11 +1,12 @@
 # Backend/core/models.py
+# ⭐ ACTUALIZADO: Campos domicilio y direccion_entrega agregados
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from cloudinary.models import CloudinaryField
 
 # ============================================================================
-# SUCURSAL (NUEVO)
+# SUCURSAL
 # ============================================================================
 class Sucursal(models.Model):
     nombre = models.CharField(max_length=100, unique=True)
@@ -24,17 +25,17 @@ class Sucursal(models.Model):
 
 
 # ============================================================================
-# USUARIO (ACTUALIZADO)
+# USUARIO (⭐ ACTUALIZADO CON DOMICILIO)
 # ============================================================================
 class Usuario(AbstractUser):
     ROLES = [
         ('cliente', 'Cliente'),
         ('administrador', 'Administrador'),
-        ('administrador_general', 'Administrador General'),  # ⭐ NUEVO ROL
+        ('administrador_general', 'Administrador General'),
     ]
     rol = models.CharField(max_length=25, choices=ROLES, default='cliente')
     
-    # ⭐ NUEVO: Relación con Sucursal
+    # Relación con Sucursal (solo para administradores)
     sucursal = models.ForeignKey(
         Sucursal,
         on_delete=models.SET_NULL,
@@ -43,13 +44,25 @@ class Usuario(AbstractUser):
         related_name='usuarios',
         help_text='Sucursal asignada (solo para administradores)'
     )
+    
+    # ⭐ NUEVO: Campo domicilio para clientes
+    domicilio = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Dirección de entrega del cliente'
+    )
 
     def __str__(self):
         return f"{self.username} ({self.rol})"
+    
+    @property
+    def tiene_domicilio(self):
+        """Verifica si el usuario tiene domicilio configurado"""
+        return bool(self.domicilio and self.domicilio.strip())
 
 
 # ============================================================================
-# PRODUCTO (ACTUALIZADO CON SUCURSAL)
+# PRODUCTO
 # ============================================================================
 class Producto(models.Model):
     nombre = models.CharField(max_length=100)
@@ -61,17 +74,15 @@ class Producto(models.Model):
         help_text='Cantidad disponible en inventario'
     )
     
-    # ⭐ NUEVO: Relación con Sucursal
     sucursal = models.ForeignKey(
         Sucursal,
         on_delete=models.CASCADE,
         related_name='productos',
         help_text='Sucursal a la que pertenece este producto',
-        null=True,  # ⭐ TEMPORAL para la migración
-        blank=True  # ⭐ TEMPORAL para la migración
+        null=True,
+        blank=True
     )
     
-    # Alertas de stock
     alerta_stock_enviada = models.BooleanField(
         default=False, 
         help_text='Indica si ya se envió la notificación de stock agotado (=0)'
@@ -81,7 +92,6 @@ class Producto(models.Model):
         help_text='Indica si ya se envió la notificación de stock bajo (≤10 unidades)'
     )
     
-    # CloudinaryField para imágenes
     imagen = CloudinaryField(
         'imagen',
         blank=True,
@@ -103,16 +113,13 @@ class Producto(models.Model):
     
     @property
     def esta_agotado(self):
-        """Verifica si el producto está agotado"""
         return self.stock == 0
     
     @property
     def tiene_stock_bajo(self):
-        """Verifica si el producto tiene stock bajo (≤10)"""
         return 0 < self.stock <= 10
     
     def reducir_stock(self, cantidad):
-        """Reduce el stock del producto"""
         if self.stock >= cantidad:
             self.stock -= cantidad
             if self.stock == 0:
@@ -123,7 +130,7 @@ class Producto(models.Model):
 
 
 # ============================================================================
-# OFERTA (ACTUALIZADA CON SUCURSAL)
+# OFERTA
 # ============================================================================
 class Oferta(models.Model):
     titulo = models.CharField(max_length=100)
@@ -132,14 +139,13 @@ class Oferta(models.Model):
     fecha_fin = models.DateField()
     precio_oferta = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
-    # ⭐ NUEVO: Relación con Sucursal
     sucursal = models.ForeignKey(
         Sucursal,
         on_delete=models.CASCADE,
         related_name='ofertas',
         help_text='Sucursal a la que pertenece esta oferta',
-        null=True,  # ⭐ TEMPORAL para la migración
-        blank=True  # ⭐ TEMPORAL para la migración
+        null=True,
+        blank=True
     )
     
     productos = models.ManyToManyField(
@@ -158,20 +164,13 @@ class Oferta(models.Model):
     
     @property
     def productos_disponibles(self):
-        """Retorna solo productos con stock disponible"""
         return self.productos.filter(stock__gt=0)
     
     def get_productos_con_cantidad(self):
-        """Retorna productos con sus cantidades"""
         return ProductoOferta.objects.filter(oferta=self).select_related('producto')
 
 
-# ⭐ Modelo intermedio para cantidades (sin cambios)
 class ProductoOferta(models.Model):
-    """
-    Tabla intermedia que almacena la cantidad de cada producto en una oferta.
-    Ejemplo: "2 panes + 1 dona" en el combo
-    """
     oferta = models.ForeignKey(Oferta, on_delete=models.CASCADE)
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
     cantidad = models.PositiveIntegerField(
@@ -190,7 +189,7 @@ class ProductoOferta(models.Model):
 
 
 # ============================================================================
-# PEDIDO (sin cambios)
+# PEDIDO (⭐ ACTUALIZADO CON DIRECCION_ENTREGA)
 # ============================================================================
 class Pedido(models.Model):
     ESTADOS = [
@@ -203,6 +202,13 @@ class Pedido(models.Model):
     fecha = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='recibido')
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # ⭐ NUEVO: Guardar domicilio en el momento del pedido
+    direccion_entrega = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Dirección de entrega del pedido (copia del domicilio del usuario)'
+    )
 
     class Meta:
         verbose_name = 'Pedido'
@@ -214,7 +220,7 @@ class Pedido(models.Model):
 
 
 # ============================================================================
-# DETALLE PEDIDO (sin cambios)
+# DETALLE PEDIDO
 # ============================================================================
 class DetallePedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="detalles")
@@ -227,3 +233,11 @@ class DetallePedido(models.Model):
 
     def __str__(self):
         return f"{self.cantidad} x {self.producto.nombre} (Pedido {self.pedido.id})"
+
+
+# ============================================================================
+# CAMBIOS REALIZADOS:
+# ============================================================================
+# 1. Usuario: Agregado campo 'domicilio' (TextField, null=True, blank=True)
+# 2. Usuario: Agregada propiedad 'tiene_domicilio' (bool)
+# 3. Pedido: Agregado campo 'direccion_entrega' (TextField, null=True, blank=True)

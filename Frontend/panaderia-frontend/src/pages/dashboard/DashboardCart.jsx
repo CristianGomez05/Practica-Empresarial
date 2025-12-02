@@ -1,15 +1,21 @@
-// src/pages/dashboard/DashboardCart.jsx
+// Frontend/src/pages/dashboard/DashboardCart.jsx
+// ⭐ ACTUALIZADO: Incluye validación de domicilio y modal
+
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../../hooks/useCart";
 import { useNavigate } from "react-router-dom";
-import { FaShoppingCart, FaTrash, FaMinus, FaPlus, FaCheckCircle, FaTag, FaBox } from "react-icons/fa";
+import { useAuth } from "../../components/auth/AuthContext";  // ⭐ NUEVO
+import { FaShoppingCart, FaTrash, FaMinus, FaPlus, FaCheckCircle, FaTag, FaBox, FaMapMarkerAlt } from "react-icons/fa";  // ⭐ NUEVO: FaMapMarkerAlt
 import { useSnackbar } from "notistack";
 import api from "../../services/api";
+import DomicilioModal from "../../components/modals/DomicilioModal";  // ⭐ NUEVO
 
 export default function DashboardCart() {
   const { items, updateQty, remove, clear, total } = useCart();
+  const { user } = useAuth();  // ⭐ NUEVO
   const [loading, setLoading] = useState(false);
+  const [showDomicilioModal, setShowDomicilioModal] = useState(false);  // ⭐ NUEVO
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
 
@@ -26,9 +32,27 @@ export default function DashboardCart() {
     });
   };
 
+  // ⭐ NUEVO: Callback cuando se guarda el domicilio
+  const handleDomicilioSuccess = () => {
+    enqueueSnackbar("Ahora puedes completar tu pedido", {
+      variant: "success",
+      autoHideDuration: 2000
+    });
+  };
+
   const handleCreateOrder = async () => {
     if (items.length === 0) {
       enqueueSnackbar("El carrito está vacío", { variant: "warning" });
+      return;
+    }
+
+    // ⭐ NUEVO: Validación de domicilio
+    if (!user?.domicilio || user.domicilio.trim() === '') {
+      setShowDomicilioModal(true);
+      enqueueSnackbar("Debes configurar tu domicilio antes de hacer un pedido", {
+        variant: "warning",
+        autoHideDuration: 3000
+      });
       return;
     }
 
@@ -36,62 +60,39 @@ export default function DashboardCart() {
     try {
       console.log('🛒 CREANDO PEDIDO');
       console.log('📦 Items en carrito:', items);
+      console.log('📍 Domicilio del usuario:', user.domicilio);  // ⭐ NUEVO log
 
-      // ⭐ CORRECCIÓN: Usar las cantidades correctas de productos_con_cantidad
+      // Preparar items para el pedido
       const orderItems = items.flatMap((item) => {
         console.log('🔍 Procesando item:', item);
 
         if (item.isOffer) {
           console.log('   🎁 Es una OFERTA');
 
-          // ⭐ NUEVO: Extraer productos con cantidades
-          let productosConCantidad = [];
-
-          // Si tiene productos_con_cantidad (formato nuevo)
-          if (item.productos_con_cantidad && Array.isArray(item.productos_con_cantidad)) {
-            console.log('   ✅ Usando productos_con_cantidad (formato nuevo)');
-            productosConCantidad = item.productos_con_cantidad.map(pc => ({
-              id: pc.producto.id,
-              nombre: pc.producto.nombre,
-              cantidad_unitaria: pc.cantidad, // ⭐ Cantidad por unidad de oferta
-              precio: pc.producto.precio
-            }));
-          }
-          // Si tiene productos (formato antiguo)
-          else if (item.productos && Array.isArray(item.productos)) {
-            console.log('   ⚠️ Usando productos (formato antiguo, cantidad = 1)');
-            productosConCantidad = item.productos.map(p => ({
-              id: p.id,
-              nombre: p.nombre,
-              cantidad_unitaria: p.cantidad_oferta || 1, // ⭐ Intentar leer cantidad_oferta
-              precio: p.precio
-            }));
-          }
+          // Extraer productos de la oferta
+          const productosConCantidad = item.productos_con_cantidad || item.productos || [];
 
           if (productosConCantidad.length === 0) {
-            console.error('   ❌ Oferta sin productos válidos');
+            console.error('   ❌ Oferta sin productos');
             throw new Error('Oferta sin productos válidos');
           }
 
-          console.log('   📦 Productos extraídos:', productosConCantidad);
-
-          // ⭐ CRÍTICO: Multiplicar cantidad_unitaria por item.qty
           const precioOferta = parseFloat(item.precio);
           const numProductos = productosConCantidad.length;
           const precioPorProducto = precioOferta / numProductos;
 
           return productosConCantidad.map((producto) => {
-            const cantidadTotal = producto.cantidad_unitaria * item.qty; // ⭐ MULTIPLICAR
+            const cantidadTotal = (producto.cantidad_unitaria || producto.cantidad || 1) * item.qty;
 
             const itemData = {
-              producto: producto.id,
-              cantidad: cantidadTotal, // ⭐ USAR CANTIDAD CORRECTA
+              producto: producto.id || producto.producto_id,
+              cantidad: cantidadTotal,
               precio_unitario: precioPorProducto,
               es_oferta: true,
               oferta_titulo: item.nombre
             };
 
-            console.log(`   ➕ ${producto.nombre}: ${producto.cantidad_unitaria} x ${item.qty} = ${cantidadTotal} unidades`);
+            console.log(`   ➕ ${producto.nombre || 'Producto'}: ${producto.cantidad_unitaria || 1} x ${item.qty} = ${cantidadTotal} unidades`);
             console.log('      Item generado:', itemData);
 
             return itemData;
@@ -137,7 +138,11 @@ export default function DashboardCart() {
       console.error('❌ Error al crear pedido:', error);
       console.error('   Detalles:', error.response?.data);
 
-      if (error.response?.data?.error) {
+      // ⭐ NUEVO: Manejo especial del error de domicilio
+      if (error.response?.data?.codigo === 'DOMICILIO_REQUERIDO') {
+        setShowDomicilioModal(true);
+        enqueueSnackbar(error.response.data.error || error.response.data.domicilio, { variant: "warning" });
+      } else if (error.response?.data?.error) {
         enqueueSnackbar(error.response.data.error, { variant: "error" });
       } else if (error.message) {
         enqueueSnackbar(error.message, { variant: "error" });
@@ -192,6 +197,33 @@ export default function DashboardCart() {
         </div>
       </div>
 
+      {/* ⭐ NUEVO: Alerta si no tiene domicilio */}
+      {!user?.domicilio && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg"
+        >
+          <div className="flex items-start gap-3">
+            <FaMapMarkerAlt className="text-red-500 text-xl mt-0.5" />
+            <div className="flex-1">
+              <p className="text-red-800 font-semibold">
+                ⚠️ Domicilio no configurado
+              </p>
+              <p className="text-red-700 text-sm mt-1">
+                Debes agregar tu domicilio para poder completar el pedido
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDomicilioModal(true)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors"
+            >
+              Agregar Ahora
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Cart Items */}
         <div className="lg:col-span-2 space-y-4">
@@ -202,96 +234,100 @@ export default function DashboardCart() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className={`bg-white rounded-xl shadow-md p-6 border-2 transition-all ${item.isOffer
-                    ? 'border-green-200 bg-gradient-to-r from-green-50 to-white'
-                    : 'border-gray-100 hover:shadow-lg'
-                  }`}
+                className={`bg-white rounded-xl shadow-md p-6 border-2 transition-all ${
+                  item.isOffer
+                    ? "border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50"
+                    : "border-gray-200 hover:border-amber-200"
+                }`}
               >
                 <div className="flex gap-4">
                   {/* Image */}
-                  <div className="w-24 h-24 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                    <img
-                      src={
-                        item.imagen ||
-                        "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=200&q=80"
-                      }
-                      alt={item.nombre}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="relative flex-shrink-0">
+                    <div className="w-24 h-24 rounded-xl overflow-hidden bg-gray-100 shadow-md">
+                      {item.imagen ? (
+                        <img
+                          src={item.imagen}
+                          alt={item.nombre}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300">
+                          <FaBox className="text-3xl text-gray-400" />
+                        </div>
+                      )}
+                    </div>
+                    {item.isOffer && (
+                      <div className="absolute -top-2 -right-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+                        <FaTag className="text-xs" />
+                        OFERTA
+                      </div>
+                    )}
                   </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    {/* Badge si es oferta */}
-                    {item.isOffer && (
-                      <span className="inline-flex items-center gap-1 bg-green-600 text-white text-xs px-2 py-1 rounded-full mb-2">
-                        <FaTag className="text-[10px]" />
-                        OFERTA ESPECIAL
-                      </span>
-                    )}
-
-                    <h3 className="font-semibold text-lg text-[#5D4037] mb-1">
-                      {item.nombre}
-                    </h3>
-
-                    {item.descripcion && (
-                      <p className="text-sm text-[#8D6E63] mb-3 line-clamp-2">
-                        {item.descripcion}
-                      </p>
-                    )}
-
-                    {/* Productos incluidos (solo para ofertas) */}
-                    {item.isOffer && item.productos && (
-                      <div className="bg-white rounded-lg p-3 mb-3 border border-green-200">
-                        <div className="flex items-center gap-2 mb-2">
-                          <FaBox className="text-green-600 text-sm" />
-                          <span className="text-sm font-semibold text-gray-700">
-                            Incluye {item.productos.length} producto{item.productos.length > 1 ? 's' : ''}:
-                          </span>
-                        </div>
-                        <ul className="space-y-1">
-                          {item.productos.map((producto, idx) => (
-                            <li key={idx} className="text-sm text-gray-600 flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
-                              {producto.nombre}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between">
-                      {/* Quantity Controls */}
+                  {/* Content */}
+                  <div className="flex-1 flex flex-col">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-[#5D4037] mb-1">
+                        {item.nombre}
+                      </h3>
+                      {item.descripcion && (
+                        <p className="text-sm text-[#8D6E63] mb-2 line-clamp-2">
+                          {item.descripcion}
+                        </p>
+                      )}
                       <div className="flex items-center gap-3">
-                        <button
+                        <span className="text-2xl font-bold text-amber-700">
+                          ₡{item.precio.toFixed(2)}
+                        </span>
+                        {item.isOffer && item.productos && (
+                          <span className="text-xs text-amber-700 bg-amber-100 px-2 py-1 rounded-full font-semibold">
+                            {item.productos.length} productos incluidos
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Quantity Controls */}
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-2">
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
                           onClick={() => handleUpdateQty(item.id, item.qty - 1)}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
                           disabled={item.qty <= 1}
+                          className="w-8 h-8 bg-white border-2 border-gray-300 rounded-lg flex items-center justify-center hover:border-amber-500 hover:text-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <FaMinus className="text-xs" />
-                        </button>
-                        <span className="font-semibold text-[#5D4037] w-8 text-center">
+                          <FaMinus className="text-sm" />
+                        </motion.button>
+                        <span className="font-bold text-[#5D4037] w-12 text-center">
                           {item.qty}
                         </span>
-                        <button
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
                           onClick={() => handleUpdateQty(item.id, item.qty + 1)}
-                          className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                          className="w-8 h-8 bg-white border-2 border-gray-300 rounded-lg flex items-center justify-center hover:border-amber-500 hover:text-amber-600 transition-colors"
                         >
-                          <FaPlus className="text-xs" />
-                        </button>
+                          <FaPlus className="text-sm" />
+                        </motion.button>
                       </div>
 
-                      {/* Price & Remove */}
                       <div className="flex items-center gap-4">
-                        <span className="text-xl font-bold text-amber-700">
-                          ₡{(item.precio * item.qty).toFixed(2)}
-                        </span>
-                        <button
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600">Subtotal</div>
+                          <div className="text-xl font-bold text-amber-700">
+                            ₡{(item.precio * item.qty).toFixed(2)}
+                          </div>
+                        </div>
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
                           onClick={() => handleRemove(item)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 p-3 rounded-lg transition-colors"
+                          title="Eliminar"
                         >
-                          <FaTrash />
-                        </button>
+                          <FaTrash className="text-lg" />
+                        </motion.button>
                       </div>
                     </div>
                   </div>
@@ -299,26 +335,35 @@ export default function DashboardCart() {
               </motion.div>
             ))}
           </AnimatePresence>
-
-          {/* Clear Cart Button */}
-          <button
-            onClick={clear}
-            className="w-full py-3 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors font-medium"
-          >
-            Vaciar Carrito
-          </button>
         </div>
 
-        {/* Order Summary */}
+        {/* Summary */}
         <div className="lg:col-span-1">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-xl shadow-lg p-6 border border-gray-100 sticky top-4"
+            className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 sticky top-4"
           >
             <h2 className="text-xl font-bold text-[#5D4037] mb-6">
               Resumen del Pedido
             </h2>
+
+            {/* ⭐ NUEVO: Mostrar domicilio si existe */}
+            {user?.domicilio && (
+              <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <FaMapMarkerAlt className="text-green-600 mt-1 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs text-green-800 font-semibold mb-1">
+                      Dirección de entrega:
+                    </p>
+                    <p className="text-xs text-green-700">
+                      {user.domicilio}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3 mb-6">
               <div className="flex justify-between text-[#8D6E63]">
@@ -343,13 +388,22 @@ export default function DashboardCart() {
 
             <button
               onClick={handleCreateOrder}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading || !user?.domicilio}
+              className={`w-full flex items-center justify-center gap-3 ${
+                !user?.domicilio
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600'
+              } text-white px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50`}
             >
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   <span>Procesando...</span>
+                </>
+              ) : !user?.domicilio ? (
+                <>
+                  <FaMapMarkerAlt />
+                  <span>Agregar Domicilio Primero</span>
                 </>
               ) : (
                 <>
@@ -365,6 +419,13 @@ export default function DashboardCart() {
           </motion.div>
         </div>
       </div>
+
+      {/* ⭐ NUEVO: Modal de Domicilio */}
+      <DomicilioModal
+        isOpen={showDomicilioModal}
+        onClose={() => setShowDomicilioModal(false)}
+        onSuccess={handleDomicilioSuccess}
+      />
     </div>
   );
 }

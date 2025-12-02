@@ -1,8 +1,10 @@
-// Frontend/panaderia-frontend/src/pages/dashboard/DashboardProfile.jsx
+// Frontend/src/pages/dashboard/DashboardProfile.jsx
+// ⭐ ACTUALIZADO: Incluye campo domicilio obligatorio
+
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "../../components/auth/AuthContext";
-import { FaUser, FaEnvelope, FaSave, FaTimes, FaUserCircle, FaEdit, FaCheckCircle } from "react-icons/fa";
+import { FaUser, FaEnvelope, FaSave, FaTimes, FaUserCircle, FaEdit, FaCheckCircle, FaHome, FaMapMarkerAlt } from "react-icons/fa";
 import { useSnackbar } from "notistack";
 import api from "../../services/api";
 
@@ -14,6 +16,7 @@ export default function DashboardProfile() {
     email: "",
     first_name: "",
     last_name: "",
+    domicilio: "",  // ⭐ NUEVO
   });
 
   useEffect(() => {
@@ -22,15 +25,26 @@ export default function DashboardProfile() {
         email: user.email || "",
         first_name: user.first_name || "",
         last_name: user.last_name || "",
+        domicilio: user.domicilio || "",  // ⭐ NUEVO
       });
     }
   }, [user]);
 
   const handleSave = async () => {
+    // ⭐ NUEVO: Validación de domicilio
+    if (!form.domicilio || form.domicilio.trim() === "") {
+      enqueueSnackbar("El domicilio es obligatorio", {
+        variant: "warning",
+        autoHideDuration: 3000,
+      });
+      return;
+    }
+
     try {
       const res = await api.patch("/usuarios/me/", {
         first_name: form.first_name,
         last_name: form.last_name,
+        domicilio: form.domicilio,  // ⭐ NUEVO
       });
       
       setUser({ ...user, ...res.data });
@@ -50,6 +64,7 @@ export default function DashboardProfile() {
       email: user.email || "",
       first_name: user.first_name || "",
       last_name: user.last_name || "",
+      domicilio: user.domicilio || "",  // ⭐ NUEVO
     });
     setEditing(false);
   };
@@ -82,135 +97,144 @@ export default function DashboardProfile() {
           <FaUserCircle className="text-white text-2xl" />
         </div>
         <div>
-          <h1 className="text-4xl font-bold text-[#5D4037] tracking-tight">Mi Perfil</h1>
-          <p className="text-[#8D6E63] text-lg">Administra tu información personal</p>
+          <h1 className="text-3xl font-bold text-[#5D4037]">Mi Perfil</h1>
+          <p className="text-[#8D6E63]">Administra tu información personal</p>
         </div>
       </motion.div>
 
-      {/* Main Profile Card */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Sidebar - Avatar & Stats */}
+      {/* ⭐ NUEVO: Alerta si no tiene domicilio */}
+      {!user?.domicilio && (
         <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg"
+        >
+          <div className="flex items-center gap-3">
+            <FaMapMarkerAlt className="text-red-500 text-xl" />
+            <div>
+              <p className="text-red-800 font-semibold">⚠️ Domicilio no configurado</p>
+              <p className="text-red-700 text-sm">
+                Debes agregar tu domicilio para poder realizar pedidos
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Main Content */}
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Sidebar - Avatar */}
+        <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
           className="lg:col-span-1"
         >
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 space-y-6 relative overflow-hidden">
-            {/* Decorative background */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full blur-3xl opacity-50 -mr-16 -mt-16"></div>
-            
-            {/* Avatar */}
-            <div className="relative text-center">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="relative inline-block"
-              >
-                <div className={`w-36 h-36 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center text-white text-6xl font-bold shadow-2xl border-4 border-white relative z-10`}>
-                  {user?.username?.[0]?.toUpperCase() || "U"}
-                </div>
-                
-                {/* Decorative ring */}
-                <div className="absolute inset-0 rounded-full border-4 border-amber-200 animate-pulse"></div>
-              </motion.div>
-              
-              <h2 className="text-2xl font-bold text-[#5D4037] mt-4">
-                {user?.first_name || "Usuario"}
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center space-y-6 border border-gray-100">
+            <div className="relative inline-block">
+              <div className={`w-32 h-32 rounded-full bg-gradient-to-br ${avatarGradient} flex items-center justify-center shadow-xl`}>
+                <span className="text-5xl font-bold text-white">
+                  {user?.first_name?.charAt(0)?.toUpperCase() || user?.username?.charAt(0)?.toUpperCase() || "U"}
+                </span>
+              </div>
+              <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-green-500 rounded-full border-4 border-white shadow-lg flex items-center justify-center">
+                <FaCheckCircle className="text-white text-sm" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold text-[#5D4037]">
+                {user?.first_name && user?.last_name 
+                  ? `${user.first_name} ${user.last_name}`
+                  : user?.username
+                }
               </h2>
-              <p className="text-sm text-[#8D6E63] flex items-center justify-center gap-2 mt-1">
-                <FaEnvelope className="text-amber-600" />
-                {user?.email}
-              </p>
+              <p className="text-[#8D6E63] text-sm">@{user?.username}</p>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 gap-3 pt-4">
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-100">
-                <div className="text-3xl font-bold text-amber-600">
-                  {user?.pedidos_count || 0}
+            <div className="pt-6 border-t border-gray-200">
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-[#8D6E63] uppercase">
+                    Rol
+                  </span>
+                  <span className="px-3 py-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold rounded-full">
+                    {user?.rol === 'cliente' ? 'Cliente' : 'Administrador'}
+                  </span>
                 </div>
-                <div className="text-xs text-[#8D6E63] font-medium">Pedidos</div>
-              </div>
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
-                <div className="text-3xl font-bold text-green-600">5★</div>
-                <div className="text-xs text-[#8D6E63] font-medium">Valoración</div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[#8D6E63] uppercase">
+                    Miembro desde
+                  </span>
+                  <span className="text-xs font-bold text-[#5D4037]">
+                    {user?.date_joined 
+                      ? new Date(user.date_joined).toLocaleDateString('es-ES', { year: 'numeric', month: 'short' })
+                      : 'N/A'
+                    }
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Info Box */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
-              <p className="text-xs text-blue-900 text-center leading-relaxed">
-                <span className="font-semibold">💡 Consejo:</span> Mantén tu información actualizada para recibir ofertas personalizadas
-              </p>
-            </div>
+            {!editing && (
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setEditing(true)}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+              >
+                <FaEdit />
+                Editar Perfil
+              </motion.button>
+            )}
           </div>
         </motion.div>
 
-        {/* Main Content - Editable Form */}
-        <motion.div
+        {/* Main Form */}
+        <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
           className="lg:col-span-2"
         >
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 relative overflow-hidden">
-            {/* Decorative background */}
-            <div className="absolute bottom-0 left-0 w-40 h-40 bg-gradient-to-tr from-amber-100 to-orange-100 rounded-full blur-3xl opacity-50 -ml-20 -mb-20"></div>
-            
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h3 className="text-2xl font-bold text-[#5D4037] flex items-center gap-2">
-                    <FaUser className="text-amber-600" />
-                    Información Personal
-                  </h3>
-                  <p className="text-sm text-[#8D6E63] mt-1">
-                    {editing ? "Edita tus datos personales" : "Visualiza tu información"}
-                  </p>
-                </div>
-                {!editing && (
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setEditing(true)}
-                    className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
-                  >
-                    <FaEdit />
-                    Editar Perfil
-                  </motion.button>
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                <h2 className="text-2xl font-bold text-[#5D4037]">
+                  Información Personal
+                </h2>
+                {editing && (
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full animate-pulse">
+                    Modo Edición
+                  </span>
                 )}
               </div>
 
-              <div className="space-y-6">
-                {/* Email (solo lectura) */}
-                <div className="group">
-                  <label className="flex items-center gap-2 text-sm font-semibold text-[#5D4037] mb-3">
-                    <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
-                      <FaEnvelope className="text-amber-600 text-sm" />
-                    </div>
-                    Correo Electrónico
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      value={form.email}
-                      disabled
-                      className="w-full px-5 py-4 border-2 border-gray-200 bg-gray-50 rounded-xl text-gray-600 font-medium transition-all"
-                    />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                      <FaCheckCircle className="text-green-500" />
-                    </div>
-                  </div>
-                  <p className="text-xs text-[#8D6E63] mt-2 ml-1">
-                    🔒 Tu correo está verificado y no puede ser modificado
-                  </p>
-                </div>
-
-                {/* First Name */}
+              <div className="space-y-5">
+                {/* Email (readonly) */}
                 <div className="group">
                   <label className="flex items-center gap-2 text-sm font-semibold text-[#5D4037] mb-3">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <FaUser className="text-blue-600 text-sm" />
+                      <FaEnvelope className="text-blue-600 text-sm" />
+                    </div>
+                    Correo Electrónico
+                  </label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    disabled
+                    className="w-full px-5 py-4 bg-gray-100 border-2 border-gray-200 rounded-xl text-gray-500 cursor-not-allowed font-medium"
+                  />
+                  <p className="text-xs text-gray-500 mt-2 ml-1">
+                    El correo no se puede modificar
+                  </p>
+                </div>
+
+                {/* Nombre */}
+                <div className="group">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-[#5D4037] mb-3">
+                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <FaUser className="text-purple-600 text-sm" />
                     </div>
                     Nombre
                   </label>
@@ -228,11 +252,11 @@ export default function DashboardProfile() {
                   />
                 </div>
 
-                {/* Last Name */}
+                {/* Apellido */}
                 <div className="group">
                   <label className="flex items-center gap-2 text-sm font-semibold text-[#5D4037] mb-3">
-                    <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <FaUser className="text-purple-600 text-sm" />
+                    <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                      <FaUser className="text-green-600 text-sm" />
                     </div>
                     Apellido
                   </label>
@@ -248,6 +272,40 @@ export default function DashboardProfile() {
                         : "border-gray-200 bg-gray-50 text-gray-600"
                     }`}
                   />
+                </div>
+
+                {/* ⭐ NUEVO: Campo Domicilio */}
+                <div className="group">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-[#5D4037] mb-3">
+                    <div className={`w-8 h-8 ${user?.domicilio ? 'bg-green-100' : 'bg-red-100'} rounded-lg flex items-center justify-center`}>
+                      <FaHome className={`${user?.domicilio ? 'text-green-600' : 'text-red-600'} text-sm`} />
+                    </div>
+                    Domicilio {!user?.domicilio && <span className="text-red-500 text-xs">(Obligatorio para pedidos)</span>}
+                  </label>
+                  <textarea
+                    value={form.domicilio}
+                    onChange={(e) => setForm({ ...form, domicilio: e.target.value })}
+                    disabled={!editing}
+                    placeholder="Ingresa tu dirección completa de entrega (provincia, cantón, barrio, número de casa, referencias...)"
+                    rows={3}
+                    className={`w-full px-5 py-4 border-2 rounded-xl transition-all font-medium resize-none ${
+                      editing
+                        ? "border-amber-300 bg-white focus:border-amber-500 focus:ring-4 focus:ring-amber-100 hover:border-amber-400"
+                        : "border-gray-200 bg-gray-50 text-gray-600"
+                    }`}
+                  />
+                  {!user?.domicilio && editing && (
+                    <p className="text-xs text-red-600 mt-2 ml-1 flex items-center gap-1">
+                      <FaMapMarkerAlt />
+                      Debes agregar tu domicilio para poder realizar pedidos
+                    </p>
+                  )}
+                  {user?.domicilio && !editing && (
+                    <p className="text-xs text-green-600 mt-2 ml-1 flex items-center gap-1">
+                      <FaCheckCircle />
+                      Domicilio configurado correctamente
+                    </p>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
