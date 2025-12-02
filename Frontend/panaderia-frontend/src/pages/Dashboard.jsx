@@ -1,4 +1,4 @@
-// src/pages/Dashboard.jsx - CON LOGS DE DEBUGGING
+// src/pages/Dashboard.jsx - CON SOPORTE PARA DOMICILIO
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../components/auth/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -46,7 +46,7 @@ export default function Dashboard() {
             const decoded = jwtDecode(access);
             console.log("🔍 Token decodificado:", decoded);
             
-            // Crear objeto de usuario con TODA la información del token
+            // ⭐ CRÍTICO: Crear objeto de usuario con TODA la información del token, incluyendo domicilio
             const userInfo = {
               id: decoded.user_id || decoded.id,
               username: decoded.username,
@@ -56,11 +56,14 @@ export default function Dashboard() {
               rol: decoded.rol,
               sucursal_id: decoded.sucursal_id || null,
               sucursal_nombre: decoded.sucursal_nombre || null,
-              avatar: decoded.avatar || null
+              avatar: decoded.avatar || null,
+              domicilio: decoded.domicilio || '',  // ⭐ NUEVO: Incluir domicilio
+              tiene_domicilio: decoded.tiene_domicilio || false  // ⭐ NUEVO
             };
             
             console.log("✅ userInfo creado:", userInfo);
             console.log("👤 Rol del usuario:", userInfo.rol);
+            console.log("🏠 Domicilio:", userInfo.domicilio ? `${userInfo.domicilio.substring(0, 50)}...` : 'No configurado');  // ⭐ NUEVO
             
             // ⭐⭐⭐ GUARDAR EN LOCALSTORAGE
             console.log("💾 Guardando usuario en localStorage...");
@@ -105,6 +108,16 @@ export default function Dashboard() {
           return;
         } else {
           console.log("✅ Hay sesión guardada, continuando...");
+          
+          // ⭐ NUEVO: Verificar si el usuario guardado tiene domicilio
+          if (storedUser) {
+            try {
+              const savedUser = JSON.parse(storedUser);
+              console.log("🏠 Domicilio en usuario guardado:", savedUser.domicilio || 'No configurado');
+            } catch (e) {
+              console.error("❌ Error parseando usuario guardado:", e);
+            }
+          }
         }
       }
       

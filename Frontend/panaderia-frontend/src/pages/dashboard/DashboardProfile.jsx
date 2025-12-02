@@ -1,5 +1,5 @@
 // Frontend/src/pages/dashboard/DashboardProfile.jsx
-// ⭐ ACTUALIZADO: Incluye campo domicilio obligatorio
+// ⭐ ACTUALIZADO: Guardar domicilio correctamente usando setUser
 
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
@@ -16,7 +16,7 @@ export default function DashboardProfile() {
     email: "",
     first_name: "",
     last_name: "",
-    domicilio: "",  // ⭐ NUEVO
+    domicilio: "",
   });
 
   useEffect(() => {
@@ -25,13 +25,13 @@ export default function DashboardProfile() {
         email: user.email || "",
         first_name: user.first_name || "",
         last_name: user.last_name || "",
-        domicilio: user.domicilio || "",  // ⭐ NUEVO
+        domicilio: user.domicilio || "",
       });
     }
   }, [user]);
 
   const handleSave = async () => {
-    // ⭐ NUEVO: Validación de domicilio
+    // ⭐ Validación de domicilio
     if (!form.domicilio || form.domicilio.trim() === "") {
       enqueueSnackbar("El domicilio es obligatorio", {
         variant: "warning",
@@ -40,21 +40,60 @@ export default function DashboardProfile() {
       return;
     }
 
+    if (form.domicilio.trim().length < 10) {
+      enqueueSnackbar("Por favor ingresa una dirección más detallada (mínimo 10 caracteres)", {
+        variant: "warning",
+        autoHideDuration: 3000,
+      });
+      return;
+    }
+
     try {
+      console.log('\n' + '='.repeat(60));
+      console.log('💾 Guardando perfil del usuario');
+      console.log('='.repeat(60));
+      console.log('📝 Datos a enviar:', {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        domicilio: form.domicilio.substring(0, 50) + '...'
+      });
+
       const res = await api.patch("/usuarios/me/", {
         first_name: form.first_name,
         last_name: form.last_name,
-        domicilio: form.domicilio,  // ⭐ NUEVO
+        domicilio: form.domicilio,
       });
       
-      setUser({ ...user, ...res.data });
+      console.log('✅ Respuesta del servidor:', res.data);
+      
+      // ⭐ CRÍTICO: Actualizar usuario completo usando setUser del contexto
+      // Esto guardará automáticamente en localStorage
+      const updatedUser = {
+        ...user,
+        ...res.data,
+        domicilio: res.data.domicilio,
+        tiene_domicilio: res.data.tiene_domicilio
+      };
+      
+      console.log('🔄 Actualizando contexto con:', {
+        username: updatedUser.username,
+        domicilio: updatedUser.domicilio?.substring(0, 50) + '...',
+        tiene_domicilio: updatedUser.tiene_domicilio
+      });
+      
+      setUser(updatedUser);
+      
+      console.log('✅ Contexto actualizado');
+      console.log('='.repeat(60) + '\n');
+      
       setEditing(false);
       enqueueSnackbar("Perfil actualizado exitosamente", {
         variant: "success",
         autoHideDuration: 3000,
       });
     } catch (error) {
-      console.error("Error actualizando perfil:", error);
+      console.error("❌ Error actualizando perfil:", error);
+      console.error("   Detalles:", error.response?.data);
       enqueueSnackbar("Error al actualizar perfil", { variant: "error" });
     }
   };
@@ -64,7 +103,7 @@ export default function DashboardProfile() {
       email: user.email || "",
       first_name: user.first_name || "",
       last_name: user.last_name || "",
-      domicilio: user.domicilio || "",  // ⭐ NUEVO
+      domicilio: user.domicilio || "",
     });
     setEditing(false);
   };
@@ -102,7 +141,7 @@ export default function DashboardProfile() {
         </div>
       </motion.div>
 
-      {/* ⭐ NUEVO: Alerta si no tiene domicilio */}
+      {/* ⭐ Alerta si no tiene domicilio */}
       {!user?.domicilio && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -266,7 +305,7 @@ export default function DashboardProfile() {
                   />
                 </div>
 
-                {/* ⭐ NUEVO: Campo Domicilio */}
+                {/* ⭐ Campo Domicilio */}
                 <div className="group">
                   <label className="flex items-center gap-2 text-sm font-semibold text-[#5D4037] mb-3">
                     <div className={`w-8 h-8 ${user?.domicilio ? 'bg-green-100' : 'bg-red-100'} rounded-lg flex items-center justify-center`}>

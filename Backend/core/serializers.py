@@ -699,6 +699,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
         
+        # ⭐ CRÍTICO: Agregar domicilio al token
+        token['domicilio'] = user.domicilio or ''
+        token['tiene_domicilio'] = user.tiene_domicilio
+        
         # Agregar información de sucursal al token
         if user.sucursal:
             token['sucursal_id'] = user.sucursal.id
@@ -777,10 +781,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         print(f"✅ Login completado: {user.username} (Rol: {user.rol})")
         if user.sucursal:
             print(f"   Sucursal: {user.sucursal.nombre}")
+        print(f"   Domicilio: {user.domicilio[:50] if user.domicilio else 'No configurado'}...")  # ⭐ NUEVO
         print(f"{'='*60}\n")
         
         refresh = self.get_token(user)
         
+        # ⭐ CRÍTICO: Incluir domicilio en la respuesta
         data = {
             'refresh': str(refresh),
             'access': str(refresh.access_token),
@@ -793,8 +799,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'last_name': user.last_name,
                 'sucursal_id': user.sucursal.id if user.sucursal else None,
                 'sucursal_nombre': user.sucursal.nombre if user.sucursal else None,
-                'domicilio': user.domicilio,  # ⭐ NUEVO
-                'tiene_domicilio': user.tiene_domicilio  # ⭐ NUEVO
+                'domicilio': user.domicilio or '',  # ⭐ ASEGURAR que siempre exista
+                'tiene_domicilio': user.tiene_domicilio
             }
         }
         
