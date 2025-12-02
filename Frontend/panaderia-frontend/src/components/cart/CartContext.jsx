@@ -1,29 +1,68 @@
 // src/components/cart/CartContext.jsx
+// ✅ CORREGIDO: Precio como número y carrito por usuario
 import React, { createContext, useState, useEffect } from "react";
+import { useAuth } from "../auth/AuthContext";
 
 export const CartContext = createContext();
 
 export function CartProvider({ children }) {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("cart");
-    if (saved) {
-      try {
-        setItems(JSON.parse(saved));
-      } catch (err) {
-        console.error("Error al cargar carrito:", err);
-      }
+  // ✅ Generar key única por usuario
+  const getCartKey = () => {
+    if (user?.id) {
+      return `cart_user_${user.id}`;
     }
-  }, []);
+    return 'cart_guest'; // Para usuarios no autenticados
+  };
 
+  // ✅ Cargar carrito del usuario específico
   useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(items));
-  }, [items]);
+    if (user?.id) {
+      const cartKey = getCartKey();
+      const saved = localStorage.getItem(cartKey);
+      
+      console.log(`📦 Cargando carrito para usuario ${user.id}:`, cartKey);
+      
+      if (saved) {
+        try {
+          const parsedItems = JSON.parse(saved);
+          console.log('✅ Carrito cargado:', parsedItems);
+          setItems(parsedItems);
+        } catch (err) {
+          console.error("❌ Error al cargar carrito:", err);
+          setItems([]);
+        }
+      } else {
+        console.log('ℹ️ No hay carrito guardado para este usuario');
+        setItems([]);
+      }
+    } else {
+      console.log('⚠️ No hay usuario autenticado');
+      setItems([]);
+    }
+  }, [user?.id]);
 
-  // ⭐ NUEVA FUNCIÓN: Extraer productos con cantidades
+  // ✅ Guardar carrito cuando cambie
+  useEffect(() => {
+    if (user?.id) {
+      const cartKey = getCartKey();
+      console.log(`💾 Guardando carrito para usuario ${user.id}:`, items);
+      localStorage.setItem(cartKey, JSON.stringify(items));
+    }
+  }, [items, user?.id]);
+
+  // ✅ Limpiar carrito de otros usuarios al cambiar de sesión
+  useEffect(() => {
+    if (!user?.id) {
+      console.log('🧹 Usuario cerró sesión, limpiando carrito');
+      setItems([]);
+    }
+  }, [user?.id]);
+
+  // ⭐ Extraer productos con cantidades
   const getProductosConCantidad = (offerData) => {
-    // Formato nuevo: productos_con_cantidad
     if (offerData.productos_con_cantidad && Array.isArray(offerData.productos_con_cantidad)) {
       return offerData.productos_con_cantidad.map(pc => ({
         ...pc.producto,
@@ -31,7 +70,6 @@ export function CartProvider({ children }) {
       }));
     }
     
-    // Formato antiguo: productos (sin cantidades)
     if (offerData.productos && Array.isArray(offerData.productos)) {
       return offerData.productos.map(p => ({
         ...p,
@@ -42,7 +80,34 @@ export function CartProvider({ children }) {
     return [];
   };
 
+  // ✅ Función auxiliar para asegurar que precio sea número
+  const ensureNumber = (value) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
   const add = (itemData, qty = 1) => {
+    console.log('➕ Agregando item:', itemData);
+    
+    // ✅ Validar que el usuario esté autenticado
+    if (!user?.id) {
+      alert("Debes iniciar sesión para agregar productos al carrito");
+      return;
+    }
+
+    // ✅ Asegurar que precio sea número
+    const precioNumerico = ensureNumber(itemData.precio);
+    
+    if (precioNumerico === 0) {
+      console.error('❌ Precio inválido:', itemData.precio);
+      alert("Error: Precio del producto no válido");
+      return;
+    }
+
     if (!itemData.isOffer) {
       if (itemData.stock === 0 || itemData.esta_agotado) {
         alert("Este producto está agotado");
@@ -82,6 +147,7 @@ export function CartProvider({ children }) {
 
     setItems((prev) => {
       const existing = prev.find((i) => i.id === itemData.id);
+      
       if (existing) {
         if (!itemData.isOffer && existing.qty + qty > itemData.stock) {
           alert(`Solo hay ${itemData.stock} unidades disponibles`);
@@ -92,28 +158,34 @@ export function CartProvider({ children }) {
           i.id === itemData.id ? { ...i, qty: i.qty + qty } : i
         );
       } else {
-        return [...prev, { ...itemData, qty }];
+        // ✅ Asegurar que precio sea número al crear nuevo item
+        return [...prev, { 
+          ...itemData, 
+          precio: precioNumerico, // ✅ Forzar como número
+          qty 
+        }];
       }
     });
   };
 
-  // ⭐ FUNCIÓN ACTUALIZADA: Agregar oferta con cantidades
   const addOffer = (offerData) => {
     console.log('🎁 addOffer llamado con:', offerData);
 
-    // ⭐ Usar la nueva función para extraer productos
+    // ✅ Validar autenticación
+    if (!user?.id) {
+      alert("Debes iniciar sesión para agregar ofertas al carrito");
+      return;
+    }
+
     const productos = getProductosConCantidad(offerData);
-    
     console.log('📦 Productos extraídos con cantidades:', productos);
 
-    // Validar que la oferta tenga productos
     if (productos.length === 0) {
       console.error('❌ No hay productos válidos en la oferta');
       alert("Esta oferta no tiene productos válidos");
       return;
     }
 
-    // ⭐ Validar stock considerando las cantidades requeridas
     const problemasStock = [];
     
     productos.forEach(p => {
@@ -131,24 +203,30 @@ export function CartProvider({ children }) {
       return;
     }
 
-    // ⭐ Calcular stock mínimo considerando cantidades
     const stockMinimo = Math.min(
       ...productos.map(p => Math.floor(p.stock / (p.cantidad_oferta || 1)))
     );
 
-    // Crear item de oferta para el carrito
+    // ✅ Asegurar que precio sea número
+    const precioOferta = ensureNumber(offerData.precio_oferta);
+
+    if (precioOferta === 0) {
+      console.error('❌ Precio de oferta inválido:', offerData.precio_oferta);
+      alert("Error: Precio de la oferta no válido");
+      return;
+    }
+
     const offerItem = {
       id: `oferta-${offerData.id}`,
       nombre: offerData.titulo,
       title: offerData.titulo,
       descripcion: offerData.descripcion,
-      precio: parseFloat(offerData.precio_oferta),
+      precio: precioOferta, // ✅ Ya es número
       imagen: productos[0]?.imagen || null,
-      productos: productos, // ⭐ Guardar productos con sus cantidades
+      productos: productos,
       isOffer: true,
-      stock: stockMinimo, // ⭐ Stock basado en cantidades
+      stock: stockMinimo,
       qty: 1,
-      // ⭐ Información adicional para debug
       oferta_id: offerData.id,
       productos_con_cantidad: offerData.productos_con_cantidad
     };
@@ -159,7 +237,6 @@ export function CartProvider({ children }) {
       const existing = prev.find((i) => i.id === offerItem.id);
       
       if (existing) {
-        // Verificar si hay stock suficiente para incrementar
         if (existing.qty + 1 > stockMinimo) {
           alert(`Stock insuficiente para agregar más unidades de esta oferta`);
           return prev;
@@ -190,7 +267,6 @@ export function CartProvider({ children }) {
             return item;
           }
           
-          // ⭐ Validar stock para ofertas
           if (item.isOffer && newQty > item.stock) {
             alert(`Stock insuficiente. Solo se pueden agregar ${item.stock} unidades de esta oferta`);
             return item;
@@ -211,13 +287,16 @@ export function CartProvider({ children }) {
     setItems([]);
   };
 
-  const total = items.reduce((sum, item) => sum + item.precio * item.qty, 0);
+  // ✅ Calcular total asegurando números
+  const total = items.reduce((sum, item) => {
+    const precio = ensureNumber(item.precio);
+    const qty = parseInt(item.qty) || 0;
+    return sum + (precio * qty);
+  }, 0);
 
-  // ⭐ Verificar problemas de stock considerando cantidades
   const hasStockIssues = () => {
     return items.some((item) => {
       if (item.isOffer) {
-        // Verificar cada producto de la oferta con su cantidad
         return item.productos?.some((p) => {
           const cantidadRequerida = (p.cantidad_oferta || 1) * item.qty;
           return p.stock === 0 || p.stock < cantidadRequerida;
@@ -228,7 +307,6 @@ export function CartProvider({ children }) {
     });
   };
 
-  // ⭐ NUEVA FUNCIÓN: Obtener detalles de problemas de stock
   const getStockIssues = () => {
     const issues = [];
     
@@ -265,7 +343,7 @@ export function CartProvider({ children }) {
         clear,
         total,
         hasStockIssues,
-        getStockIssues, // ⭐ Nueva función exportada
+        getStockIssues,
       }}
     >
       {children}

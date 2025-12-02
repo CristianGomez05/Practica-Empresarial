@@ -1,4 +1,5 @@
 // src/components/cart/CartPage.jsx
+// ✅ CORREGIDO: Manejo seguro de precios como números
 import React, { useContext, useState } from "react";
 import { CartContext } from "./CartContext";
 import { FaTag, FaBox, FaTrash, FaShoppingCart, FaExclamationTriangle } from "react-icons/fa";
@@ -9,86 +10,99 @@ export default function CartPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleCreateOrder = async () => {
-  if (!items.length) return;
-
-  // Verificar problemas de stock antes de crear el pedido
-  if (hasStockIssues()) {
-    setError("Hay productos sin stock o con cantidades no válidas. Por favor ajusta tu carrito.");
-    return;
-  }
-
-  setLoading(true);
-  setError(null);
-  
-  console.log('🛒 CREANDO PEDIDO');
-  console.log('📦 Items en carrito:', items);
-  
-  try {
-    // Preparar items para el pedido
-    const orderItems = items.flatMap((item) => {
-      console.log('🔍 Procesando item:', item);
-      
-      if (item.isOffer) {
-        // Si es una oferta, añadir todos sus productos
-        console.log('   🎁 Es una OFERTA con', item.productos?.length, 'productos');
-        
-        if (!item.productos || item.productos.length === 0) {
-          console.error('   ❌ Oferta sin productos');
-          throw new Error('Oferta sin productos válidos');
-        }
-        
-        return item.productos.map((producto) => {
-          const itemData = {
-            producto: producto.id,
-            cantidad: item.qty,
-            precio_unitario: item.precio / item.productos.length, // Distribuir precio
-          };
-          console.log('   ➕ Producto de oferta:', itemData);
-          return itemData;
-        });
-      } else {
-        // Si es un producto individual
-        const itemData = {
-          producto: item.id,
-          cantidad: item.qty,
-        };
-        console.log('   ➕ Producto individual:', itemData);
-        return [itemData];
-      }
-    });
-
-    console.log('📋 Items preparados para enviar:', orderItems);
-    console.log('💰 Total:', total);
-
-    const body = {
-      items: orderItems,
-      total,
-    };
-    
-    console.log('📤 Enviando al backend:', JSON.stringify(body, null, 2));
-    
-    const res = await api.post("/pedidos/", body);
-    
-    console.log('✅ Respuesta del servidor:', res.data);
-    
-    clear();
-    window.location.href = `/dashboard/pedidos/${res.data.id}`;
-  } catch (err) {
-    console.error('❌ Error al crear pedido:', err);
-    console.error('   Detalles:', err.response?.data);
-    
-    if (err.response?.data?.error) {
-      setError(err.response.data.error);
-    } else if (err.message) {
-      setError(err.message);
-    } else {
-      setError("No se pudo crear el pedido. Intenta nuevamente.");
+  // ✅ Función auxiliar para asegurar números
+  const ensureNumber = (value) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      return isNaN(parsed) ? 0 : parsed;
     }
-  } finally {
-    setLoading(false);
-  }
-};
+    return 0;
+  };
+
+  // ✅ Función segura para formatear precios
+  const formatPrice = (price) => {
+    const numPrice = ensureNumber(price);
+    return numPrice.toFixed(2);
+  };
+
+  const handleCreateOrder = async () => {
+    if (!items.length) return;
+
+    if (hasStockIssues()) {
+      setError("Hay productos sin stock o con cantidades no válidas. Por favor ajusta tu carrito.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    
+    console.log('🛒 CREANDO PEDIDO');
+    console.log('📦 Items en carrito:', items);
+    
+    try {
+      const orderItems = items.flatMap((item) => {
+        console.log('🔍 Procesando item:', item);
+        
+        if (item.isOffer) {
+          console.log('   🎁 Es una OFERTA con', item.productos?.length, 'productos');
+          
+          if (!item.productos || item.productos.length === 0) {
+            console.error('   ❌ Oferta sin productos');
+            throw new Error('Oferta sin productos válidos');
+          }
+          
+          return item.productos.map((producto) => {
+            const itemData = {
+              producto: producto.id,
+              cantidad: item.qty,
+              precio_unitario: ensureNumber(item.precio) / item.productos.length,
+            };
+            console.log('   ➕ Producto de oferta:', itemData);
+            return itemData;
+          });
+        } else {
+          const itemData = {
+            producto: item.id,
+            cantidad: item.qty,
+            precio_unitario: ensureNumber(item.precio),
+          };
+          console.log('   ➕ Producto individual:', itemData);
+          return [itemData];
+        }
+      });
+
+      console.log('📋 Items preparados para enviar:', orderItems);
+      console.log('💰 Total:', total);
+
+      const body = {
+        items: orderItems,
+        total: ensureNumber(total),
+      };
+      
+      console.log('📤 Enviando al backend:', JSON.stringify(body, null, 2));
+      
+      const res = await api.post("/pedidos/", body);
+      
+      console.log('✅ Respuesta del servidor:', res.data);
+      
+      clear();
+      window.location.href = `/dashboard/pedidos/${res.data.id}`;
+    } catch (err) {
+      console.error('❌ Error al crear pedido:', err);
+      console.error('   Detalles:', err.response?.data);
+      
+      if (err.response?.data?.error) {
+        setError(err.response.data.error);
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError("No se pudo crear el pedido. Intenta nuevamente.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!items.length) {
     return (
@@ -106,7 +120,6 @@ export default function CartPage() {
     <div className="max-w-4xl mx-auto space-y-4">
       <h1 className="text-3xl font-bold text-[#5D4037] mb-6">Mi Carrito</h1>
 
-      {/* Alerta general de stock */}
       {cartHasIssues && (
         <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-start gap-3">
           <FaExclamationTriangle className="text-red-600 text-xl flex-shrink-0 mt-1" />
@@ -121,11 +134,13 @@ export default function CartPage() {
       )}
 
       {items.map((item) => {
-        // Verificar problemas de stock
         const estaAgotado = !item.isOffer && (item.stock === 0 || item.esta_agotado);
         const stockInsuficiente = !item.isOffer && item.qty > item.stock;
         const ofertaConProductosAgotados = item.isOffer && item.productos?.some(p => p.stock === 0);
         const tieneProblema = estaAgotado || stockInsuficiente || ofertaConProductosAgotados;
+
+        // ✅ Asegurar que precio sea número
+        const precioItem = ensureNumber(item.precio);
 
         return (
           <div
@@ -138,7 +153,6 @@ export default function CartPage() {
                 : 'border-gray-200'
             }`}
           >
-            {/* Alerta de stock específica */}
             {tieneProblema && (
               <div className="mb-3 bg-red-100 border border-red-300 rounded-lg p-3 flex items-start gap-2">
                 <FaExclamationTriangle className="text-red-600 flex-shrink-0 mt-0.5" />
@@ -163,7 +177,6 @@ export default function CartPage() {
             )}
 
             <div className="flex items-start gap-4">
-              {/* Imagen */}
               {item.imagen && (
                 <div className={`w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ${
                   tieneProblema ? 'opacity-50 grayscale' : ''
@@ -176,9 +189,7 @@ export default function CartPage() {
                 </div>
               )}
 
-              {/* Contenido */}
               <div className="flex-1">
-                {/* Header con badge */}
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     {item.isOffer && (
@@ -202,7 +213,6 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                {/* Stock disponible (solo productos) */}
                 {!item.isOffer && (
                   <div className="mb-2">
                     {estaAgotado ? (
@@ -224,7 +234,6 @@ export default function CartPage() {
                   </div>
                 )}
 
-                {/* Productos incluidos (solo para ofertas) */}
                 {item.isOffer && item.productos && (
                   <div className="bg-white rounded-lg p-3 mb-3 border border-green-200">
                     <div className="flex items-center gap-2 mb-2">
@@ -253,11 +262,10 @@ export default function CartPage() {
                   </div>
                 )}
 
-                {/* Precio y controles */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="text-sm text-gray-600">
-                      Precio unitario: <span className="font-semibold text-[#5D4037]">₡{item.precio}</span>
+                      Precio unitario: <span className="font-semibold text-[#5D4037]">₡{formatPrice(precioItem)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <label className="text-sm text-gray-600">Cantidad:</label>
@@ -281,7 +289,7 @@ export default function CartPage() {
                     <div className="text-right">
                       <div className="text-sm text-gray-600">Subtotal</div>
                       <div className="text-xl font-bold text-amber-700">
-                        ₡{(item.precio * item.qty).toFixed(2)}
+                        ₡{formatPrice(precioItem * item.qty)}
                       </div>
                     </div>
                     <button
@@ -299,11 +307,10 @@ export default function CartPage() {
         );
       })}
 
-      {/* Total y acciones */}
       <div className="bg-white p-6 rounded-xl shadow-md border-2 border-amber-200">
         <div className="flex justify-between items-center mb-6">
           <span className="text-xl font-semibold text-[#5D4037]">Total:</span>
-          <span className="text-3xl font-bold text-amber-700">₡{total.toFixed(2)}</span>
+          <span className="text-3xl font-bold text-amber-700">₡{formatPrice(total)}</span>
         </div>
 
         {error && (
