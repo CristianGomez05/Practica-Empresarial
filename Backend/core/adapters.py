@@ -1,13 +1,17 @@
 # Backend/core/adapters.py
+# ⭐ ACTUALIZADO: Incluye domicilio en tokens OAuth
+
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from rest_framework_simplejwt.tokens import RefreshToken
 from urllib.parse import urlencode
 from django.conf import settings
 
+
 class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
     """
     Genera tokens JWT y redirige al frontend según el rol del usuario
+    ⭐ CRÍTICO: Incluye TODA la información del usuario en el token, incluyendo domicilio
     """
     def get_login_redirect_url(self, request):
         user = request.user
@@ -21,14 +25,20 @@ class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
         # Generar tokens con información personalizada
         refresh = RefreshToken.for_user(user)
         
-        # Agregar claims personalizados al token
+        # ⭐ Agregar TODOS los claims personalizados (igual que en serializers.py)
         refresh['username'] = user.username
         refresh['email'] = user.email
         refresh['rol'] = user.rol
         refresh['first_name'] = user.first_name
         refresh['last_name'] = user.last_name
         
-        # ⭐ Agregar información de sucursal si existe
+        # ⭐⭐⭐ CRÍTICO: Agregar domicilio al token OAuth
+        refresh['domicilio'] = user.domicilio or ''
+        refresh['tiene_domicilio'] = user.tiene_domicilio
+        print(f"🏠 Domicilio: {user.domicilio[:50] if user.domicilio else 'No configurado'}...")
+        print(f"✓ Tiene domicilio: {user.tiene_domicilio}")
+        
+        # Agregar información de sucursal si existe
         if hasattr(user, 'sucursal') and user.sucursal:
             refresh['sucursal_id'] = user.sucursal.id
             refresh['sucursal_nombre'] = user.sucursal.nombre
@@ -48,7 +58,7 @@ class FrontendRedirectAccountAdapter(DefaultAccountAdapter):
 
         frontend_url = settings.FRONTEND_URL
         
-        # ⭐ Redirigir a /dashboard SIEMPRE
+        # Redirigir a /dashboard SIEMPRE
         # Dashboard.jsx se encargará de procesar tokens y redirigir según rol
         redirect_url = f"{frontend_url}/dashboard#{fragment}"
         
@@ -81,6 +91,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     def save_user(self, request, sociallogin, form=None):
         """
         Se ejecuta al crear un nuevo usuario desde Google
+        ⭐ NUEVO: Inicializar domicilio vacío para nuevos usuarios OAuth
         """
         user = super().save_user(request, sociallogin, form)
         
@@ -90,7 +101,13 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
             
             if email and not user.email:
                 user.email = email
-                user.save()
-                print(f"✅ Email guardado para nuevo usuario: {user.username} -> {email}")
+            
+            # ⭐ NUEVO: Asegurar que domicilio esté inicializado
+            if not user.domicilio:
+                user.domicilio = ''
+            
+            user.save()
+            print(f"✅ Usuario OAuth creado/actualizado: {user.username} -> {email}")
+            print(f"🏠 Domicilio inicial: {user.domicilio or 'Vacío (debe configurarse)'}")
         
         return user
