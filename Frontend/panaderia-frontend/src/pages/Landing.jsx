@@ -572,7 +572,6 @@ const Landing = () => {
         stock={selectedItem?.stock}
         isOffer={selectedItem?.isOffer}
         offerProducts={selectedItem?.offerProducts || []}
-        sucursalNombre={selectedItem?.sucursalNombre}
       />
     </div>
   );
