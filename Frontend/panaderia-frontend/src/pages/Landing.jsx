@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
-import { FaShoppingCart, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaTag, FaClock, FaFire, FaBox } from "react-icons/fa";
+import ImageModal from "../components/ImageModal";
+import { FaShoppingCart, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaTag, FaClock, FaFire, FaBox, FaStore } from "react-icons/fa";
 import api from "../services/api";
 import { useAuth } from "../components/auth/AuthContext";
 
@@ -36,8 +37,8 @@ const Landing = () => {
       const ofertasActivas = (ofertasRes.data.results || ofertasRes.data)
         .filter(o => o.fecha_inicio <= hoy && o.fecha_fin >= hoy);
 
-      setProductos(productosDisponibles); // MOSTRAR TODOS LOS PRODUCTOS (sin límite)
-      setOfertas(ofertasActivas); // MOSTRAR TODAS LAS OFERTAS (sin límite)
+      setProductos(productosDisponibles);
+      setOfertas(ofertasActivas);
     } catch (error) {
       console.error('Error cargando datos:', error);
     } finally {
@@ -46,15 +47,9 @@ const Landing = () => {
   };
 
   const openModal = (item) => {
-    console.log('=== DEBUG MODAL ===');
-    console.log('1. Función openModal llamada');
-    console.log('2. Datos recibidos:', item);
-    console.log('3. isOffer:', item?.isOffer);
-    console.log('4. offerProducts:', item?.offerProducts);
-    console.log('==================');
+    console.log('🔍 Abriendo modal:', item);
     setSelectedItem(item);
     setModalOpen(true);
-    console.log('5. Modal abierto, modalOpen:', true);
   };
 
   const closeModal = () => {
@@ -107,7 +102,7 @@ const Landing = () => {
       <Navbar />
 
       {/* ================== HERO SECTION ================== */}
-      <section id="inicio" className="relative flex flex-col md:flex-row items-center justify-between max-w-7x1 mx-auto px-1 md:px-12 pt-32 md:pt-40 pb-20 gap-10 overflow-hidden">
+      <section id="inicio" className="relative flex flex-col md:flex-row items-center justify-between max-w-7xl mx-auto px-6 md:px-12 pt-32 md:pt-40 pb-20 gap-10 overflow-hidden">
         <div className="absolute top-20 left-10 w-72 h-72 bg-amber-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
         <div className="absolute top-20 right-10 w-72 h-72 bg-orange-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
 
@@ -189,78 +184,85 @@ const Landing = () => {
           </div>
         ) : productos.length > 0 ? (
           <div className="grid md:grid-cols-4 sm:grid-cols-2 grid-cols-1 gap-8">
-            {productos.map((producto, i) => {
-              return (
-                <motion.div
-                  key={producto.id}
-                  {...fadeUp(i * 0.05)}
-                  className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-amber-200"
+            {productos.map((producto, i) => (
+              <motion.div
+                key={producto.id}
+                {...fadeUp(i * 0.05)}
+                className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-transparent hover:border-amber-200"
+              >
+                {/* Imagen - CLICKEABLE */}
+                <div 
+                  onClick={() => openModal({
+                    image: producto.imagen,
+                    title: producto.nombre,
+                    description: producto.descripcion,
+                    price: producto.precio,
+                    offerPrice: null,
+                    stock: producto.stock,
+                    isOffer: false,
+                    sucursalNombre: producto.sucursal_nombre
+                  })}
+                  className="relative h-56 overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50 cursor-pointer hover:opacity-90 transition-opacity"
                 >
-                  {/* Imagen - CLICKEABLE para abrir modal de PRODUCTO INDIVIDUAL */}
-                  <div 
-                    onClick={() => openModal({
-                      image: producto.imagen,
-                      title: producto.nombre,
-                      description: producto.descripcion,
-                      price: producto.precio,
-                      offerPrice: null,
-                      stock: producto.stock,
-                      isOffer: false
-                    })}
-                    className="relative h-56 overflow-hidden bg-gradient-to-br from-amber-50 to-orange-50 cursor-pointer hover:opacity-90 transition-opacity"
-                  >
-                    {producto.imagen ? (
-                      <img
-                        src={producto.imagen}
-                        alt={producto.nombre}
-                        className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center">
-                        <span className="text-6xl">🥖</span>
-                      </div>
-                    )}
-
-                    {/* Badge de stock bajo */}
-                    {producto.stock > 0 && producto.stock <= 5 && (
-                      <div className="absolute top-3 left-3 bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
-                        ¡Últimos {producto.stock}!
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Contenido */}
-                  <div className="p-6">
-                    <h3 className="text-xl font-bold text-[#5D4037] mb-2 group-hover:text-amber-700 transition-colors line-clamp-1">
-                      {producto.nombre}
-                    </h3>
-
-                    {producto.descripcion && (
-                      <p className="text-sm text-[#8D6E63] mb-4 line-clamp-2 min-h-[40px]">
-                        {producto.descripcion}
-                      </p>
-                    )}
-
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm text-gray-600 mb-1">Precio</p>
-                        <p className="text-2xl font-bold text-amber-700">
-                          ₡{Number(producto.precio).toLocaleString('es-CR')}
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => handleAddToCart(producto)}
-                        className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white p-3 rounded-xl transition-all hover:scale-110 shadow-lg group-hover:shadow-xl"
-                        title="Agregar al carrito"
-                      >
-                        <FaShoppingCart className="text-lg" />
-                      </button>
+                  {producto.imagen ? (
+                    <img
+                      src={producto.imagen}
+                      alt={producto.nombre}
+                      className="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center">
+                      <span className="text-6xl">🥖</span>
                     </div>
+                  )}
+
+                  {/* Badge de stock bajo */}
+                  {producto.stock > 0 && producto.stock <= 5 && (
+                    <div className="absolute top-3 left-3 bg-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+                      ¡Últimos {producto.stock}!
+                    </div>
+                  )}
+
+                  {/* Badge de sucursal */}
+                  {producto.sucursal_nombre && (
+                    <div className="absolute top-3 right-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+                      <FaStore className="text-xs" />
+                      {producto.sucursal_nombre}
+                    </div>
+                  )}
+                </div>
+
+                {/* Contenido */}
+                <div className="p-6">
+                  <h3 className="text-xl font-bold text-[#5D4037] mb-2 group-hover:text-amber-700 transition-colors line-clamp-1">
+                    {producto.nombre}
+                  </h3>
+
+                  {producto.descripcion && (
+                    <p className="text-sm text-[#8D6E63] mb-4 line-clamp-2 min-h-[40px]">
+                      {producto.descripcion}
+                    </p>
+                  )}
+
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Precio</p>
+                      <p className="text-2xl font-bold text-amber-700">
+                        ₡{Number(producto.precio).toLocaleString('es-CR')}
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => handleAddToCart(producto)}
+                      className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white p-3 rounded-xl transition-all hover:scale-110 shadow-lg group-hover:shadow-xl"
+                      title="Agregar al carrito"
+                    >
+                      <FaShoppingCart className="text-lg" />
+                    </button>
                   </div>
-                </motion.div>
-              );
-            })}
+                </div>
+              </motion.div>
+            ))}
           </div>
         ) : (
           <div className="text-center py-20">
@@ -296,11 +298,17 @@ const Landing = () => {
             <div className="grid md:grid-cols-3 sm:grid-cols-2 grid-cols-1 gap-8">
               {ofertas.map((oferta, i) => {
                 const diasRestantes = getDiasRestantes(oferta.fecha_fin);
-                const productos = oferta.productos || [];
-                const primerProducto = productos[0];
                 
-                // Calcular precio total regular y porcentaje de descuento
-                const precioTotalRegular = productos.reduce((sum, p) => sum + Number(p.precio || 0), 0);
+                // Extraer productos con cantidades
+                const productosConCantidad = oferta.productos_con_cantidad || [];
+                const primerProducto = productosConCantidad[0]?.producto;
+                
+                // Calcular precio total regular (sumando precio * cantidad)
+                const precioTotalRegular = productosConCantidad.reduce(
+                  (sum, item) => sum + (Number(item.producto?.precio || 0) * item.cantidad), 
+                  0
+                );
+                
                 const precioOferta = Number(oferta.precio_oferta || 0);
                 const porcentajeDescuento = precioTotalRegular > 0 
                   ? Math.round(((precioTotalRegular - precioOferta) / precioTotalRegular) * 100) 
@@ -313,17 +321,21 @@ const Landing = () => {
                     {...fadeUp(i * 0.1)}
                     className="group bg-white rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-red-200"
                   >
-                    {/* Header con imagen - CLICKEABLE para abrir modal de OFERTA */}
+                    {/* Header con imagen - CLICKEABLE */}
                     <div 
                       onClick={() => openModal({
                         image: primerProducto?.imagen,
                         title: oferta.titulo,
                         description: oferta.descripcion,
-                        price: null, // No se usa en ofertas
+                        price: null,
                         offerPrice: oferta.precio_oferta,
-                        stock: null, // No aplica para ofertas
-                        isOffer: true, // 🔥 IMPORTANTE: Indica que es una oferta
-                        offerProducts: productos // 🔥 Array completo de productos
+                        stock: null,
+                        isOffer: true,
+                        offerProducts: productosConCantidad.map(item => ({
+                          ...item.producto,
+                          cantidad: item.cantidad
+                        })),
+                        sucursalNombre: oferta.sucursal_nombre
                       })}
                       className="relative h-48 overflow-hidden bg-gradient-to-br from-red-50 to-orange-50 cursor-pointer hover:opacity-90 transition-opacity"
                     >
@@ -339,9 +351,18 @@ const Landing = () => {
                         </div>
                       )}
 
-                      {productos.length > 1 && (
+                      {/* Badge de cantidad de productos */}
+                      {productosConCantidad.length > 1 && (
                         <div className="absolute top-3 left-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
-                          {productos.length} Productos
+                          {productosConCantidad.length} Productos
+                        </div>
+                      )}
+
+                      {/* Badge de sucursal */}
+                      {oferta.sucursal_nombre && (
+                        <div className="absolute bottom-3 left-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+                          <FaStore className="text-xs" />
+                          {oferta.sucursal_nombre}
                         </div>
                       )}
 
@@ -368,20 +389,24 @@ const Landing = () => {
                         {oferta.descripcion}
                       </p>
 
-                      {productos.length > 0 && (
+                      {productosConCantidad.length > 0 && (
                         <div className="bg-amber-50 rounded-lg p-3 mb-4 border border-amber-200">
                           <p className="text-xs text-amber-800 font-semibold mb-2">
-                            {productos.length > 1 ? 'Productos incluidos:' : 'Producto:'}
+                            Productos incluidos:
                           </p>
                           <div className="space-y-1">
-                            {productos.slice(0, 2).map((prod, idx) => (
+                            {productosConCantidad.slice(0, 2).map((item, idx) => (
                               <div key={idx} className="flex justify-between items-center text-sm">
-                                <span className="text-[#5D4037] font-medium">{prod.nombre}</span>
-                                <span className="text-gray-500 line-through text-xs">₡{prod.precio}</span>
+                                <span className="text-[#5D4037] font-medium">
+                                  {item.cantidad}x {item.producto.nombre}
+                                </span>
+                                <span className="text-gray-500 line-through text-xs">
+                                  ₡{(item.producto.precio * item.cantidad).toLocaleString('es-CR')}
+                                </span>
                               </div>
                             ))}
-                            {productos.length > 2 && (
-                              <p className="text-xs text-amber-700">+{productos.length - 2} más...</p>
+                            {productosConCantidad.length > 2 && (
+                              <p className="text-xs text-amber-700">+{productosConCantidad.length - 2} más...</p>
                             )}
                           </div>
                         </div>
@@ -390,7 +415,12 @@ const Landing = () => {
                       <div className="flex items-end justify-between pt-4 border-t border-gray-200">
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Precio Oferta</p>
-                          <p className="text-3xl font-bold text-red-600">₡{oferta.precio_oferta}</p>
+                          <p className="text-3xl font-bold text-red-600">₡{precioOferta.toLocaleString('es-CR')}</p>
+                          {ahorro > 0 && (
+                            <p className="text-xs text-green-600 font-semibold">
+                              Ahorras ₡{ahorro.toLocaleString('es-CR')}
+                            </p>
+                          )}
                         </div>
                         <button
                           onClick={() => navigate(user ? '/dashboard/inicio' : '/login')}
@@ -530,249 +560,20 @@ const Landing = () => {
         </motion.button>
       )}
 
-      {/* Image Modal - Versión Mejorada */}
-      {console.log('Renderizando Landing, modalOpen:', modalOpen, 'selectedItem:', selectedItem)}
-      
-      {/* Modal con Framer Motion */}
-      {modalOpen && (
-        <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={closeModal}
-          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 backdrop-blur-sm z-[9999]"
-        >
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            transition={{ type: "spring", duration: 0.5 }}
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden relative"
-          >
-            {/* Botón Cerrar */}
-            <button 
-              onClick={closeModal}
-              className="absolute top-4 right-4 z-10 bg-white hover:bg-red-50 text-gray-700 hover:text-red-600 rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all hover:scale-110 hover:rotate-90"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <div className="flex flex-col md:flex-row max-h-[95vh]">
-              {/* Sección Izquierda - Imagen */}
-              <div className="md:w-1/2 bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 p-8 flex items-center justify-center relative overflow-hidden">
-                {/* Decoración de fondo */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-orange-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
-                
-                {selectedItem?.image && (
-                  <motion.img 
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    src={selectedItem.image} 
-                    alt={selectedItem.title}
-                    className="relative z-10 max-w-full max-h-[50vh] md:max-h-[70vh] object-contain rounded-2xl shadow-2xl"
-                  />
-                )}
-                
-                {/* Badges sobre la imagen */}
-                {selectedItem?.offerPrice && (
-                  <motion.div 
-                    initial={{ x: -50, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="absolute top-6 left-6 bg-gradient-to-r from-red-500 to-orange-500 text-white px-5 py-3 rounded-2xl shadow-xl"
-                  >
-                    <p className="text-xs font-bold">OFERTA</p>
-                    <p className="text-3xl font-black leading-none">
-                      -{Math.round(((
-                        (selectedItem.price || selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0) || 0) - 
-                        selectedItem.offerPrice
-                      ) / (selectedItem.price || selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0) || 1)) * 100)}%
-                    </p>
-                  </motion.div>
-                )}
-                
-                {selectedItem?.isOffer && selectedItem?.offerProducts?.length > 1 && (
-                  <motion.div 
-                    initial={{ x: 50, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="absolute bottom-6 left-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-5 py-3 rounded-2xl shadow-xl"
-                  >
-                    <p className="text-sm font-bold">{selectedItem.offerProducts.length} PRODUCTOS</p>
-                    <p className="text-xs">Incluidos</p>
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Sección Derecha - Información */}
-              <div className="md:w-1/2 overflow-y-auto">
-                <div className="p-8 space-y-6">
-                  {/* Header */}
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    {selectedItem?.isOffer && (
-                      <span className="inline-flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-full text-sm font-bold mb-3">
-                        <FaTag /> OFERTA ESPECIAL
-                      </span>
-                    )}
-                    <h2 className="text-4xl font-black text-[#5D4037] mb-3 leading-tight">
-                      {selectedItem?.title || 'Sin título'}
-                    </h2>
-                    {selectedItem?.description && (
-                      <p className="text-lg text-[#8D6E63] leading-relaxed">
-                        {selectedItem.description}
-                      </p>
-                    )}
-                  </motion.div>
-
-                  {/* Productos de la Oferta */}
-                  {selectedItem?.isOffer && selectedItem?.offerProducts?.length > 0 && (
-                    <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                      className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 border-2 border-amber-200"
-                    >
-                      <h3 className="text-xl font-bold text-[#5D4037] mb-4 flex items-center gap-2">
-                        <FaBox className="text-amber-600" />
-                        Productos incluidos en esta oferta:
-                      </h3>
-                      <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                        {selectedItem.offerProducts.map((prod, idx) => (
-                          <motion.div 
-                            key={idx}
-                            initial={{ x: -20, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            transition={{ delay: 0.3 + (idx * 0.1) }}
-                            className="flex items-center gap-4 bg-white rounded-xl p-3 shadow-md hover:shadow-lg transition-all group"
-                          >
-                            {prod.imagen && (
-                              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 group-hover:scale-110 transition-transform">
-                                <img 
-                                  src={prod.imagen} 
-                                  alt={prod.nombre}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-[#5D4037] truncate">{prod.nombre}</p>
-                              {prod.descripcion && (
-                                <p className="text-sm text-[#8D6E63] line-clamp-1">
-                                  {prod.descripcion}
-                                </p>
-                              )}
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-sm text-gray-400 line-through">
-                                ₡{Number(prod.precio).toLocaleString('es-CR')}
-                              </p>
-                              <span className="text-xs text-green-600 font-semibold">En oferta</span>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
-                  {/* Stock - Solo para productos individuales */}
-                  {!selectedItem?.isOffer && selectedItem?.stock !== undefined && selectedItem?.stock !== null && (
-                    <motion.div
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.3 }}
-                      className={`rounded-2xl p-5 border-2 ${
-                        selectedItem.stock === 0 
-                          ? 'bg-red-50 border-red-200' 
-                          : selectedItem.stock <= 5 
-                          ? 'bg-orange-50 border-orange-200' 
-                          : 'bg-green-50 border-green-200'
-                      }`}
-                    >
-                      <p className="text-sm font-semibold mb-2" style={{ color: selectedItem.stock === 0 ? '#d32f2f' : selectedItem.stock <= 5 ? '#f57c00' : '#388e3c' }}>
-                        Disponibilidad
-                      </p>
-                      <p className={`text-xl font-bold flex items-center gap-2 ${
-                        selectedItem.stock === 0 ? 'text-red-600' : selectedItem.stock <= 5 ? 'text-orange-600' : 'text-green-600'
-                      }`}>
-                        <span className="text-2xl">
-                          {selectedItem.stock === 0 ? '❌' : selectedItem.stock <= 5 ? '⚠️' : '✓'}
-                        </span>
-                        {selectedItem.stock === 0 
-                          ? 'Sin existencias' 
-                          : selectedItem.stock <= 5 
-                          ? `Quedan solo ${selectedItem.stock} unidades` 
-                          : `${selectedItem.stock} unidades disponibles`}
-                      </p>
-                    </motion.div>
-                  )}
-
-                  {/* Precio */}
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl p-6 border-2 border-yellow-300 shadow-lg"
-                  >
-                    {selectedItem?.offerPrice ? (
-                      <div>
-                        <p className="text-sm text-gray-500 mb-2">Precio regular</p>
-                        <p className="text-2xl text-gray-400 line-through mb-4">
-                          ₡{selectedItem.price 
-                            ? Number(selectedItem.price).toLocaleString('es-CR') 
-                            : selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0).toLocaleString('es-CR')}
-                        </p>
-                        <div className="flex items-center gap-2 mb-3">
-                          <FaTag className="text-red-600 text-2xl" />
-                          <p className="text-base font-bold text-red-700">Precio de oferta</p>
-                        </div>
-                        <p className="text-5xl font-black text-red-600 mb-4">
-                          ₡{Number(selectedItem.offerPrice).toLocaleString('es-CR')}
-                        </p>
-                        <div className="bg-green-100 border-2 border-green-300 rounded-xl p-4">
-                          <p className="text-green-800 font-bold text-lg flex items-center gap-2">
-                            <FaFire className="text-2xl" />
-                            Ahorras ₡{(
-                              (selectedItem.price || selectedItem.offerProducts?.reduce((sum, p) => sum + Number(p.precio || 0), 0) || 0) - 
-                              selectedItem.offerPrice
-                            ).toLocaleString('es-CR')}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm text-gray-600 mb-2">Precio</p>
-                        <p className="text-5xl font-black text-amber-700">
-                          ₡{selectedItem?.price ? Number(selectedItem.price).toLocaleString('es-CR') : '0'}
-                        </p>
-                      </div>
-                    )}
-                  </motion.div>
-
-                  {/* Botón Cerrar */}
-                  <motion.button
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                    onClick={closeModal}
-                    className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all hover:scale-105"
-                  >
-                    Cerrar
-                  </motion.button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={modalOpen}
+        onClose={closeModal}
+        image={selectedItem?.image}
+        title={selectedItem?.title}
+        description={selectedItem?.description}
+        price={selectedItem?.price}
+        offerPrice={selectedItem?.offerPrice}
+        stock={selectedItem?.stock}
+        isOffer={selectedItem?.isOffer}
+        offerProducts={selectedItem?.offerProducts || []}
+        sucursalNombre={selectedItem?.sucursalNombre}
+      />
     </div>
   );
 };

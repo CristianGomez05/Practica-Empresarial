@@ -1,21 +1,11 @@
 // Frontend/panaderia-frontend/src/components/ImageModal.jsx
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaTag, FaFire, FaBox, FaTimes } from "react-icons/fa";
+import { FaTag, FaFire, FaBox, FaTimes, FaStore } from "react-icons/fa";
 
 /**
  * Modal reutilizable para mostrar detalles de productos y ofertas
- * 
- * @param {boolean} isOpen - Estado del modal (abierto/cerrado)
- * @param {function} onClose - Función para cerrar el modal
- * @param {string} image - URL de la imagen
- * @param {string} title - Título del producto/oferta
- * @param {string} description - Descripción
- * @param {number} price - Precio regular (opcional)
- * @param {number} offerPrice - Precio de oferta (opcional)
- * @param {number} stock - Stock disponible (opcional)
- * @param {boolean} isOffer - Indica si es una oferta con múltiples productos
- * @param {Array} offerProducts - Array de productos incluidos en la oferta
+ * ⭐ ACTUALIZADO: Soporte para cantidades en ofertas y visualización de sucursal
  */
 export default function ImageModal({
   isOpen,
@@ -27,29 +17,27 @@ export default function ImageModal({
   offerPrice,
   stock,
   isOffer = false,
-  offerProducts = []
+  offerProducts = [],
+  sucursalNombre = null
 }) {
   if (!isOpen) return null;
 
-  // Calcular descuento si hay precio de oferta
-  const descuentoPorcentaje = offerPrice && price
-    ? Math.round(((price - offerPrice) / price) * 100)
-    : offerPrice && offerProducts.length > 0
-    ? Math.round((
-        (offerProducts.reduce((sum, p) => sum + Number(p.precio || 0), 0) - offerPrice) /
-        offerProducts.reduce((sum, p) => sum + Number(p.precio || 0), 0)
-      ) * 100)
-    : 0;
-
-  const ahorro = offerPrice && price
-    ? price - offerPrice
-    : offerPrice && offerProducts.length > 0
-    ? offerProducts.reduce((sum, p) => sum + Number(p.precio || 0), 0) - offerPrice
-    : 0;
-
-  const precioTotalRegular = offerProducts.length > 0
-    ? offerProducts.reduce((sum, p) => sum + Number(p.precio || 0), 0)
+  // Calcular precio total regular considerando cantidades
+  const precioTotalRegular = isOffer && offerProducts.length > 0
+    ? offerProducts.reduce((sum, p) => sum + (Number(p.precio || 0) * (p.cantidad || 1)), 0)
     : price || 0;
+
+  // Calcular descuento
+  const descuentoPorcentaje = offerPrice && precioTotalRegular > 0
+    ? Math.round(((precioTotalRegular - offerPrice) / precioTotalRegular) * 100)
+    : 0;
+
+  const ahorro = offerPrice ? precioTotalRegular - offerPrice : 0;
+
+  // Calcular total de unidades en la oferta
+  const totalUnidades = isOffer 
+    ? offerProducts.reduce((sum, p) => sum + (p.cantidad || 1), 0)
+    : 0;
 
   return (
     <AnimatePresence>
@@ -109,16 +97,29 @@ export default function ImageModal({
                 </motion.div>
               )}
 
-              {/* Badge de múltiples productos */}
-              {isOffer && offerProducts.length > 1 && (
+              {/* Badge de múltiples productos con total de unidades */}
+              {isOffer && offerProducts.length > 0 && (
                 <motion.div
                   initial={{ x: 50, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
                   className="absolute bottom-6 left-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-5 py-3 rounded-2xl shadow-xl"
                 >
-                  <p className="text-sm font-bold">{offerProducts.length} PRODUCTOS</p>
-                  <p className="text-xs">Incluidos</p>
+                  <p className="text-sm font-bold">{totalUnidades} UNIDADES</p>
+                  <p className="text-xs">{offerProducts.length} productos diferentes</p>
+                </motion.div>
+              )}
+
+              {/* Badge de sucursal */}
+              {sucursalNombre && (
+                <motion.div
+                  initial={{ y: -20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.4 }}
+                  className="absolute top-6 right-6 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2"
+                >
+                  <FaStore />
+                  <span className="font-bold">{sucursalNombre}</span>
                 </motion.div>
               )}
             </div>
@@ -145,9 +146,15 @@ export default function ImageModal({
                       {description}
                     </p>
                   )}
+                  {sucursalNombre && (
+                    <div className="flex items-center gap-2 mt-3 text-blue-700 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+                      <FaStore className="text-lg" />
+                      <span className="font-semibold">Disponible en: {sucursalNombre}</span>
+                    </div>
+                  )}
                 </motion.div>
 
-                {/* Productos de la Oferta */}
+                {/* Productos de la Oferta con CANTIDADES */}
                 {isOffer && offerProducts.length > 0 && (
                   <motion.div
                     initial={{ y: 20, opacity: 0 }}
@@ -157,42 +164,66 @@ export default function ImageModal({
                   >
                     <h3 className="text-xl font-bold text-[#5D4037] mb-4 flex items-center gap-2">
                       <FaBox className="text-amber-600" />
-                      Productos incluidos en esta oferta:
+                      Productos incluidos ({totalUnidades} unidades):
                     </h3>
                     <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
-                      {offerProducts.map((prod, idx) => (
-                        <motion.div
-                          key={idx}
-                          initial={{ x: -20, opacity: 0 }}
-                          animate={{ x: 0, opacity: 1 }}
-                          transition={{ delay: 0.3 + (idx * 0.1) }}
-                          className="flex items-center gap-4 bg-white rounded-xl p-3 shadow-md hover:shadow-lg transition-all group"
-                        >
-                          {prod.imagen && (
-                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 group-hover:scale-110 transition-transform">
-                              <img
-                                src={prod.imagen}
-                                alt={prod.nombre}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-[#5D4037] truncate">{prod.nombre}</p>
-                            {prod.descripcion && (
-                              <p className="text-sm text-[#8D6E63] line-clamp-1">
-                                {prod.descripcion}
-                              </p>
+                      {offerProducts.map((prod, idx) => {
+                        const cantidad = prod.cantidad || 1;
+                        const precioUnitario = Number(prod.precio || 0);
+                        const precioTotal = precioUnitario * cantidad;
+
+                        return (
+                          <motion.div
+                            key={idx}
+                            initial={{ x: -20, opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            transition={{ delay: 0.3 + (idx * 0.1) }}
+                            className="flex items-center gap-4 bg-white rounded-xl p-3 shadow-md hover:shadow-lg transition-all group"
+                          >
+                            {prod.imagen && (
+                              <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 group-hover:scale-110 transition-transform">
+                                <img
+                                  src={prod.imagen}
+                                  alt={prod.nombre}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
                             )}
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-sm text-gray-400 line-through">
-                              ₡{Number(prod.precio).toLocaleString('es-CR')}
-                            </p>
-                            <span className="text-xs text-green-600 font-semibold">En oferta</span>
-                          </div>
-                        </motion.div>
-                      ))}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-bold">
+                                  {cantidad}x
+                                </span>
+                                <p className="font-bold text-[#5D4037] truncate">{prod.nombre}</p>
+                              </div>
+                              {prod.descripcion && (
+                                <p className="text-sm text-[#8D6E63] line-clamp-1">
+                                  {prod.descripcion}
+                                </p>
+                              )}
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-xs text-gray-400 mb-1">
+                                ₡{precioUnitario.toLocaleString('es-CR')} c/u
+                              </p>
+                              <p className="text-sm text-gray-400 line-through">
+                                ₡{precioTotal.toLocaleString('es-CR')}
+                              </p>
+                              <span className="text-xs text-green-600 font-semibold">En oferta</span>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Resumen total */}
+                    <div className="mt-4 pt-4 border-t-2 border-amber-300">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-[#5D4037]">Total regular:</span>
+                        <span className="text-lg text-gray-400 line-through">
+                          ₡{precioTotalRegular.toLocaleString('es-CR')}
+                        </span>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -257,6 +288,11 @@ export default function ImageModal({
                             <FaFire className="text-2xl" />
                             Ahorras ₡{ahorro.toLocaleString('es-CR')}
                           </p>
+                          {isOffer && totalUnidades > 0 && (
+                            <p className="text-green-700 text-sm mt-2">
+                              ¡{totalUnidades} unidades por solo ₡{Number(offerPrice).toLocaleString('es-CR')}!
+                            </p>
+                          )}
                         </div>
                       )}
                     </div>
