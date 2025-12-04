@@ -116,7 +116,7 @@ export default function ImageModal({
                   initial={{ y: -20, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.4 }}
-                  className="absolute top-6 right-6 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2"
+                  className="absolute top-6 right-6 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2 rounded-xl shadow-xl flex items-center gap-2"
                 >
                   <FaStore />
                   <span className="font-bold">{sucursalNombre}</span>
@@ -147,7 +147,7 @@ export default function ImageModal({
                     </p>
                   )}
                   {sucursalNombre && (
-                    <div className="flex items-center gap-2 mt-3 text-blue-700 bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mt-3 text-orange-700 bg-orange-50 px-4 py-2 rounded-lg border border-orange-200">
                       <FaStore className="text-lg" />
                       <span className="font-semibold">Disponible en: {sucursalNombre}</span>
                     </div>

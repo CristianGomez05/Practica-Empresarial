@@ -225,7 +225,7 @@ const Landing = () => {
 
                   {/* Badge de sucursal */}
                   {producto.sucursal_nombre && (
-                    <div className="absolute top-3 right-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+                    <div className="absolute top-3 right-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
                       <FaStore className="text-xs" />
                       {producto.sucursal_nombre}
                     </div>
