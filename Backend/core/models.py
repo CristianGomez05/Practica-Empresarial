@@ -198,16 +198,31 @@ class Pedido(models.Model):
         ('listo', 'Listo'),
         ('entregado', 'Entregado'),
     ]
+    
+    # ⭐ NUEVO: Tipos de entrega
+    TIPOS_ENTREGA = [
+        ('domicilio', 'Entrega a Domicilio'),
+        ('recoger', 'Recoger en Sucursal'),
+    ]
+    
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name="pedidos")
     fecha = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='recibido')
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
-    # ⭐ NUEVO: Guardar domicilio en el momento del pedido
+    # Dirección de entrega (copia del domicilio del usuario en el momento del pedido)
     direccion_entrega = models.TextField(
         blank=True,
         null=True,
         help_text='Dirección de entrega del pedido (copia del domicilio del usuario)'
+    )
+    
+    # ⭐ NUEVO: Tipo de entrega
+    tipo_entrega = models.CharField(
+        max_length=20,
+        choices=TIPOS_ENTREGA,
+        default='domicilio',
+        help_text='Tipo de entrega del pedido'
     )
 
     class Meta:
@@ -216,7 +231,17 @@ class Pedido(models.Model):
         ordering = ['-fecha']
 
     def __str__(self):
-        return f"Pedido {self.id} - {self.usuario.username}"
+        return f"Pedido {self.id} - {self.usuario.username} ({self.get_tipo_entrega_display()})"
+    
+    @property
+    def es_domicilio(self):
+        """Verifica si es entrega a domicilio"""
+        return self.tipo_entrega == 'domicilio'
+    
+    @property
+    def es_recoger(self):
+        """Verifica si es para recoger en sucursal"""
+        return self.tipo_entrega == 'recoger'
 
 
 # ============================================================================

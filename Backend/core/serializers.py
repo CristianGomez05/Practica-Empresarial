@@ -546,15 +546,19 @@ class DetallePedidoSerializer(serializers.ModelSerializer):
         ).exists()
 
 
+# ⭐ ACTUALIZADO: PedidoSerializer para incluir tipo_entrega
 class PedidoSerializer(serializers.ModelSerializer):
     """Serializer para pedidos con detalles completos (SOLO LECTURA)"""
     detalles = DetallePedidoSerializer(many=True, read_only=True)
     usuario = UsuarioSerializer(read_only=True)
     usuario_nombre = serializers.CharField(source='usuario.username', read_only=True)
     estado_display = serializers.CharField(source='get_estado_display', read_only=True)
+    tipo_entrega_display = serializers.CharField(source='get_tipo_entrega_display', read_only=True)  # ⭐ NUEVO
     cantidad_items = serializers.SerializerMethodField()
     tiempo_transcurrido = serializers.SerializerMethodField()
     es_oferta = serializers.SerializerMethodField()
+    es_domicilio = serializers.BooleanField(read_only=True)  # ⭐ NUEVO
+    es_recoger = serializers.BooleanField(read_only=True)  # ⭐ NUEVO
 
     class Meta:
         model = Pedido
@@ -562,9 +566,10 @@ class PedidoSerializer(serializers.ModelSerializer):
             'id', 'usuario', 'usuario_nombre', 'fecha', 'estado', 
             'estado_display', 'detalles', 'total', 
             'cantidad_items', 'tiempo_transcurrido', 'es_oferta',
-            'direccion_entrega'  # ⭐ NUEVO CAMPO
+            'direccion_entrega', 'tipo_entrega', 'tipo_entrega_display',  # ⭐ NUEVOS
+            'es_domicilio', 'es_recoger'  # ⭐ NUEVOS
         ]
-        read_only_fields = ['id', 'fecha', 'usuario', 'total', 'direccion_entrega']
+        read_only_fields = ['id', 'fecha', 'usuario', 'total', 'direccion_entrega', 'tipo_entrega']
     
     def get_cantidad_items(self, obj):
         """Cuenta la cantidad total de items en el pedido"""
@@ -572,6 +577,7 @@ class PedidoSerializer(serializers.ModelSerializer):
     
     def get_tiempo_transcurrido(self, obj):
         """Calcula el tiempo transcurrido desde que se hizo el pedido"""
+        from django.utils import timezone
         ahora = timezone.now()
         delta = ahora - obj.fecha
         
@@ -588,6 +594,7 @@ class PedidoSerializer(serializers.ModelSerializer):
     
     def get_es_oferta(self, obj):
         """Verifica si el pedido contiene al menos un producto de oferta"""
+        from django.utils import timezone
         hoy = timezone.now().date()
         for detalle in obj.detalles.all():
             if detalle.producto.ofertas.filter(
@@ -604,6 +611,11 @@ class PedidoCreateSerializer(serializers.Serializer):
         child=serializers.DictField(),
         allow_empty=False,
         write_only=True
+    )
+    tipo_entrega = serializers.ChoiceField(
+        choices=['domicilio', 'recoger'],
+        default='domicilio',
+        help_text='Tipo de entrega: domicilio o recoger'
     )
     
     def validate_items(self, items):
@@ -634,28 +646,36 @@ class PedidoCreateSerializer(serializers.Serializer):
         return items
     
     def validate(self, data):
-        """⭐ NUEVO: Validación de domicilio"""
+        """⭐ ACTUALIZADO: Validación según tipo de entrega"""
         request = self.context.get('request')
+        tipo_entrega = data.get('tipo_entrega', 'domicilio')
         
         if request and request.user:
-            if not request.user.tiene_domicilio:
-                raise serializers.ValidationError({
-                    'domicilio': 'Debes configurar tu domicilio antes de realizar un pedido',
-                    'codigo': 'DOMICILIO_REQUERIDO'
-                })
+            # Si es entrega a domicilio, validar que tenga domicilio
+            if tipo_entrega == 'domicilio':
+                if not request.user.tiene_domicilio:
+                    raise serializers.ValidationError({
+                        'domicilio': 'Debes configurar tu domicilio para entrega a domicilio',
+                        'codigo': 'DOMICILIO_REQUERIDO'
+                    })
+            # Si es para recoger, no se requiere domicilio
         
         return data
     
     def create(self, validated_data):
-        """Crea el pedido con sus detalles"""
+        """⭐ ACTUALIZADO: Crear pedido con tipo_entrega"""
         items_data = validated_data.pop('items')
+        tipo_entrega = validated_data.get('tipo_entrega', 'domicilio')
         usuario = self.context['request'].user
         
+        # ⭐ Crear pedido con tipo_entrega
         pedido = Pedido.objects.create(
             usuario=usuario,
             estado='recibido',
             total=0,
-            direccion_entrega=usuario.domicilio  # ⭐ NUEVO: Copiar domicilio
+            tipo_entrega=tipo_entrega,
+            # Solo guardar dirección si es entrega a domicilio
+            direccion_entrega=usuario.domicilio if tipo_entrega == 'domicilio' else None
         )
         
         total = 0

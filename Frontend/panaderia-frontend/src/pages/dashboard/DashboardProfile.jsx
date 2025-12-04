@@ -63,9 +63,9 @@ export default function DashboardProfile() {
         last_name: form.last_name,
         domicilio: form.domicilio,
       });
-      
+
       console.log('✅ Respuesta del servidor:', res.data);
-      
+
       // ⭐ CRÍTICO: Actualizar usuario completo usando setUser del contexto
       // Esto guardará automáticamente en localStorage
       const updatedUser = {
@@ -74,18 +74,18 @@ export default function DashboardProfile() {
         domicilio: res.data.domicilio,
         tiene_domicilio: res.data.tiene_domicilio
       };
-      
+
       console.log('🔄 Actualizando contexto con:', {
         username: updatedUser.username,
         domicilio: updatedUser.domicilio?.substring(0, 50) + '...',
         tiene_domicilio: updatedUser.tiene_domicilio
       });
-      
+
       setUser(updatedUser);
-      
+
       console.log('✅ Contexto actualizado');
       console.log('='.repeat(60) + '\n');
-      
+
       setEditing(false);
       enqueueSnackbar("Perfil actualizado exitosamente", {
         variant: "success",
@@ -127,7 +127,7 @@ export default function DashboardProfile() {
   return (
     <div className="max-w-6xl mx-auto space-y-6 px-4">
       {/* Header con animación */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center gap-3"
@@ -163,7 +163,7 @@ export default function DashboardProfile() {
       {/* Main Content */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Sidebar - Avatar */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.1 }}
@@ -183,28 +183,12 @@ export default function DashboardProfile() {
 
             <div className="space-y-1">
               <h2 className="text-2xl font-bold text-[#5D4037]">
-                {user?.first_name && user?.last_name 
+                {user?.first_name && user?.last_name
                   ? `${user.first_name} ${user.last_name}`
                   : user?.username
                 }
               </h2>
               <p className="text-[#8D6E63] text-sm">@{user?.username}</p>
-            </div>
-
-            <div className="pt-6 border-t border-gray-200">
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[#8D6E63] uppercase">
-                    Miembro desde
-                  </span>
-                  <span className="text-xs font-bold text-[#5D4037]">
-                    {user?.date_joined 
-                      ? new Date(user.date_joined).toLocaleDateString('es-ES', { year: 'numeric', month: 'short' })
-                      : 'N/A'
-                    }
-                  </span>
-                </div>
-              </div>
             </div>
 
             {!editing && (
@@ -222,7 +206,7 @@ export default function DashboardProfile() {
         </motion.div>
 
         {/* Main Form */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.2 }}
@@ -275,11 +259,10 @@ export default function DashboardProfile() {
                     onChange={(e) => setForm({ ...form, first_name: e.target.value })}
                     disabled={!editing}
                     placeholder="Ingresa tu nombre"
-                    className={`w-full px-5 py-4 border-2 rounded-xl transition-all font-medium ${
-                      editing
+                    className={`w-full px-5 py-4 border-2 rounded-xl transition-all font-medium ${editing
                         ? "border-amber-300 bg-white focus:border-amber-500 focus:ring-4 focus:ring-amber-100 hover:border-amber-400"
                         : "border-gray-200 bg-gray-50 text-gray-600"
-                    }`}
+                      }`}
                   />
                 </div>
 
@@ -297,11 +280,10 @@ export default function DashboardProfile() {
                     onChange={(e) => setForm({ ...form, last_name: e.target.value })}
                     disabled={!editing}
                     placeholder="Ingresa tu apellido"
-                    className={`w-full px-5 py-4 border-2 rounded-xl transition-all font-medium ${
-                      editing
+                    className={`w-full px-5 py-4 border-2 rounded-xl transition-all font-medium ${editing
                         ? "border-amber-300 bg-white focus:border-amber-500 focus:ring-4 focus:ring-amber-100 hover:border-amber-400"
                         : "border-gray-200 bg-gray-50 text-gray-600"
-                    }`}
+                      }`}
                   />
                 </div>
 
@@ -319,11 +301,10 @@ export default function DashboardProfile() {
                     disabled={!editing}
                     placeholder="Ingresa tu dirección completa de entrega (provincia, cantón, barrio, número de casa, referencias...)"
                     rows={3}
-                    className={`w-full px-5 py-4 border-2 rounded-xl transition-all font-medium resize-none ${
-                      editing
+                    className={`w-full px-5 py-4 border-2 rounded-xl transition-all font-medium resize-none ${editing
                         ? "border-amber-300 bg-white focus:border-amber-500 focus:ring-4 focus:ring-amber-100 hover:border-amber-400"
                         : "border-gray-200 bg-gray-50 text-gray-600"
-                    }`}
+                      }`}
                   />
                   {!user?.domicilio && editing && (
                     <p className="text-xs text-red-600 mt-2 ml-1 flex items-center gap-1">
@@ -341,7 +322,7 @@ export default function DashboardProfile() {
 
                 {/* Action Buttons */}
                 {editing && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     className="flex gap-3 pt-6"
@@ -388,8 +369,8 @@ export default function DashboardProfile() {
               Seguridad y Privacidad
             </h3>
             <p className="text-sm text-[#8D6E63] leading-relaxed">
-              Tu información está protegida con encriptación de última generación y solo será 
-              utilizada para mejorar tu experiencia de compra. Nos tomamos muy en serio la 
+              Tu información está protegida con encriptación de última generación y solo será
+              utilizada para mejorar tu experiencia de compra. Nos tomamos muy en serio la
               seguridad de tus datos personales.
             </p>
           </div>
