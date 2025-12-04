@@ -371,40 +371,6 @@ class OfertaSerializer(serializers.ModelSerializer):
             representation['productos_data'] = []
         
         return representation
-    
-def update(self, instance, validated_data):
-    print(f"\n{'='*60}")
-    print("✏️ ACTUALIZANDO OFERTA CON CANTIDADES")
-    print(f"{'='*60}")
-    
-    productos_data = validated_data.pop('productos_data', None)
-    
-    # Actualizar campos básicos
-    for attr, value in validated_data.items():
-        setattr(instance, attr, value)
-    instance.save()
-    
-    print(f"✅ Oferta actualizada: {instance.titulo} (ID: {instance.id})")
-    
-    # Si se enviaron productos, actualizar la relación
-    if productos_data is not None:
-        # Eliminar productos antiguos
-        ProductoOferta.objects.filter(oferta=instance).delete()
-        print(f"🗑️ Productos antiguos eliminados")
-        
-        # Crear nuevas relaciones con cantidades
-        for item in productos_data:
-            producto = Producto.objects.get(id=item['producto_id'])
-            ProductoOferta.objects.create(
-                oferta=instance,
-                producto=producto,
-                cantidad=item['cantidad']
-            )
-            print(f"   ✓ {item['cantidad']}x {producto.nombre}")
-    
-    print(f"{'='*60}\n")
-    
-    return instance
 
 
 # ============================================================================
