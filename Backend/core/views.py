@@ -1,5 +1,5 @@
 # Backend/core/views.py
-# ⭐ ACTUALIZADO: Incluye validación de domicilio y endpoint /usuarios/me/
+# ⭐ CORREGIDO: PedidoViewSet usa PedidoCreateSerializer correctamente
 
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -17,7 +17,8 @@ from .serializers import (
     UsuarioSerializer,
     ProductoSerializer, 
     OfertaSerializer, 
-    PedidoSerializer, 
+    PedidoSerializer,
+    PedidoCreateSerializer,  # ⭐ NUEVO: Import
     DetallePedidoSerializer,
     SucursalSerializer
 )
@@ -69,7 +70,7 @@ def registro_usuario(request):
 
 
 # ============================================================================
-# USUARIO VIEWSET (⭐ ACTUALIZADO CON ENDPOINT /me/)
+# USUARIO VIEWSET
 # ============================================================================
 
 class UsuarioViewSet(viewsets.ModelViewSet):
@@ -86,17 +87,14 @@ class UsuarioViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         
-        # Admin General: Ve TODOS los usuarios
         if user.rol == 'administrador_general':
             print(f"🔓 Admin General - Mostrando TODOS los usuarios")
             return Usuario.objects.all().order_by('-date_joined')
         
-        # Admin Regular: Solo VE pero NO puede modificar
         elif user.rol == 'administrador':
             print(f"👁️ Admin Regular - Solo puede VER usuarios")
             return Usuario.objects.all().order_by('-date_joined')
         
-        # Cliente: Solo su perfil
         elif user.rol == 'cliente':
             print(f"🔒 Cliente - Solo su perfil")
             return Usuario.objects.filter(id=user.id)
@@ -161,7 +159,6 @@ class UsuarioViewSet(viewsets.ModelViewSet):
         
         return super().destroy(request, *args, **kwargs)
     
-    # ⭐ NUEVO: Endpoint para gestionar el perfil propio
     @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
     def me(self, request):
         """
@@ -176,7 +173,6 @@ class UsuarioViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         
         elif request.method == 'PATCH':
-            # Solo permitir actualizar estos campos
             allowed_fields = ['first_name', 'last_name', 'domicilio']
             data = {k: v for k, v in request.data.items() if k in allowed_fields}
             
@@ -293,13 +289,11 @@ class ProductoViewSet(viewsets.ModelViewSet):
         print(f"📦 CREANDO PRODUCTO - Usuario: {user.username} (Rol: {user.rol})")
         print(f"{'='*60}")
         
-        # Si es admin regular, forzar su sucursal
         if user.rol == 'administrador' and user.sucursal:
             producto = serializer.save(sucursal=user.sucursal)
             print(f"✅ Producto creado en sucursal: {user.sucursal.nombre}")
             print(f"   ID: {producto.id}, Nombre: {producto.nombre}")
         else:
-            # Admin general - guardar con la sucursal que viene en el request
             cache.delete('productos_list')
             producto = serializer.save()
             print(f"✅ Producto creado: {producto.nombre} (ID: {producto.id})")
@@ -308,7 +302,6 @@ class ProductoViewSet(viewsets.ModelViewSet):
         
         print(f"{'='*60}\n")
         
-        # Enviar notificación
         try:
             from .emails import enviar_notificacion_nuevo_producto
             enviar_notificacion_nuevo_producto(producto.id)
@@ -389,7 +382,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# PEDIDO VIEWSET (⭐ ACTUALIZADO CON VALIDACIÓN DE DOMICILIO)
+# PEDIDO VIEWSET (⭐ CORREGIDO)
 # ============================================================================
 
 class PedidoViewSet(viewsets.ModelViewSet):
@@ -412,94 +405,25 @@ class PedidoViewSet(viewsets.ModelViewSet):
         
         return base_queryset.filter(usuario=user).order_by('-fecha')
 
+    def get_serializer_class(self):
+        """⭐ CRÍTICO: Usar PedidoCreateSerializer para crear pedidos"""
+        if self.action == 'create':
+            return PedidoCreateSerializer
+        return PedidoSerializer
+
     @transaction.atomic
     def perform_create(self, serializer):
-        # ⭐ NUEVO: Validación de domicilio ANTES de crear el pedido
+        """⭐ CORREGIDO: Ya no sobrescribe nada, el serializer lo maneja todo"""
         user = self.request.user
-        if not user.tiene_domicilio:
-            raise ValidationError({
-                'domicilio': 'Debes configurar tu domicilio antes de realizar un pedido',
-                'codigo': 'DOMICILIO_REQUERIDO'
-            })
-        
-        items_data = self.request.data.get('items', [])
-        
-        if not items_data:
-            raise Exception('Debe incluir al menos un producto')
         
         print(f"\n{'='*60}")
-        print(f"🛒 CREANDO PEDIDO - Usuario: {self.request.user.username}")
-        print(f"📍 Domicilio: {user.domicilio}")  # ⭐ NUEVO log
+        print(f"📦 Nuevo pedido creado (correo se enviará después)")
         print(f"{'='*60}\n")
         
-        productos_ids = [item['producto'] for item in items_data]
-        productos = {
-            p.id: p for p in Producto.objects.select_for_update().filter(id__in=productos_ids)
-        }
+        # El serializer PedidoCreateSerializer ya maneja todo correctamente
+        pedido = serializer.save()
         
-        for item in items_data:
-            producto_id = item['producto']
-            cantidad = item['cantidad']
-            
-            if producto_id not in productos:
-                raise Exception(f'Producto {producto_id} no encontrado')
-            
-            producto = productos[producto_id]
-            
-            if producto.stock < cantidad:
-                raise Exception(
-                    f'Stock insuficiente para {producto.nombre}. '
-                    f'Disponible: {producto.stock}, Solicitado: {cantidad}'
-                )
-            
-            if not producto.disponible:
-                raise Exception(f'Producto {producto.nombre} no disponible')
-        
-        # ⭐ NUEVO: Guardar con direccion_entrega
-        pedido = serializer.save(
-            usuario=self.request.user,
-            direccion_entrega=user.domicilio
-        )
-        print(f"✅ Pedido #{pedido.id} creado")
-        print(f"📍 Dirección de entrega: {pedido.direccion_entrega}\n")
-        
-        from decimal import Decimal
-        total = Decimal('0.00')
-        
-        for item_data in items_data:
-            producto = productos[item_data['producto']]
-            cantidad = item_data['cantidad']
-            
-            precio_unitario = Decimal(str(item_data.get('precio_unitario', producto.precio)))
-            
-            DetallePedido.objects.create(
-                pedido=pedido,
-                producto=producto,
-                cantidad=cantidad
-            )
-            
-            subtotal = precio_unitario * cantidad
-            total += subtotal
-            
-            stock_anterior = producto.stock
-            producto.stock -= cantidad
-            
-            print(f"📦 {producto.nombre}: {stock_anterior} → {producto.stock}")
-            
-            if producto.stock == 0:
-                producto.disponible = False
-                print(f"   🔴 AGOTADO")
-            elif producto.stock <= 10:
-                print(f"   ⚠️ STOCK BAJO ({producto.stock} unidades)")
-            
-            producto.save(update_fields=['stock', 'disponible'])
-        
-        pedido.total = total
-        pedido.save(update_fields=['total'])
-        
-        print(f"\n💵 TOTAL: ₡{total}")
-        
-        print(f"\n📧 Programando confirmación en background...")
+        # Enviar notificación en background
         try:
             import threading
             from .emails import enviar_confirmacion_pedido
@@ -548,6 +472,7 @@ class DetallePedidoViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DetallePedidoSerializer
     permission_classes = [IsAuthenticated]
 
+
 # ============================================================================
 # VISTA PARA OAUTH CANCELADO
 # ============================================================================
@@ -562,8 +487,6 @@ class LoginCancelledView(View):
     def get(self, request):
         print("⚠️ Usuario canceló el login de Google")
         
-        # URL del frontend en producción
         frontend_url = 'https://practica-empresarial-production.up.railway.app'
         
-        # Redireccionar con parámetro
         return redirect(f'{frontend_url}/login?cancelled=true')
