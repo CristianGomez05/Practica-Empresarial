@@ -353,14 +353,14 @@ const Landing = () => {
 
                       {/* Badge de cantidad de productos */}
                       {productosConCantidad.length > 1 && (
-                        <div className="absolute top-3 left-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
+                        <div className="absolute top-3 left-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
                           {productosConCantidad.length} Productos
                         </div>
                       )}
 
                       {/* Badge de sucursal */}
                       {oferta.sucursal_nombre && (
-                        <div className="absolute bottom-3 left-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
+                        <div className="absolute bottom-3 left-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
                           <FaStore className="text-xs" />
                           {oferta.sucursal_nombre}
                         </div>

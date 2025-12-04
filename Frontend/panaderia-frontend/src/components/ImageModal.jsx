@@ -103,7 +103,7 @@ export default function ImageModal({
                   initial={{ x: 50, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="absolute bottom-6 left-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-5 py-3 rounded-2xl shadow-xl"
+                  className="absolute bottom-6 left-6 bg-gradient-to-r from-orange-500 to-amber-500 text-white px-5 py-3 rounded-2xl shadow-xl"
                 >
                   <p className="text-sm font-bold">{totalUnidades} UNIDADES</p>
                   <p className="text-xs">{offerProducts.length} productos diferentes</p>
@@ -191,7 +191,7 @@ export default function ImageModal({
                             )}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-bold">
+                                <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-full text-xs font-bold">
                                   {cantidad}x
                                 </span>
                                 <p className="font-bold text-[#5D4037] truncate">{prod.nombre}</p>
