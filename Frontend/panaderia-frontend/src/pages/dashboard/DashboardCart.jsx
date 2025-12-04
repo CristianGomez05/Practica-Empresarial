@@ -1,21 +1,25 @@
 // Frontend/src/pages/dashboard/DashboardCart.jsx
-// ⭐ ACTUALIZADO: Incluye validación de domicilio y modal
+// ⭐ ACTUALIZADO: Incluye modal de confirmación con tipo de entrega
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../../hooks/useCart";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../components/auth/AuthContext";  // ⭐ NUEVO
-import { FaShoppingCart, FaTrash, FaMinus, FaPlus, FaCheckCircle, FaTag, FaBox, FaMapMarkerAlt } from "react-icons/fa";  // ⭐ NUEVO: FaMapMarkerAlt
+import { useAuth } from "../../components/auth/AuthContext";
+import { useBranch } from "../../contexts/BranchContext";
+import { FaShoppingCart, FaTrash, FaMinus, FaPlus, FaCheckCircle, FaTag, FaBox } from "react-icons/fa";
 import { useSnackbar } from "notistack";
 import api from "../../services/api";
-import DomicilioModal from "../../components/modals/DomicilioModal";  // ⭐ NUEVO
+import ConfirmarPedidoModal from "../../components/modals/ConfirmarPedidoModal";
+import DomicilioModal from "../../components/modals/DomicilioModal";
 
 export default function DashboardCart() {
   const { items, updateQty, remove, clear, total } = useCart();
-  const { user } = useAuth();  // ⭐ NUEVO
+  const { user } = useAuth();
+  const { selectedBranch } = useBranch();
   const [loading, setLoading] = useState(false);
-  const [showDomicilioModal, setShowDomicilioModal] = useState(false);  // ⭐ NUEVO
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showDomicilioModal, setShowDomicilioModal] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
 
@@ -32,44 +36,34 @@ export default function DashboardCart() {
     });
   };
 
-  // ⭐ NUEVO: Callback cuando se guarda el domicilio
   const handleDomicilioSuccess = () => {
-    enqueueSnackbar("Ahora puedes completar tu pedido", {
+    enqueueSnackbar("Domicilio guardado exitosamente", {
       variant: "success",
       autoHideDuration: 2000
     });
   };
 
-  const handleCreateOrder = async () => {
+  const handleClickCrearPedido = () => {
     if (items.length === 0) {
       enqueueSnackbar("El carrito está vacío", { variant: "warning" });
       return;
     }
+    setShowConfirmModal(true);
+  };
 
-    // ⭐ NUEVO: Validación de domicilio
-    if (!user?.domicilio || user.domicilio.trim() === '') {
-      setShowDomicilioModal(true);
-      enqueueSnackbar("Debes configurar tu domicilio antes de hacer un pedido", {
-        variant: "warning",
-        autoHideDuration: 3000
-      });
-      return;
-    }
-
+  const handleConfirmOrder = async (tipoEntrega) => {
     setLoading(true);
     try {
       console.log('🛒 CREANDO PEDIDO');
+      console.log('📦 Tipo de entrega:', tipoEntrega);
       console.log('📦 Items en carrito:', items);
-      console.log('📍 Domicilio del usuario:', user.domicilio);  // ⭐ NUEVO log
+      console.log('📍 Domicilio del usuario:', user.domicilio);
 
-      // Preparar items para el pedido
       const orderItems = items.flatMap((item) => {
         console.log('🔍 Procesando item:', item);
 
         if (item.isOffer) {
           console.log('   🎁 Es una OFERTA');
-
-          // Extraer productos de la oferta
           const productosConCantidad = item.productos_con_cantidad || item.productos || [];
 
           if (productosConCantidad.length === 0) {
@@ -84,38 +78,31 @@ export default function DashboardCart() {
           return productosConCantidad.map((producto) => {
             const cantidadTotal = (producto.cantidad_unitaria || producto.cantidad || 1) * item.qty;
 
-            const itemData = {
+            return {
               producto: producto.id || producto.producto_id,
               cantidad: cantidadTotal,
               precio_unitario: precioPorProducto,
               es_oferta: true,
               oferta_titulo: item.nombre
             };
-
-            console.log(`   ➕ ${producto.nombre || 'Producto'}: ${producto.cantidad_unitaria || 1} x ${item.qty} = ${cantidadTotal} unidades`);
-            console.log('      Item generado:', itemData);
-
-            return itemData;
           });
         } else {
-          // Producto individual
-          const itemData = {
+          return [{
             producto: item.id,
             cantidad: item.qty,
             precio_unitario: parseFloat(item.precio),
             es_oferta: false
-          };
-          console.log('   ➕ Producto individual:', itemData);
-          return [itemData];
+          }];
         }
       });
 
-      console.log('📋 Items preparados para enviar:', orderItems);
+      console.log('📋 Items preparados:', orderItems);
       console.log('💰 Total:', total);
 
       const body = {
         items: orderItems,
         total,
+        tipo_entrega: tipoEntrega
       };
 
       console.log('📤 Enviando al backend:', JSON.stringify(body, null, 2));
@@ -130,6 +117,7 @@ export default function DashboardCart() {
       });
 
       clear();
+      setShowConfirmModal(false);
 
       setTimeout(() => {
         navigate("/dashboard/pedidos");
@@ -138,8 +126,8 @@ export default function DashboardCart() {
       console.error('❌ Error al crear pedido:', error);
       console.error('   Detalles:', error.response?.data);
 
-      // ⭐ NUEVO: Manejo especial del error de domicilio
       if (error.response?.data?.codigo === 'DOMICILIO_REQUERIDO') {
+        setShowConfirmModal(false);
         setShowDomicilioModal(true);
         enqueueSnackbar(error.response.data.error || error.response.data.domicilio, { variant: "warning" });
       } else if (error.response?.data?.error) {
@@ -192,37 +180,10 @@ export default function DashboardCart() {
         <div>
           <h1 className="text-3xl font-bold text-[#5D4037]">Mi Carrito</h1>
           <p className="text-[#8D6E63]">
-            {items.length} {items.length === 1 ? "item" : "items"}
+            {items.length} {items.length === 1 ? "item" : "items"} • Sucursal: {selectedBranch?.nombre || 'No seleccionada'}
           </p>
         </div>
       </div>
-
-      {/* ⭐ NUEVO: Alerta si no tiene domicilio */}
-      {!user?.domicilio && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg"
-        >
-          <div className="flex items-start gap-3">
-            <FaMapMarkerAlt className="text-red-500 text-xl mt-0.5" />
-            <div className="flex-1">
-              <p className="text-red-800 font-semibold">
-                ⚠️ Domicilio no configurado
-              </p>
-              <p className="text-red-700 text-sm mt-1">
-                Debes agregar tu domicilio para poder completar el pedido
-              </p>
-            </div>
-            <button
-              onClick={() => setShowDomicilioModal(true)}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold transition-colors"
-            >
-              Agregar Ahora
-            </button>
-          </div>
-        </motion.div>
-      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Cart Items */}
@@ -348,23 +309,6 @@ export default function DashboardCart() {
               Resumen del Pedido
             </h2>
 
-            {/* ⭐ NUEVO: Mostrar domicilio si existe */}
-            {user?.domicilio && (
-              <div className="mb-6 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <FaMapMarkerAlt className="text-green-600 mt-1 flex-shrink-0" />
-                  <div>
-                    <p className="text-xs text-green-800 font-semibold mb-1">
-                      Dirección de entrega:
-                    </p>
-                    <p className="text-xs text-green-700">
-                      {user.domicilio}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="space-y-3 mb-6">
               <div className="flex justify-between text-[#8D6E63]">
                 <span>Subtotal</span>
@@ -387,28 +331,19 @@ export default function DashboardCart() {
             </div>
 
             <button
-              onClick={handleCreateOrder}
-              disabled={loading || !user?.domicilio}
-              className={`w-full flex items-center justify-center gap-3 ${
-                !user?.domicilio
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600'
-              } text-white px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50`}
+              onClick={handleClickCrearPedido}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600 text-white px-6 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50"
             >
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   <span>Procesando...</span>
                 </>
-              ) : !user?.domicilio ? (
-                <>
-                  <FaMapMarkerAlt />
-                  <span>Agregar Domicilio Primero</span>
-                </>
               ) : (
                 <>
                   <FaCheckCircle className="text-lg" />
-                  <span>Realizar Pedido</span>
+                  <span>Continuar</span>
                 </>
               )}
             </button>
@@ -420,7 +355,17 @@ export default function DashboardCart() {
         </div>
       </div>
 
-      {/* ⭐ NUEVO: Modal de Domicilio */}
+      {/* Modal de Confirmación */}
+      <ConfirmarPedidoModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleConfirmOrder}
+        user={user}
+        total={total}
+        itemsCount={items.length}
+      />
+
+      {/* Modal de Domicilio */}
       <DomicilioModal
         isOpen={showDomicilioModal}
         onClose={() => setShowDomicilioModal(false)}

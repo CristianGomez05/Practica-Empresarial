@@ -1,10 +1,10 @@
 // Frontend/src/pages/admin_general/AdminGeneralOrders.jsx
-// COMPLETO Y FUNCIONAL - Gestión de pedidos (CORREGIDO)
+// ⭐ ACTUALIZADO: Muestra tipo de entrega y dirección completa
 
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaShoppingCart, FaEye, FaCheck, FaTimes, FaClock, FaBox, FaUser, FaPhone, FaMapMarkerAlt, FaCalendar, FaMoneyBillWave, FaSync, FaReceipt } from 'react-icons/fa';
+import { FaShoppingCart, FaEye, FaCheck, FaTimes, FaClock, FaBox, FaUser, FaPhone, FaMapMarkerAlt, FaCalendar, FaMoneyBillWave, FaSync, FaReceipt, FaTruck, FaStore } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
@@ -29,7 +29,6 @@ export default function AdminGeneralOrders() {
       
       const data = response.data.results || response.data;
       console.log('🛒 Pedidos cargados:', data.length);
-      console.log('📊 Ejemplo pedido:', data[0]); // Debug
       setPedidos(data);
       
       if (refreshing) {
@@ -64,7 +63,6 @@ export default function AdminGeneralOrders() {
 
   const cambiarEstado = async (pedidoId, nuevoEstado) => {
     try {
-      // ⭐ Usar el endpoint correcto igual que AdminOrders
       await api.patch(`/pedidos/${pedidoId}/cambiar_estado/`, { 
         estado: nuevoEstado 
       });
@@ -91,7 +89,6 @@ export default function AdminGeneralOrders() {
     setSelectedPedido(null);
   };
 
-  // ⭐ Estados corregidos para coincidir con el backend
   const getEstadoConfig = (estado) => {
     const configs = {
       recibido: {
@@ -143,7 +140,6 @@ export default function AdminGeneralOrders() {
     return configs[estado] || configs.recibido;
   };
 
-  // ⭐ Flujo de estados corregido
   const getEstadosSiguientes = (estadoActual) => {
     const flujo = {
       recibido: ['en_preparacion', 'cancelado'],
@@ -243,13 +239,23 @@ export default function AdminGeneralOrders() {
                         {estado.icon}
                       </div>
                       <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <h3 className="text-xl font-bold text-[#5D4037]">
                             Pedido #{pedido.id}
                           </h3>
                           <span className={`${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1`}>
                             {estado.icon}
                             {estado.text}
+                          </span>
+                          
+                          {/* ⭐ NUEVO: Badge de tipo de entrega */}
+                          <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 ${
+                            pedido.es_domicilio 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {pedido.es_domicilio ? <FaTruck /> : <FaStore />}
+                            {pedido.tipo_entrega_display || (pedido.es_domicilio ? 'Domicilio' : 'Recoger')}
                           </span>
                         </div>
                         
@@ -262,7 +268,6 @@ export default function AdminGeneralOrders() {
                           </div>
                           <div className="flex items-center gap-2">
                             <FaCalendar className="text-blue-600" />
-                            {/* ⭐ CORREGIDO: usar pedido.fecha en lugar de pedido.fecha_pedido */}
                             <span>
                               {new Date(pedido.fecha).toLocaleString('es-ES', {
                                 day: 'numeric',
@@ -277,12 +282,6 @@ export default function AdminGeneralOrders() {
                             <div className="flex items-center gap-2">
                               <FaPhone className="text-green-600" />
                               <span>{pedido.telefono}</span>
-                            </div>
-                          )}
-                          {pedido.direccion && (
-                            <div className="flex items-center gap-2">
-                              <FaMapMarkerAlt className="text-red-600" />
-                              <span className="truncate">{pedido.direccion}</span>
                             </div>
                           )}
                           {pedido.sucursal?.nombre && (
@@ -301,9 +300,38 @@ export default function AdminGeneralOrders() {
                           </div>
                         </div>
 
+                        {/* ⭐ NUEVO: Información de entrega */}
+                        {pedido.es_domicilio && pedido.direccion_entrega && (
+                          <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                            <div className="flex items-start gap-2">
+                              <FaMapMarkerAlt className="text-blue-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="text-blue-800 font-semibold text-xs mb-1">
+                                  📍 Dirección de entrega:
+                                </p>
+                                <p className="text-blue-700 text-xs">
+                                  {pedido.direccion_entrega}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {pedido.es_recoger && (
+                          <div className="mt-3 p-3 bg-purple-50 border-l-4 border-purple-500 rounded-lg">
+                            <div className="flex items-start gap-2">
+                              <FaStore className="text-purple-600 mt-0.5 flex-shrink-0" />
+                              <div>
+                                <p className="text-purple-800 font-semibold text-xs">
+                                  🏪 Cliente recogerá el pedido en sucursal
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Items Preview */}
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {/* ⭐ CORREGIDO: usar pedido.detalles en lugar de pedido.items */}
                           {pedido.detalles?.slice(0, 3).map((item, idx) => (
                             <span key={idx} className="bg-gray-100 px-3 py-1 rounded-full text-xs text-gray-700">
                               {item.cantidad}x {item.producto?.nombre || 'Producto'}
@@ -397,6 +425,49 @@ export default function AdminGeneralOrders() {
                     </div>
                   </div>
 
+                  {/* Tipo de Entrega */}
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm text-gray-600 mb-2">Tipo de Entrega</p>
+                    <div className={`px-4 py-2 rounded-lg inline-flex items-center gap-2 font-semibold ${
+                      selectedPedido.es_domicilio 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'bg-purple-100 text-purple-700'
+                    }`}>
+                      {selectedPedido.es_domicilio ? <FaTruck /> : <FaStore />}
+                      {selectedPedido.tipo_entrega_display || (selectedPedido.es_domicilio ? 'Entrega a Domicilio' : 'Recoger en Sucursal')}
+                    </div>
+                  </div>
+
+                  {/* ⭐ NUEVO: Dirección de entrega si aplica */}
+                  {selectedPedido.es_domicilio && selectedPedido.direccion_entrega && (
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <FaMapMarkerAlt className="text-blue-600 text-lg mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-blue-800 font-semibold mb-1">
+                            📍 Dirección de entrega:
+                          </p>
+                          <p className="text-blue-700">
+                            {selectedPedido.direccion_entrega}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedPedido.es_recoger && (
+                    <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <FaStore className="text-purple-600 text-lg mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-purple-800 font-semibold">
+                            🏪 Cliente recogerá el pedido en sucursal
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Información del Cliente */}
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-sm text-gray-600 mb-3 font-semibold">Información del Cliente</p>
@@ -411,15 +482,8 @@ export default function AdminGeneralOrders() {
                           <span>{selectedPedido.telefono}</span>
                         </div>
                       )}
-                      {selectedPedido.direccion && (
-                        <div className="flex items-center gap-2">
-                          <FaMapMarkerAlt className="text-red-600" />
-                          <span>{selectedPedido.direccion}</span>
-                        </div>
-                      )}
                       <div className="flex items-center gap-2">
                         <FaCalendar className="text-blue-600" />
-                        {/* ⭐ CORREGIDO: usar selectedPedido.fecha */}
                         <span>
                           {new Date(selectedPedido.fecha).toLocaleString('es-ES', {
                             day: 'numeric',
@@ -448,7 +512,6 @@ export default function AdminGeneralOrders() {
                       Items del Pedido
                     </p>
                     <div className="space-y-3">
-                      {/* ⭐ CORREGIDO: usar selectedPedido.detalles */}
                       {selectedPedido.detalles?.map((item, idx) => (
                         <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-lg">
                           <div>

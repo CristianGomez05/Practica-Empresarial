@@ -1,7 +1,9 @@
 // Frontend/src/pages/admin/AdminOrders.jsx
+// ⭐ ACTUALIZADO: Muestra tipo de entrega y dirección
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaClipboardList, FaEye, FaEdit, FaSearch, FaFilter, FaSortAmountDown } from 'react-icons/fa';
+import { FaClipboardList, FaEye, FaEdit, FaSearch, FaFilter, FaSortAmountDown, FaMapMarkerAlt, FaTruck, FaStore } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 
@@ -36,13 +38,12 @@ export default function AdminOrders() {
     }
   };
 
-  // Sistema de prioridades mejorado
   const getPrioridadPorEstado = (estado) => {
     const prioridades = {
-      'recibido': 4,        // Máxima prioridad
-      'en_preparacion': 3,  // Alta prioridad
-      'listo': 2,           // Media prioridad
-      'entregado': 1        // Baja prioridad
+      'recibido': 4,
+      'en_preparacion': 3,
+      'listo': 2,
+      'entregado': 1
     };
     return prioridades[estado] || 0;
   };
@@ -79,12 +80,10 @@ export default function AdminOrders() {
   const filterOrders = () => {
     let filtered = [...orders];
 
-    // Filtrar por estado
     if (filterEstado !== 'todos') {
       filtered = filtered.filter(order => order.estado === filterEstado);
     }
 
-    // Filtrar por búsqueda
     if (searchTerm) {
       filtered = filtered.filter(order =>
         order.id.toString().includes(searchTerm) ||
@@ -92,35 +91,28 @@ export default function AdminOrders() {
       );
     }
 
-    // Ordenar según la opción seleccionada
     filtered.sort((a, b) => {
       switch (sortOrder) {
         case 'prioridad':
-          // Primero ordenar por prioridad de estado (recibido > en_preparacion > listo > entregado)
           const prioridadA = getPrioridadPorEstado(a.estado);
           const prioridadB = getPrioridadPorEstado(b.estado);
           
           if (prioridadA !== prioridadB) {
-            return prioridadB - prioridadA; // Mayor prioridad primero
+            return prioridadB - prioridadA;
           }
           
-          // Si tienen el mismo estado, ordenar por antigüedad (más antiguos primero = FIFO)
           return new Date(a.fecha) - new Date(b.fecha);
         
         case 'mas_antiguo':
-          // Más antiguos primero
           return new Date(a.fecha) - new Date(b.fecha);
         
         case 'mas_reciente':
-          // Más recientes primero
           return new Date(b.fecha) - new Date(a.fecha);
         
         case 'monto_mayor':
-          // Mayor monto primero
           return parseFloat(b.total) - parseFloat(a.total);
         
         case 'monto_menor':
-          // Menor monto primero
           return parseFloat(a.total) - parseFloat(b.total);
         
         default:
@@ -199,7 +191,6 @@ export default function AdminOrders() {
     entregado: null
   };
 
-  // Calcular si un pedido es urgente (más de 30 minutos en estado recibido o en_preparacion)
   const esUrgente = (order) => {
     if (order.estado === 'listo' || order.estado === 'entregado') return false;
     
@@ -277,7 +268,6 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      {/* Indicador de ordenamiento activo */}
       {sortOrder === 'prioridad' && (
         <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
           <p className="text-blue-700 text-sm font-semibold">
@@ -331,6 +321,15 @@ export default function AdminOrders() {
                           <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">
                             {badge.priority}
                           </span>
+                          {/* ⭐ NUEVO: Badge de tipo de entrega */}
+                          <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                            order.es_domicilio 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {order.es_domicilio ? <FaTruck className="text-xs" /> : <FaStore className="text-xs" />}
+                            {order.es_domicilio ? 'Domicilio' : 'Recoger'}
+                          </span>
                         </div>
                         <div className="flex items-center gap-3 text-sm">
                           <span className="text-gray-500">
@@ -358,7 +357,36 @@ export default function AdminOrders() {
                     </div>
                   </div>
 
-                  {/* Alerta de urgencia */}
+                  {/* ⭐ NUEVO: Información de entrega */}
+                  {order.es_domicilio && order.direccion_entrega && (
+                    <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <FaMapMarkerAlt className="text-blue-600 text-lg mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-blue-800 font-semibold text-sm mb-1">
+                            📍 Dirección de entrega:
+                          </p>
+                          <p className="text-blue-700 text-sm">
+                            {order.direccion_entrega}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {order.es_recoger && (
+                    <div className="mb-4 p-3 bg-purple-50 border-l-4 border-purple-500 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <FaStore className="text-purple-600 text-lg mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="text-purple-800 font-semibold text-sm">
+                            🏪 Cliente recogerá el pedido en sucursal
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {urgente && (
                     <div className="mb-4 px-4 py-2 bg-red-50 border-l-4 border-red-500 rounded">
                       <p className="text-red-700 text-sm font-semibold">
@@ -427,7 +455,7 @@ export default function AdminOrders() {
         )}
       </div>
 
-      {/* Modal de Detalles - Sin cambios */}
+      {/* Modal de Detalles */}
       {selectedOrder && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -492,24 +520,52 @@ export default function AdminOrders() {
                   </p>
                 </div>
                 <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Tipo de Pedido</p>
-                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
-                    selectedOrder.es_oferta 
-                      ? 'bg-red-100 text-red-700' 
-                      : 'bg-blue-100 text-blue-700'
+                  <p className="text-sm text-gray-600 mb-1">Tipo de Entrega</p>
+                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 ${
+                    selectedOrder.es_domicilio 
+                      ? 'bg-blue-100 text-blue-700' 
+                      : 'bg-purple-100 text-purple-700'
                   }`}>
-                    {selectedOrder.es_oferta ? '🎁 Oferta Especial' : '🛒 Pedido Regular'}
+                    {selectedOrder.es_domicilio ? <FaTruck /> : <FaStore />}
+                    {selectedOrder.tipo_entrega_display || (selectedOrder.es_domicilio ? 'Entrega a Domicilio' : 'Recoger en Sucursal')}
                   </span>
                 </div>
               </div>
+
+              {/* ⭐ NUEVO: Dirección de entrega si aplica */}
+              {selectedOrder.es_domicilio && selectedOrder.direccion_entrega && (
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <FaMapMarkerAlt className="text-blue-600 text-lg mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-blue-800 font-semibold mb-1">
+                        📍 Dirección de entrega:
+                      </p>
+                      <p className="text-blue-700">
+                        {selectedOrder.direccion_entrega}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedOrder.es_recoger && (
+                <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <FaStore className="text-purple-600 text-lg mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-purple-800 font-semibold">
+                        🏪 Cliente recogerá el pedido en sucursal
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-5 rounded-xl border-2 border-amber-200">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-amber-700 mb-1">Total del Pedido</p>
-                    {selectedOrder.es_oferta && (
-                      <p className="text-xs text-amber-600">✨ Precio con descuento aplicado</p>
-                    )}
                   </div>
                   <p className="text-3xl font-bold text-amber-700">
                     ₡{selectedOrder.total}
@@ -523,30 +579,15 @@ export default function AdminOrders() {
                 </h3>
                 <div className="space-y-3">
                   {selectedOrder.detalles?.map((item, idx) => (
-                    <div key={idx} className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
-                      item.es_oferta 
-                        ? 'bg-red-50 border-2 border-red-200 hover:bg-red-100' 
-                        : 'bg-gray-50 hover:bg-gray-100'
-                    }`}>
+                    <div key={idx} className="flex items-center justify-between p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className={`w-12 h-12 bg-gradient-to-br rounded-lg flex items-center justify-center text-white font-bold ${
-                          item.es_oferta 
-                            ? 'from-red-400 to-red-600' 
-                            : 'from-amber-400 to-amber-600'
-                        }`}>
+                        <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center text-white font-bold">
                           {item.cantidad}x
                         </div>
                         <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-semibold text-gray-800">
-                              {item.producto?.nombre || 'Producto'}
-                            </p>
-                            {item.es_oferta && (
-                              <span className="px-2 py-0.5 bg-red-500 text-white text-xs font-bold rounded-full">
-                                OFERTA
-                              </span>
-                            )}
-                          </div>
+                          <p className="font-semibold text-gray-800">
+                            {item.producto?.nombre || 'Producto'}
+                          </p>
                           <p className="text-sm text-gray-600">
                             ₡{item.precio_unitario} c/u
                           </p>

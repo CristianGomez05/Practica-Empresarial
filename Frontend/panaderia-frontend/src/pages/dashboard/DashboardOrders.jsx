@@ -1,9 +1,11 @@
-// Frontend/panaderia-frontend/src/pages/dashboard/DashboardOrders.jsx
+// Frontend/src/pages/dashboard/DashboardOrders.jsx
+// ⭐ ACTUALIZADO: Muestra tipo de entrega y dirección de entrega
+
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../../services/api";
 import ImageModal from "../../components/ImageModal";
-import { FaClipboardList, FaClock, FaCheckCircle, FaTruck, FaBox, FaTag, FaPercentage, FaStore } from "react-icons/fa";
+import { FaClipboardList, FaClock, FaCheckCircle, FaTruck, FaBox, FaTag, FaPercentage, FaStore, FaMapMarkerAlt, FaHome } from "react-icons/fa";
 
 export default function DashboardOrders() {
   const [orders, setOrders] = useState([]);
@@ -16,7 +18,6 @@ export default function DashboardOrders() {
       try {
         const res = await api.get("/pedidos/");
         const data = res.data.results || res.data;
-        // Ordenar por fecha más reciente
         const sorted = data.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
         setOrders(sorted);
       } catch (error) {
@@ -83,24 +84,20 @@ export default function DashboardOrders() {
     });
   };
 
-  // Detectar si un pedido contiene productos de oferta
   const detectarOfertas = (order) => {
     if (!order.detalles || order.detalles.length === 0) return { tieneOferta: false };
     
-    // Calcular el total esperado con precios normales
     const totalEsperado = order.detalles.reduce((sum, item) => {
       return sum + (item.producto?.precio || 0) * item.cantidad;
     }, 0);
     
-    // Si el total del pedido es menor que el esperado, probablemente hay ofertas
-    const tieneOferta = order.total < totalEsperado - 1; // -1 para evitar errores de redondeo
+    const tieneOferta = order.total < totalEsperado - 1;
     const ahorro = tieneOferta ? totalEsperado - order.total : 0;
     const porcentajeDescuento = tieneOferta ? Math.round((ahorro / totalEsperado) * 100) : 0;
     
     return { tieneOferta, ahorro, porcentajeDescuento, totalEsperado };
   };
 
-  // Agrupar productos por sucursal
   const agruparPorSucursal = (detalles) => {
     if (!detalles || detalles.length === 0) return [];
     
@@ -206,12 +203,57 @@ export default function DashboardOrders() {
                         </span>
                       </div>
                     )}
+                    
+                    {/* ⭐ NUEVO: Badge de tipo de entrega */}
+                    <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+                      order.es_domicilio 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'bg-purple-100 text-purple-700'
+                    }`}>
+                      {order.es_domicilio ? <FaTruck /> : <FaStore />}
+                      <span className="font-semibold text-sm">
+                        {order.tipo_entrega_display || (order.es_domicilio ? 'Entrega a Domicilio' : 'Recoger en Sucursal')}
+                      </span>
+                    </div>
                   </div>
                   <div className="text-sm text-[#8D6E63]">
                     <FaClock className="inline mr-2" />
                     {formatDate(order.fecha)}
                   </div>
                 </div>
+
+                {/* ⭐ NUEVO: Información de entrega */}
+                {order.es_domicilio && order.direccion_entrega && (
+                  <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <FaMapMarkerAlt className="text-blue-600 text-lg mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-blue-800 font-semibold text-sm mb-1">
+                          📍 Dirección de entrega:
+                        </p>
+                        <p className="text-blue-700 text-sm">
+                          {order.direccion_entrega}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {order.es_recoger && (
+                  <div className="mb-4 p-3 bg-purple-50 border-l-4 border-purple-500 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <FaStore className="text-purple-600 text-lg mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-purple-800 font-semibold text-sm mb-1">
+                          🏪 Recoger en sucursal
+                        </p>
+                        <p className="text-purple-700 text-sm">
+                          Por favor, pasar a recoger cuando esté listo
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Descuento Info */}
                 {tieneOferta && (
@@ -238,7 +280,6 @@ export default function DashboardOrders() {
                     key={gIdx}
                     className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-lg p-4"
                   >
-                    {/* ⭐ NUEVO: Header con nombre de sucursal */}
                     <div className="flex items-center gap-2 mb-3 pb-3 border-b border-amber-200">
                       <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
                         <FaStore className="text-white text-sm" />
@@ -253,7 +294,6 @@ export default function DashboardOrders() {
                       </div>
                     </div>
                     
-                    {/* Productos de esta sucursal */}
                     <div className="space-y-2">
                       {grupo.productos.map((item, idx) => (
                         <div
@@ -261,7 +301,6 @@ export default function DashboardOrders() {
                           className="flex items-center justify-between py-2 border-b border-amber-100 last:border-0 bg-white rounded-lg px-3"
                         >
                           <div className="flex items-center gap-3">
-                            {/* IMAGEN CLICKEABLE PARA ABRIR MODAL */}
                             <div 
                               onClick={() => openModal({
                                 imagen: item.producto?.imagen,
