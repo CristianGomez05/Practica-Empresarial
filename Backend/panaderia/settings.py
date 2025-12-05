@@ -262,15 +262,41 @@ CLOUDINARY_STORAGE = {
 }
 
 # ============================================================================
-# ALLAUTH & SOCIAL AUTH
+# ALLAUTH & SOCIAL AUTH (⭐ ACTUALIZADO)
 # ============================================================================
+
+# ⭐ CRÍTICO: Usar HTTPS en producción
+if not DEBUG:
+    ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'https'
+else:
+    ACCOUNT_DEFAULT_HTTP_PROTOCOL = 'http'
+
+# Configuración de Google OAuth
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        },
+        'OAUTH_PKCE_ENABLED': True,
+        'VERIFIED_EMAIL': True,
+    }
+}
+
+# Adapters personalizados
 ACCOUNT_ADAPTER = "core.adapters.FrontendRedirectAccountAdapter"
 SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
+
+# Configuración de login
 SOCIALACCOUNT_LOGIN_ON_GET = True
 SOCIALACCOUNT_AUTO_SIGNUP = True
 ACCOUNT_EMAIL_REQUIRED = True
 SOCIALACCOUNT_QUERY_EMAIL = True
 
+# URLs de redirección
 LOGIN_REDIRECT_URL = f"{FRONTEND_URL}/dashboard"
 LOGOUT_REDIRECT_URL = FRONTEND_URL
 
