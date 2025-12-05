@@ -187,7 +187,7 @@ class ProductoOferta(models.Model):
 
 
 # ============================================================================
-# PEDIDO (⭐ ACTUALIZADO CON ESTADO CANCELADO)
+# PEDIDO (⭐ ACTUALIZADO CON FECHA_COMPLETADO Y AUTO-DELETE)
 # ============================================================================
 class Pedido(models.Model):
     ESTADOS = [
@@ -195,7 +195,7 @@ class Pedido(models.Model):
         ('en_preparacion', 'En preparación'),
         ('listo', 'Listo'),
         ('entregado', 'Entregado'),
-        ('cancelado', 'Cancelado'),  # ⭐ NUEVO
+        ('cancelado', 'Cancelado'),
     ]
     
     TIPOS_ENTREGA = [
@@ -207,6 +207,13 @@ class Pedido(models.Model):
     fecha = models.DateTimeField(auto_now_add=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='recibido')
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    # ⭐ NUEVO: Registrar cuándo se completó/canceló el pedido
+    fecha_completado = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Fecha en que el pedido fue entregado o cancelado'
+    )
     
     direccion_entrega = models.TextField(
         blank=True,
@@ -239,11 +246,66 @@ class Pedido(models.Model):
         """Verifica si es para recoger en sucursal"""
         return self.tipo_entrega == 'recoger'
     
-    # ⭐ NUEVO: Validar si se puede cancelar
     @property
     def puede_cancelarse(self):
         """El pedido solo puede cancelarse si está en estado 'recibido'"""
         return self.estado == 'recibido'
+    
+    # ⭐⭐⭐ NUEVO: Validar si se puede eliminar
+    @property
+    def puede_eliminarse(self):
+        """
+        El pedido puede eliminarse si:
+        1. NO está en estado 'en_preparacion' o 'listo'
+        2. Si está 'entregado' o 'cancelado', debe tener más de 48 horas
+        """
+        # No se puede eliminar si está en preparación o listo
+        if self.estado in ['en_preparacion', 'listo']:
+            return False
+        
+        # Si está entregado o cancelado, verificar las 48 horas
+        if self.estado in ['entregado', 'cancelado']:
+            if not self.fecha_completado:
+                # Si no tiene fecha_completado, usar fecha de creación como fallback
+                fecha_referencia = self.fecha
+            else:
+                fecha_referencia = self.fecha_completado
+            
+            tiempo_transcurrido = timezone.now() - fecha_referencia
+            return tiempo_transcurrido >= timedelta(hours=48)
+        
+        # Estados 'recibido' pueden eliminarse siempre
+        return True
+    
+    # ⭐⭐⭐ NUEVO: Método para actualizar fecha_completado automáticamente
+    def save(self, *args, **kwargs):
+        # Si el estado cambió a 'entregado' o 'cancelado' y no tiene fecha_completado
+        if self.estado in ['entregado', 'cancelado'] and not self.fecha_completado:
+            self.fecha_completado = timezone.now()
+            print(f"✅ Pedido #{self.id} marcado como {self.estado} - Auto-delete en 48h")
+        
+        super().save(*args, **kwargs)
+    
+    # ⭐⭐⭐ NUEVO: Obtener tiempo restante hasta auto-delete
+    @property
+    def tiempo_hasta_auto_delete(self):
+        """Retorna el tiempo restante hasta que el pedido sea auto-eliminado"""
+        if self.estado not in ['entregado', 'cancelado']:
+            return None
+        
+        if not self.fecha_completado:
+            fecha_referencia = self.fecha
+        else:
+            fecha_referencia = self.fecha_completado
+        
+        tiempo_transcurrido = timezone.now() - fecha_referencia
+        tiempo_restante = timedelta(hours=48) - tiempo_transcurrido
+        
+        if tiempo_restante.total_seconds() <= 0:
+            return "Listo para eliminar"
+        
+        horas = int(tiempo_restante.total_seconds() // 3600)
+        return f"{horas}h restantes"
 
 
 # ============================================================================

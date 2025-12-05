@@ -1,17 +1,21 @@
-// Frontend/src/pages/admin/AdminOrders.jsx
-// ⭐ ACTUALIZADO: Muestra tipo de entrega y dirección
+//src/pages/admin/AdminOrders.jsx
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaClipboardList, FaEye, FaEdit, FaSearch, FaFilter, FaSortAmountDown, FaMapMarkerAlt, FaTruck, FaStore } from 'react-icons/fa';
+import { 
+  FaClipboardList, FaEye, FaEdit, FaSearch, FaFilter, 
+  FaSortAmountDown, FaMapMarkerAlt, FaTruck, FaStore, FaTrash 
+} from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
+import DeleteOrderModal from '../../components/modals/DeleteOrderModal';
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [deleteOrder, setDeleteOrder] = useState(null);
   const [filterEstado, setFilterEstado] = useState('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState('prioridad');
@@ -43,38 +47,10 @@ export default function AdminOrders() {
       'recibido': 4,
       'en_preparacion': 3,
       'listo': 2,
-      'entregado': 1
+      'entregado': 1,
+      'cancelado': 0
     };
     return prioridades[estado] || 0;
-  };
-
-  const getTiempoEspera = (fecha) => {
-    const ahora = new Date();
-    const fechaPedido = new Date(fecha);
-    const minutos = Math.floor((ahora - fechaPedido) / (1000 * 60));
-
-    if (minutos < 60) {
-      return `${minutos} min`;
-    } else if (minutos < 1440) {
-      const horas = Math.floor(minutos / 60);
-      return `${horas}h ${minutos % 60}min`;
-    } else {
-      const dias = Math.floor(minutos / 1440);
-      return `${dias}d ${Math.floor((minutos % 1440) / 60)}h`;
-    }
-  };
-
-  const getTiempoColor = (fecha, estado) => {
-    if (estado === 'entregado') return 'text-gray-400';
-
-    const ahora = new Date();
-    const fechaPedido = new Date(fecha);
-    const minutos = Math.floor((ahora - fechaPedido) / (1000 * 60));
-
-    if (minutos < 15) return 'text-green-600';
-    if (minutos < 30) return 'text-yellow-600';
-    if (minutos < 60) return 'text-orange-600';
-    return 'text-red-600 font-bold animate-pulse';
   };
 
   const filterOrders = () => {
@@ -128,13 +104,57 @@ export default function AdminOrders() {
       await api.patch(`/pedidos/${orderId}/cambiar_estado/`, {
         estado: nuevoEstado
       });
-      enqueueSnackbar('Estado actualizado y notificación enviada', { 
-        variant: 'success' 
-      });
+      enqueueSnackbar('Estado actualizado', { variant: 'success' });
       fetchOrders();
     } catch (error) {
       console.error('Error actualizando estado:', error);
       enqueueSnackbar('Error al actualizar estado', { variant: 'error' });
+    }
+  };
+
+  // ⭐⭐⭐ NUEVA FUNCIÓN: Eliminar pedido
+  const handleDeleteOrder = async (orderId) => {
+    try {
+      console.log('🗑️ Eliminando pedido:', orderId);
+      
+      const response = await api.delete(`/pedidos/${orderId}/`);
+      
+      console.log('✅ Respuesta:', response.data);
+      
+      enqueueSnackbar(
+        response.data.message || 'Pedido eliminado exitosamente', 
+        { variant: 'success' }
+      );
+      
+      // Actualizar lista
+      await fetchOrders();
+      
+      // Cerrar modales si están abiertos
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(null);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error eliminando pedido:', error);
+      
+      if (error.response?.data) {
+        const { error: errorMsg, codigo, tiempo_hasta_auto_delete } = error.response.data;
+        
+        let mensaje = errorMsg || 'Error al eliminar el pedido';
+        
+        if (tiempo_hasta_auto_delete) {
+          mensaje += ` (${tiempo_hasta_auto_delete})`;
+        }
+        
+        enqueueSnackbar(mensaje, { 
+          variant: 'error',
+          autoHideDuration: 5000 
+        });
+      } else {
+        enqueueSnackbar('Error al eliminar el pedido', { variant: 'error' });
+      }
+      
+      throw error;
     }
   };
 
@@ -163,6 +183,12 @@ export default function AdminOrders() {
         text: 'text-purple-700', 
         label: '🎉 Entregado',
         priority: '⚪ Completado'
+      },
+      cancelado: {
+        bg: 'bg-red-100',
+        text: 'text-red-700',
+        label: '❌ Cancelado',
+        priority: '⚫ Cancelado'
       }
     };
     return badges[estado] || badges.recibido;
@@ -173,7 +199,8 @@ export default function AdminOrders() {
     { value: 'recibido', label: '📋 Recibidos' },
     { value: 'en_preparacion', label: '👨‍🍳 En Preparación' },
     { value: 'listo', label: '✅ Listos' },
-    { value: 'entregado', label: '🎉 Entregados' }
+    { value: 'entregado', label: '🎉 Entregados' },
+    { value: 'cancelado', label: '❌ Cancelados' }
   ];
 
   const ordenamientos = [
@@ -188,17 +215,8 @@ export default function AdminOrders() {
     recibido: 'en_preparacion',
     en_preparacion: 'listo',
     listo: 'entregado',
-    entregado: null
-  };
-
-  const esUrgente = (order) => {
-    if (order.estado === 'listo' || order.estado === 'entregado') return false;
-    
-    const ahora = new Date();
-    const fechaPedido = new Date(order.fecha);
-    const minutos = Math.floor((ahora - fechaPedido) / (1000 * 60));
-    
-    return minutos > 30;
+    entregado: null,
+    cancelado: null
   };
 
   if (loading) {
@@ -268,26 +286,12 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      {sortOrder === 'prioridad' && (
-        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
-          <p className="text-blue-700 text-sm font-semibold">
-            🎯 Mostrando pedidos por prioridad: 
-            <span className="ml-2">Recibidos → En Preparación → Listos → Entregados</span>
-          </p>
-          <p className="text-blue-600 text-xs mt-1">
-            Dentro de cada estado, los pedidos más antiguos aparecen primero
-          </p>
-        </div>
-      )}
-
       {/* Orders List */}
       <div className="space-y-4">
         <AnimatePresence>
           {filteredOrders.map((order, index) => {
             const badge = getEstadoBadge(order.estado);
             const siguienteEstado = estadosSiguientes[order.estado];
-            const urgente = esUrgente(order);
-            const prioridad = getPrioridadPorEstado(order.estado);
 
             return (
               <motion.div
@@ -296,32 +300,20 @@ export default function AdminOrders() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ delay: index * 0.05 }}
-                className={`bg-white rounded-xl shadow-md border-2 overflow-hidden hover:shadow-lg transition-all ${
-                  urgente ? 'border-red-300 shadow-red-100' : 'border-gray-100'
-                }`}
+                className="bg-white rounded-xl shadow-md border-2 border-gray-100 overflow-hidden hover:shadow-lg transition-all"
               >
                 <div className="p-6">
                   {/* Header */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 bg-gradient-to-br rounded-full flex items-center justify-center text-white font-bold shadow-lg ${
-                        urgente ? 'from-red-500 to-red-600 animate-pulse' : 
-                        prioridad === 4 ? 'from-blue-500 to-blue-600' :
-                        prioridad === 3 ? 'from-yellow-500 to-yellow-600' :
-                        prioridad === 2 ? 'from-green-500 to-green-600' :
-                        'from-purple-500 to-purple-600'
-                      }`}>
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
                         #{order.id}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-gray-800 text-lg">
                             {order.usuario?.username || 'Cliente'}
                           </p>
-                          <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded-full">
-                            {badge.priority}
-                          </span>
-                          {/* ⭐ NUEVO: Badge de tipo de entrega */}
                           <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${
                             order.es_domicilio 
                               ? 'bg-blue-100 text-blue-700' 
@@ -330,18 +322,22 @@ export default function AdminOrders() {
                             {order.es_domicilio ? <FaTruck className="text-xs" /> : <FaStore className="text-xs" />}
                             {order.es_domicilio ? 'Domicilio' : 'Recoger'}
                           </span>
+                          
+                          {/* ⭐ NUEVO: Badge de auto-delete */}
+                          {order.tiempo_hasta_auto_delete && (
+                            <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">
+                              🕐 {order.tiempo_hasta_auto_delete}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex items-center gap-3 text-sm">
-                          <span className="text-gray-500">
+                        <div className="flex items-center gap-3 text-sm text-gray-500">
+                          <span>
                             {new Date(order.fecha).toLocaleString('es-ES', {
                               day: 'numeric',
                               month: 'short',
                               hour: '2-digit',
                               minute: '2-digit'
                             })}
-                          </span>
-                          <span className={`font-semibold ${getTiempoColor(order.fecha, order.estado)}`}>
-                            ⏱️ {getTiempoEspera(order.fecha)}
                           </span>
                         </div>
                       </div>
@@ -357,7 +353,7 @@ export default function AdminOrders() {
                     </div>
                   </div>
 
-                  {/* ⭐ NUEVO: Información de entrega */}
+                  {/* Dirección si aplica */}
                   {order.es_domicilio && order.direccion_entrega && (
                     <div className="mb-4 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
                       <div className="flex items-start gap-3">
@@ -370,49 +366,6 @@ export default function AdminOrders() {
                             {order.direccion_entrega}
                           </p>
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {order.es_recoger && (
-                    <div className="mb-4 p-3 bg-purple-50 border-l-4 border-purple-500 rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <FaStore className="text-purple-600 text-lg mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-purple-800 font-semibold text-sm">
-                            🏪 Cliente recogerá el pedido en sucursal
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {urgente && (
-                    <div className="mb-4 px-4 py-2 bg-red-50 border-l-4 border-red-500 rounded">
-                      <p className="text-red-700 text-sm font-semibold">
-                        🚨 Pedido urgente - Requiere atención inmediata
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Items */}
-                  {order.detalles && order.detalles.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-sm text-gray-600 mb-2">Productos:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {order.detalles.slice(0, 3).map((item, idx) => (
-                          <span
-                            key={idx}
-                            className="px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700"
-                          >
-                            {item.cantidad}x {item.producto?.nombre}
-                          </span>
-                        ))}
-                        {order.detalles.length > 3 && (
-                          <span className="px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700">
-                            +{order.detalles.length - 3} más
-                          </span>
-                        )}
                       </div>
                     </div>
                   )}
@@ -430,16 +383,31 @@ export default function AdminOrders() {
                     {siguienteEstado && (
                       <button
                         onClick={() => handleChangeEstado(order.id, siguienteEstado)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold ${
-                          urgente 
-                            ? 'bg-red-50 hover:bg-red-100 text-red-600 animate-pulse' 
-                            : 'bg-green-50 hover:bg-green-100 text-green-600'
-                        }`}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-colors font-semibold"
                       >
                         <FaEdit />
                         Marcar como {getEstadoBadge(siguienteEstado).label}
                       </button>
                     )}
+
+                    {/* ⭐⭐⭐ NUEVO: Botón Eliminar */}
+                    <button
+                      onClick={() => setDeleteOrder(order)}
+                      disabled={!order.puede_eliminarse}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold ${
+                        order.puede_eliminarse
+                          ? 'bg-red-50 hover:bg-red-100 text-red-600'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                      title={
+                        order.puede_eliminarse 
+                          ? 'Eliminar pedido' 
+                          : 'No se puede eliminar en este estado'
+                      }
+                    >
+                      <FaTrash />
+                      Eliminar
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -455,176 +423,13 @@ export default function AdminOrders() {
         )}
       </div>
 
-      {/* Modal de Detalles */}
-      {selectedOrder && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-          onClick={() => setSelectedOrder(null)}
-        >
-          <motion.div
-            initial={{ scale: 0.9, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.9, y: 20 }}
-            className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-purple-600 text-white p-6 rounded-t-2xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-2xl font-bold">
-                    #{selectedOrder.id}
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold">Detalles del Pedido</h2>
-                    <p className="text-purple-100">
-                      {selectedOrder.usuario?.username || 'Cliente'}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedOrder(null)}
-                  className="w-10 h-10 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-full flex items-center justify-center transition-colors"
-                >
-                  <span className="text-2xl">×</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Fecha del Pedido</p>
-                  <p className="font-semibold text-gray-800">
-                    {new Date(selectedOrder.fecha).toLocaleString('es-ES', {
-                      day: 'numeric',
-                      month: 'long',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Estado</p>
-                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${getEstadoBadge(selectedOrder.estado).bg} ${getEstadoBadge(selectedOrder.estado).text}`}>
-                    {getEstadoBadge(selectedOrder.estado).label}
-                  </span>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Tiempo de Espera</p>
-                  <p className={`font-semibold ${getTiempoColor(selectedOrder.fecha, selectedOrder.estado)}`}>
-                    ⏱️ {getTiempoEspera(selectedOrder.fecha)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm text-gray-600 mb-1">Tipo de Entrega</p>
-                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 ${
-                    selectedOrder.es_domicilio 
-                      ? 'bg-blue-100 text-blue-700' 
-                      : 'bg-purple-100 text-purple-700'
-                  }`}>
-                    {selectedOrder.es_domicilio ? <FaTruck /> : <FaStore />}
-                    {selectedOrder.tipo_entrega_display || (selectedOrder.es_domicilio ? 'Entrega a Domicilio' : 'Recoger en Sucursal')}
-                  </span>
-                </div>
-              </div>
-
-              {/* ⭐ NUEVO: Dirección de entrega si aplica */}
-              {selectedOrder.es_domicilio && selectedOrder.direccion_entrega && (
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <FaMapMarkerAlt className="text-blue-600 text-lg mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-blue-800 font-semibold mb-1">
-                        📍 Dirección de entrega:
-                      </p>
-                      <p className="text-blue-700">
-                        {selectedOrder.direccion_entrega}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedOrder.es_recoger && (
-                <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <FaStore className="text-purple-600 text-lg mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-purple-800 font-semibold">
-                        🏪 Cliente recogerá el pedido en sucursal
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-5 rounded-xl border-2 border-amber-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-amber-700 mb-1">Total del Pedido</p>
-                  </div>
-                  <p className="text-3xl font-bold text-amber-700">
-                    ₡{selectedOrder.total}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                  🛍️ Productos ({selectedOrder.detalles?.length || 0})
-                </h3>
-                <div className="space-y-3">
-                  {selectedOrder.detalles?.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center text-white font-bold">
-                          {item.cantidad}x
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-800">
-                            {item.producto?.nombre || 'Producto'}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            ₡{item.precio_unitario} c/u
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-lg font-bold text-amber-700">
-                        ₡{(parseFloat(item.precio_unitario) * item.cantidad).toFixed(2)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t">
-                {estadosSiguientes[selectedOrder.estado] && (
-                  <button
-                    onClick={() => {
-                      handleChangeEstado(selectedOrder.id, estadosSiguientes[selectedOrder.estado]);
-                      setSelectedOrder(null);
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-colors font-semibold shadow-md"
-                  >
-                    <FaEdit />
-                    Marcar como {getEstadoBadge(estadosSiguientes[selectedOrder.estado]).label}
-                  </button>
-                )}
-                <button
-                  onClick={() => setSelectedOrder(null)}
-                  className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors font-semibold"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
+      {/* ⭐⭐⭐ NUEVO: Modal de Eliminación */}
+      <DeleteOrderModal
+        isOpen={!!deleteOrder}
+        onClose={() => setDeleteOrder(null)}
+        onConfirm={handleDeleteOrder}
+        order={deleteOrder}
+      />
     </div>
   );
 }

@@ -540,7 +540,12 @@ class PedidoSerializer(serializers.ModelSerializer):
     es_oferta = serializers.SerializerMethodField()
     es_domicilio = serializers.BooleanField(read_only=True)
     es_recoger = serializers.BooleanField(read_only=True)
-    puede_cancelarse = serializers.BooleanField(read_only=True)  # ⭐ NUEVO
+    puede_cancelarse = serializers.BooleanField(read_only=True)
+    
+    # ⭐⭐⭐ NUEVO: Campos para eliminación
+    puede_eliminarse = serializers.BooleanField(read_only=True)
+    tiempo_hasta_auto_delete = serializers.CharField(read_only=True)
+    fecha_completado = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = Pedido
@@ -549,9 +554,14 @@ class PedidoSerializer(serializers.ModelSerializer):
             'estado_display', 'detalles', 'total', 
             'cantidad_items', 'tiempo_transcurrido', 'es_oferta',
             'direccion_entrega', 'tipo_entrega', 'tipo_entrega_display',
-            'es_domicilio', 'es_recoger', 'puede_cancelarse'  # ⭐ NUEVO
+            'es_domicilio', 'es_recoger', 'puede_cancelarse',
+            # ⭐ NUEVO
+            'puede_eliminarse', 'tiempo_hasta_auto_delete', 'fecha_completado'
         ]
-        read_only_fields = ['id', 'fecha', 'usuario', 'total', 'direccion_entrega', 'tipo_entrega']
+        read_only_fields = [
+            'id', 'fecha', 'usuario', 'total', 'direccion_entrega', 
+            'tipo_entrega', 'fecha_completado'
+        ]
     
     def get_cantidad_items(self, obj):
         return sum(detalle.cantidad for detalle in obj.detalles.all())
