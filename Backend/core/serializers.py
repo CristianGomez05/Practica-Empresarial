@@ -540,6 +540,7 @@ class PedidoSerializer(serializers.ModelSerializer):
     es_oferta = serializers.SerializerMethodField()
     es_domicilio = serializers.BooleanField(read_only=True)
     es_recoger = serializers.BooleanField(read_only=True)
+    puede_cancelarse = serializers.BooleanField(read_only=True)  # ⭐ NUEVO
 
     class Meta:
         model = Pedido
@@ -548,7 +549,7 @@ class PedidoSerializer(serializers.ModelSerializer):
             'estado_display', 'detalles', 'total', 
             'cantidad_items', 'tiempo_transcurrido', 'es_oferta',
             'direccion_entrega', 'tipo_entrega', 'tipo_entrega_display',
-            'es_domicilio', 'es_recoger'
+            'es_domicilio', 'es_recoger', 'puede_cancelarse'  # ⭐ NUEVO
         ]
         read_only_fields = ['id', 'fecha', 'usuario', 'total', 'direccion_entrega', 'tipo_entrega']
     

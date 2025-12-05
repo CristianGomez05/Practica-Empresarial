@@ -1,5 +1,5 @@
 # Backend/core/models.py
-# ⭐ ACTUALIZADO: Campos domicilio y direccion_entrega agregados
+# ⭐ ACTUALIZADO: Agregado estado 'cancelado' para pedidos
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
@@ -25,7 +25,7 @@ class Sucursal(models.Model):
 
 
 # ============================================================================
-# USUARIO (⭐ ACTUALIZADO CON DOMICILIO)
+# USUARIO
 # ============================================================================
 class Usuario(AbstractUser):
     ROLES = [
@@ -35,7 +35,6 @@ class Usuario(AbstractUser):
     ]
     rol = models.CharField(max_length=25, choices=ROLES, default='cliente')
     
-    # Relación con Sucursal (solo para administradores)
     sucursal = models.ForeignKey(
         Sucursal,
         on_delete=models.SET_NULL,
@@ -45,7 +44,6 @@ class Usuario(AbstractUser):
         help_text='Sucursal asignada (solo para administradores)'
     )
     
-    # ⭐ NUEVO: Campo domicilio para clientes
     domicilio = models.TextField(
         blank=True,
         null=True,
@@ -189,7 +187,7 @@ class ProductoOferta(models.Model):
 
 
 # ============================================================================
-# PEDIDO (⭐ ACTUALIZADO CON DIRECCION_ENTREGA)
+# PEDIDO (⭐ ACTUALIZADO CON ESTADO CANCELADO)
 # ============================================================================
 class Pedido(models.Model):
     ESTADOS = [
@@ -197,9 +195,9 @@ class Pedido(models.Model):
         ('en_preparacion', 'En preparación'),
         ('listo', 'Listo'),
         ('entregado', 'Entregado'),
+        ('cancelado', 'Cancelado'),  # ⭐ NUEVO
     ]
     
-    # ⭐ NUEVO: Tipos de entrega
     TIPOS_ENTREGA = [
         ('domicilio', 'Entrega a Domicilio'),
         ('recoger', 'Recoger en Sucursal'),
@@ -210,14 +208,12 @@ class Pedido(models.Model):
     estado = models.CharField(max_length=20, choices=ESTADOS, default='recibido')
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     
-    # Dirección de entrega (copia del domicilio del usuario en el momento del pedido)
     direccion_entrega = models.TextField(
         blank=True,
         null=True,
         help_text='Dirección de entrega del pedido (copia del domicilio del usuario)'
     )
     
-    # ⭐ NUEVO: Tipo de entrega
     tipo_entrega = models.CharField(
         max_length=20,
         choices=TIPOS_ENTREGA,
@@ -242,6 +238,12 @@ class Pedido(models.Model):
     def es_recoger(self):
         """Verifica si es para recoger en sucursal"""
         return self.tipo_entrega == 'recoger'
+    
+    # ⭐ NUEVO: Validar si se puede cancelar
+    @property
+    def puede_cancelarse(self):
+        """El pedido solo puede cancelarse si está en estado 'recibido'"""
+        return self.estado == 'recibido'
 
 
 # ============================================================================
@@ -263,6 +265,5 @@ class DetallePedido(models.Model):
 # ============================================================================
 # CAMBIOS REALIZADOS:
 # ============================================================================
-# 1. Usuario: Agregado campo 'domicilio' (TextField, null=True, blank=True)
-# 2. Usuario: Agregada propiedad 'tiene_domicilio' (bool)
-# 3. Pedido: Agregado campo 'direccion_entrega' (TextField, null=True, blank=True)
+# 1. Pedido.ESTADOS: Agregado ('cancelado', 'Cancelado')
+# 2. Pedido: Agregada propiedad 'puede_cancelarse' (bool)

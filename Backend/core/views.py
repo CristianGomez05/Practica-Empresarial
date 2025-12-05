@@ -406,21 +406,18 @@ class PedidoViewSet(viewsets.ModelViewSet):
         return base_queryset.filter(usuario=user).order_by('-fecha')
 
     def get_serializer_class(self):
-        """⭐ CRÍTICO: Usar PedidoCreateSerializer para crear pedidos"""
         if self.action == 'create':
             return PedidoCreateSerializer
         return PedidoSerializer
 
     @transaction.atomic
     def perform_create(self, serializer):
-        """⭐ CORREGIDO: Ya no sobrescribe nada, el serializer lo maneja todo"""
         user = self.request.user
         
         print(f"\n{'='*60}")
         print(f"📦 Nuevo pedido creado (correo se enviará después)")
         print(f"{'='*60}\n")
         
-        # El serializer PedidoCreateSerializer ya maneja todo correctamente
         pedido = serializer.save()
         
         # Enviar notificación en background
@@ -444,11 +441,17 @@ class PedidoViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def cambiar_estado(self, request, pk=None):
-        """Cambiar estado con notificación automática"""
+        """Cambiar estado del pedido (solo admins)"""
         pedido = self.get_object()
         nuevo_estado = request.data.get('estado')
         
-        estados_validos = ['recibido', 'en_preparacion', 'listo', 'entregado']
+        # ⭐ Solo admins pueden cambiar el estado manualmente
+        if request.user.rol not in ['administrador', 'administrador_general']:
+            return Response({
+                'error': 'No tienes permisos para cambiar el estado del pedido'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        estados_validos = ['recibido', 'en_preparacion', 'listo', 'entregado', 'cancelado']
         if nuevo_estado not in estados_validos:
             return Response({
                 'error': f'Estado inválido. Debe ser: {", ".join(estados_validos)}'
@@ -465,7 +468,54 @@ class PedidoViewSet(viewsets.ModelViewSet):
             'message': 'Estado actualizado',
             'pedido': serializer.data
         })
-
+    
+    # ⭐⭐⭐ NUEVO: Acción para cancelar pedido (SOLO CLIENTES)
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def cancelar(self, request, pk=None):
+        """
+        Permite al cliente cancelar su pedido.
+        Solo funciona si el pedido está en estado 'recibido'.
+        Endpoint: POST /api/pedidos/{id}/cancelar/
+        """
+        pedido = self.get_object()
+        user = request.user
+        
+        print(f"\n{'='*60}")
+        print(f"❌ SOLICITUD DE CANCELACIÓN")
+        print(f"   Pedido ID: {pedido.id}")
+        print(f"   Usuario: {user.username}")
+        print(f"   Estado actual: {pedido.estado}")
+        print(f"{'='*60}")
+        
+        # Verificar que el pedido pertenece al usuario
+        if pedido.usuario != user and user.rol not in ['administrador', 'administrador_general']:
+            print(f"🚫 Usuario no autorizado para cancelar este pedido")
+            return Response({
+                'error': 'No tienes permiso para cancelar este pedido'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Verificar que el pedido puede cancelarse
+        if not pedido.puede_cancelarse:
+            print(f"🚫 Pedido no se puede cancelar - Estado: {pedido.estado}")
+            return Response({
+                'error': f'No puedes cancelar este pedido porque ya está en estado "{pedido.get_estado_display()}". Solo los pedidos en estado "Recibido" pueden cancelarse.',
+                'estado_actual': pedido.estado
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Cambiar estado a cancelado
+        estado_anterior = pedido.estado
+        pedido.estado = 'cancelado'
+        pedido.save(update_fields=['estado'])
+        
+        print(f"✅ Pedido #{pedido.id} cancelado exitosamente")
+        print(f"   Estado: {estado_anterior} → cancelado")
+        print(f"{'='*60}\n")
+        
+        serializer = self.get_serializer(pedido)
+        return Response({
+            'message': 'Pedido cancelado exitosamente',
+            'pedido': serializer.data
+        }, status=status.HTTP_200_OK)
 
 class DetallePedidoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = DetallePedido.objects.select_related('producto', 'pedido').all()
