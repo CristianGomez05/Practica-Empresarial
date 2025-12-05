@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus, FaStore } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
