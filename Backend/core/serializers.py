@@ -11,11 +11,16 @@ import cloudinary.uploader
 
 
 # ============================================================================
-# SUCURSAL SERIALIZER
+# SUCURSAL SERIALIZER (⭐ CORREGIDO)
 # ============================================================================
 
 class SucursalSerializer(serializers.ModelSerializer):
-    """Serializer para sucursales"""
+    """Serializer para sucursales con conteos correctos"""
+    total_productos = serializers.SerializerMethodField()
+    total_ofertas = serializers.SerializerMethodField()
+    total_admins = serializers.SerializerMethodField()
+    
+    # ⭐ LEGACY: Mantener compatibilidad con código antiguo
     productos_count = serializers.SerializerMethodField()
     ofertas_count = serializers.SerializerMethodField()
     usuarios_count = serializers.SerializerMethodField()
@@ -24,18 +29,37 @@ class SucursalSerializer(serializers.ModelSerializer):
         model = Sucursal
         fields = [
             'id', 'nombre', 'telefono', 'direccion', 'activa', 
-            'fecha_creacion', 'productos_count', 'ofertas_count', 'usuarios_count'
+            'fecha_creacion', 
+            # Nuevos campos
+            'total_productos', 'total_ofertas', 'total_admins',
+            # Legacy (para compatibilidad)
+            'productos_count', 'ofertas_count', 'usuarios_count'
         ]
         read_only_fields = ['fecha_creacion']
     
-    def get_productos_count(self, obj):
+    def get_total_productos(self, obj):
+        """Conteo de productos de esta sucursal"""
         return obj.productos.count()
     
-    def get_ofertas_count(self, obj):
+    def get_total_ofertas(self, obj):
+        """Conteo de ofertas de esta sucursal"""
         return obj.ofertas.count()
     
+    def get_total_admins(self, obj):
+        """Conteo de administradores asignados a esta sucursal"""
+        return obj.usuarios.filter(
+            rol__in=['administrador', 'administrador_general']
+        ).count()
+    
+    # ⭐ LEGACY: Métodos antiguos para compatibilidad
+    def get_productos_count(self, obj):
+        return self.get_total_productos(obj)
+    
+    def get_ofertas_count(self, obj):
+        return self.get_total_ofertas(obj)
+    
     def get_usuarios_count(self, obj):
-        return obj.usuarios.filter(rol__in=['administrador', 'administrador_general']).count()
+        return self.get_total_admins(obj)
 
 
 # ============================================================================
