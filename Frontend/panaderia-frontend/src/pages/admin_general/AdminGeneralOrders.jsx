@@ -1,13 +1,18 @@
 // Frontend/src/pages/admin_general/AdminGeneralOrders.jsx
-// ⭐ ACTUALIZADO: Muestra tipo de entrega y dirección completa
+// ⭐ COMPLETO: Con función de eliminación de pedidos
 
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaShoppingCart, FaEye, FaCheck, FaTimes, FaClock, FaBox, FaUser, FaPhone, FaMapMarkerAlt, FaCalendar, FaMoneyBillWave, FaSync, FaReceipt, FaTruck, FaStore } from 'react-icons/fa';
+import { 
+  FaShoppingCart, FaEye, FaCheck, FaTimes, FaClock, FaBox, 
+  FaUser, FaPhone, FaMapMarkerAlt, FaCalendar, FaMoneyBillWave, 
+  FaSync, FaReceipt, FaTruck, FaStore, FaTrash 
+} from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
+import DeleteOrderModal from '../../components/modals/DeleteOrderModal';
 
 export default function AdminGeneralOrders() {
   const { selectedBranch } = useOutletContext();
@@ -16,6 +21,7 @@ export default function AdminGeneralOrders() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPedido, setSelectedPedido] = useState(null);
+  const [deleteOrder, setDeleteOrder] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
   const { enqueueSnackbar } = useSnackbar();
@@ -57,7 +63,7 @@ export default function AdminGeneralOrders() {
 
   useSmartRefresh(cargarPedidos, {
     interval: 30000,
-    enabled: !showModal,
+    enabled: !showModal && !deleteOrder,
     refreshOnFocus: true
   });
 
@@ -76,6 +82,53 @@ export default function AdminGeneralOrders() {
     } catch (error) {
       console.error('❌ Error actualizando estado:', error);
       enqueueSnackbar('Error al actualizar estado', { variant: 'error' });
+    }
+  };
+
+  // ⭐⭐⭐ NUEVA FUNCIÓN: Eliminar pedido
+  const handleDeleteOrder = async (orderId) => {
+    try {
+      console.log('🗑️ Eliminando pedido:', orderId);
+      
+      const response = await api.delete(`/pedidos/${orderId}/`);
+      
+      console.log('✅ Respuesta:', response.data);
+      
+      enqueueSnackbar(
+        response.data.message || 'Pedido eliminado exitosamente', 
+        { variant: 'success' }
+      );
+      
+      // Actualizar lista
+      await cargarPedidos();
+      
+      // Cerrar modales si están abiertos
+      if (selectedPedido?.id === orderId) {
+        setSelectedPedido(null);
+        setShowModal(false);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error eliminando pedido:', error);
+      
+      if (error.response?.data) {
+        const { error: errorMsg, codigo, tiempo_hasta_auto_delete } = error.response.data;
+        
+        let mensaje = errorMsg || 'Error al eliminar el pedido';
+        
+        if (tiempo_hasta_auto_delete) {
+          mensaje += ` (${tiempo_hasta_auto_delete})`;
+        }
+        
+        enqueueSnackbar(mensaje, { 
+          variant: 'error',
+          autoHideDuration: 5000 
+        });
+      } else {
+        enqueueSnackbar('Error al eliminar el pedido', { variant: 'error' });
+      }
+      
+      throw error;
     }
   };
 
@@ -157,6 +210,7 @@ export default function AdminGeneralOrders() {
     en_preparacion: pedidos.filter(p => p.estado === 'en_preparacion').length,
     listos: pedidos.filter(p => p.estado === 'listo').length,
     entregados: pedidos.filter(p => p.estado === 'entregado').length,
+    cancelados: pedidos.filter(p => p.estado === 'cancelado').length,
     totalVentas: pedidos
       .filter(p => p.estado === 'entregado')
       .reduce((sum, p) => sum + parseFloat(p.total || 0), 0)
@@ -196,7 +250,7 @@ export default function AdminGeneralOrders() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
           <p className="text-sm text-gray-600">Total</p>
           <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
@@ -209,13 +263,17 @@ export default function AdminGeneralOrders() {
           <p className="text-sm text-gray-600">En Preparación</p>
           <p className="text-2xl font-bold text-gray-800">{stats.en_preparacion}</p>
         </div>
+        <div className="bg-white p-4 rounded-xl shadow border-l-4 border-purple-500">
+          <p className="text-sm text-gray-600">Listos</p>
+          <p className="text-2xl font-bold text-gray-800">{stats.listos}</p>
+        </div>
         <div className="bg-white p-4 rounded-xl shadow border-l-4 border-green-500">
           <p className="text-sm text-gray-600">Entregados</p>
           <p className="text-2xl font-bold text-gray-800">{stats.entregados}</p>
         </div>
         <div className="bg-white p-4 rounded-xl shadow border-l-4 border-amber-500">
           <p className="text-sm text-gray-600">Total Ventas</p>
-          <p className="text-2xl font-bold text-gray-800">₡{stats.totalVentas.toLocaleString('es-CR')}</p>
+          <p className="text-xl font-bold text-gray-800">₡{stats.totalVentas.toLocaleString('es-CR')}</p>
         </div>
       </div>
 
@@ -248,7 +306,7 @@ export default function AdminGeneralOrders() {
                             {estado.text}
                           </span>
                           
-                          {/* ⭐ NUEVO: Badge de tipo de entrega */}
+                          {/* Badge de tipo de entrega */}
                           <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 ${
                             pedido.es_domicilio 
                               ? 'bg-blue-100 text-blue-700' 
@@ -257,6 +315,13 @@ export default function AdminGeneralOrders() {
                             {pedido.es_domicilio ? <FaTruck /> : <FaStore />}
                             {pedido.tipo_entrega_display || (pedido.es_domicilio ? 'Domicilio' : 'Recoger')}
                           </span>
+
+                          {/* ⭐ Badge de auto-delete */}
+                          {pedido.tiempo_hasta_auto_delete && (
+                            <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">
+                              🕐 {pedido.tiempo_hasta_auto_delete}
+                            </span>
+                          )}
                         </div>
                         
                         <div className="grid md:grid-cols-2 gap-3 text-sm text-[#8D6E63]">
@@ -300,7 +365,7 @@ export default function AdminGeneralOrders() {
                           </div>
                         </div>
 
-                        {/* ⭐ NUEVO: Información de entrega */}
+                        {/* Información de entrega */}
                         {pedido.es_domicilio && pedido.direccion_entrega && (
                           <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
                             <div className="flex items-start gap-2">
@@ -348,7 +413,7 @@ export default function AdminGeneralOrders() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2 pt-4 border-t border-gray-200">
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
                     <button
                       onClick={() => verDetalle(pedido)}
                       className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
@@ -370,6 +435,25 @@ export default function AdminGeneralOrders() {
                         </button>
                       );
                     })}
+
+                    {/* ⭐⭐⭐ NUEVO: Botón Eliminar */}
+                    <button
+                      onClick={() => setDeleteOrder(pedido)}
+                      disabled={!pedido.puede_eliminarse}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors font-semibold ${
+                        pedido.puede_eliminarse
+                          ? 'bg-red-50 hover:bg-red-100 text-red-600'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                      title={
+                        pedido.puede_eliminarse 
+                          ? 'Eliminar pedido' 
+                          : 'No se puede eliminar en este estado'
+                      }
+                    >
+                      <FaTrash />
+                      Eliminar
+                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -438,7 +522,7 @@ export default function AdminGeneralOrders() {
                     </div>
                   </div>
 
-                  {/* ⭐ NUEVO: Dirección de entrega si aplica */}
+                  {/* Dirección de entrega si aplica */}
                   {selectedPedido.es_domicilio && selectedPedido.direccion_entrega && (
                     <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
                       <div className="flex items-start gap-3">
@@ -563,6 +647,23 @@ export default function AdminGeneralOrders() {
                     </div>
                   )}
 
+                  {/* ⭐ Botón Eliminar en Modal */}
+                  {selectedPedido.puede_eliminarse && (
+                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                      <p className="text-sm text-red-800 mb-3 font-semibold">Eliminar Pedido</p>
+                      <button
+                        onClick={() => {
+                          cerrarModal();
+                          setDeleteOrder(selectedPedido);
+                        }}
+                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors font-semibold"
+                      >
+                        <FaTrash />
+                        Eliminar este Pedido
+                      </button>
+                    </div>
+                  )}
+
                   {/* Botón Cerrar */}
                   <button
                     onClick={cerrarModal}
@@ -576,6 +677,14 @@ export default function AdminGeneralOrders() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ⭐⭐⭐ Modal de Eliminación */}
+      <DeleteOrderModal
+        isOpen={!!deleteOrder}
+        onClose={() => setDeleteOrder(null)}
+        onConfirm={handleDeleteOrder}
+        order={deleteOrder}
+      />
     </div>
   );
 }
