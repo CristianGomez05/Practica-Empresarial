@@ -1,9 +1,11 @@
 # Backend/core/models.py
-# ⭐ ACTUALIZADO: Agregado estado 'cancelado' para pedidos
+# ⭐ ACTUALIZADO: Agregado campo fecha_completado y lógica de auto-eliminación
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from cloudinary.models import CloudinaryField
+from django.utils import timezone
+from datetime import timedelta
 
 # ============================================================================
 # SUCURSAL
@@ -259,23 +261,27 @@ class Pedido(models.Model):
         1. NO está en estado 'en_preparacion' o 'listo'
         2. Si está 'entregado' o 'cancelado', debe tener más de 48 horas
         """
-        # No se puede eliminar si está en preparación o listo
-        if self.estado in ['en_preparacion', 'listo']:
-            return False
-        
-        # Si está entregado o cancelado, verificar las 48 horas
-        if self.estado in ['entregado', 'cancelado']:
-            if not self.fecha_completado:
-                # Si no tiene fecha_completado, usar fecha de creación como fallback
-                fecha_referencia = self.fecha
-            else:
-                fecha_referencia = self.fecha_completado
+        try:
+            # No se puede eliminar si está en preparación o listo
+            if self.estado in ['en_preparacion', 'listo']:
+                return False
             
-            tiempo_transcurrido = timezone.now() - fecha_referencia
-            return tiempo_transcurrido >= timedelta(hours=48)
-        
-        # Estados 'recibido' pueden eliminarse siempre
-        return True
+            # Si está entregado o cancelado, verificar las 48 horas
+            if self.estado in ['entregado', 'cancelado']:
+                if not self.fecha_completado:
+                    # Si no tiene fecha_completado, usar fecha de creación como fallback
+                    fecha_referencia = self.fecha
+                else:
+                    fecha_referencia = self.fecha_completado
+                
+                tiempo_transcurrido = timezone.now() - fecha_referencia
+                return tiempo_transcurrido >= timedelta(hours=48)
+            
+            # Estados 'recibido' pueden eliminarse siempre
+            return True
+        except Exception as e:
+            print(f"Error en puede_eliminarse para Pedido {self.id}: {e}")
+            return False
     
     # ⭐⭐⭐ NUEVO: Método para actualizar fecha_completado automáticamente
     def save(self, *args, **kwargs):
@@ -290,22 +296,26 @@ class Pedido(models.Model):
     @property
     def tiempo_hasta_auto_delete(self):
         """Retorna el tiempo restante hasta que el pedido sea auto-eliminado"""
-        if self.estado not in ['entregado', 'cancelado']:
+        try:
+            if self.estado not in ['entregado', 'cancelado']:
+                return None
+            
+            if not self.fecha_completado:
+                fecha_referencia = self.fecha
+            else:
+                fecha_referencia = self.fecha_completado
+            
+            tiempo_transcurrido = timezone.now() - fecha_referencia
+            tiempo_restante = timedelta(hours=48) - tiempo_transcurrido
+            
+            if tiempo_restante.total_seconds() <= 0:
+                return "Listo para eliminar"
+            
+            horas = int(tiempo_restante.total_seconds() // 3600)
+            return f"{horas}h restantes"
+        except Exception as e:
+            print(f"Error en tiempo_hasta_auto_delete para Pedido {self.id}: {e}")
             return None
-        
-        if not self.fecha_completado:
-            fecha_referencia = self.fecha
-        else:
-            fecha_referencia = self.fecha_completado
-        
-        tiempo_transcurrido = timezone.now() - fecha_referencia
-        tiempo_restante = timedelta(hours=48) - tiempo_transcurrido
-        
-        if tiempo_restante.total_seconds() <= 0:
-            return "Listo para eliminar"
-        
-        horas = int(tiempo_restante.total_seconds() // 3600)
-        return f"{horas}h restantes"
 
 
 # ============================================================================
@@ -327,5 +337,7 @@ class DetallePedido(models.Model):
 # ============================================================================
 # CAMBIOS REALIZADOS:
 # ============================================================================
-# 1. Pedido.ESTADOS: Agregado ('cancelado', 'Cancelado')
-# 2. Pedido: Agregada propiedad 'puede_cancelarse' (bool)
+# 1. Pedido: Agregado campo 'fecha_completado' (DateTime, nullable)
+# 2. Pedido: Agregada propiedad 'puede_eliminarse' (validación de eliminación)
+# 3. Pedido: Override del método save() para auto-registrar fecha_completado
+# 4. Pedido: Agregada propiedad 'tiempo_hasta_auto_delete' (info para UI)
