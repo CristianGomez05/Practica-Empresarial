@@ -1,14 +1,16 @@
+
 // Frontend/src/pages/admin/AdminGeneralOffers.jsx
+// ⭐ MEJORADO: UI clara para cambio de sucursal en ofertas
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus, FaInfoCircle } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
 
 export default function AdminGeneralOffers() {
-  // ⭐ NUEVO: Obtener sucursal seleccionada del contexto
   const { selectedBranch } = useOutletContext();
 
   const [offers, setOffers] = useState([]);
@@ -21,6 +23,7 @@ export default function AdminGeneralOffers() {
   const [offerToDelete, setOfferToDelete] = useState(null);
   const [editingOffer, setEditingOffer] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [sucursalCambiada, setSucursalCambiada] = useState(false); // ⭐ NUEVO
 
   const [formData, setFormData] = useState({
     titulo: '',
@@ -29,36 +32,31 @@ export default function AdminGeneralOffers() {
     precio_oferta: '',
     fecha_inicio: '',
     fecha_fin: '',
-    sucursal: '' // ⭐ NUEVO
+    sucursal: ''
   });
 
   const { enqueueSnackbar } = useSnackbar();
 
-  // Cargar usuario actual
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
     setCurrentUser(userData);
   }, []);
 
-  // ⭐ ACTUALIZADO: Cargar datos con filtro de sucursal
   const fetchData = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
 
-      // ⭐ Aplicar filtro de sucursal si está seleccionada
       const params = selectedBranch ? { sucursal: selectedBranch } : {};
 
       const [offersRes, productsRes, sucursalesRes] = await Promise.all([
         api.get('/ofertas/', { params }),
-        api.get('/productos/', { params }), // También filtrar productos por sucursal
+        api.get('/productos/', { params }),
         api.get('/sucursales/activas/')
       ]);
 
       setOffers(offersRes.data.results || offersRes.data);
       setProducts(productsRes.data.results || productsRes.data);
       setSucursales(sucursalesRes.data.results || sucursalesRes.data);
-
-      console.log('🏷️ Ofertas cargadas:', offersRes.data.length, selectedBranch ? `(Sucursal: ${selectedBranch})` : '(Todas)');
 
       if (refreshing) {
         enqueueSnackbar('Datos actualizados', { variant: 'info', autoHideDuration: 2000 });
@@ -72,9 +70,8 @@ export default function AdminGeneralOffers() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loading, refreshing, selectedBranch, enqueueSnackbar]); // ⭐ Agregar selectedBranch
+  }, [loading, refreshing, selectedBranch, enqueueSnackbar]);
 
-  // ⭐ Recargar cuando cambia la sucursal seleccionada
   useEffect(() => {
     if (!loading) {
       fetchData();
@@ -101,6 +98,8 @@ export default function AdminGeneralOffers() {
   };
 
   const handleOpenModal = (offer = null) => {
+    setSucursalCambiada(false); // Reset
+
     if (offer) {
       setEditingOffer(offer);
 
@@ -112,18 +111,11 @@ export default function AdminGeneralOffers() {
           producto_id: pc.producto.id,
           cantidad: pc.cantidad
         }));
-      } else if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
-        productosData = offer.productos_ids.map(id => ({
-          producto_id: id,
-          cantidad: 1
-        }));
       }
 
-      // ⭐ Para admin regular, forzar su sucursal al editar
       let sucursalParaEditar = offer.sucursal || '';
       if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
         sucursalParaEditar = currentUser.sucursal_id;
-        console.log('🔒 Admin regular - Forzando sucursal en edición:', currentUser.sucursal_id);
       }
 
       setFormData({
@@ -138,11 +130,9 @@ export default function AdminGeneralOffers() {
     } else {
       setEditingOffer(null);
 
-      // ⭐ Auto-asignar sucursal según el usuario
       let sucursalDefault = '';
       if (currentUser?.rol === 'administrador' && currentUser?.sucursal_id) {
         sucursalDefault = currentUser.sucursal_id;
-        console.log('🔒 Admin regular - Sucursal pre-asignada:', currentUser.sucursal_id);
       } else if (currentUser?.rol === 'administrador_general' && selectedBranch) {
         sucursalDefault = selectedBranch;
       }
@@ -160,9 +150,23 @@ export default function AdminGeneralOffers() {
     setShowModal(true);
   };
 
+  // ⭐ NUEVA FUNCIÓN: Detectar cambio de sucursal
+  const handleSucursalChange = (newSucursalId) => {
+    const changed = editingOffer && editingOffer.sucursal !== parseInt(newSucursalId);
+    setSucursalCambiada(changed);
+
+    setFormData(prev => ({
+      ...prev,
+      sucursal: newSucursalId,
+      // ⭐ Si cambió la sucursal, limpiar productos para evitar conflictos
+      productos_data: changed ? [] : prev.productos_data
+    }));
+  };
+
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingOffer(null);
+    setSucursalCambiada(false);
   };
 
   const toggleProductSelection = (productId) => {
@@ -198,7 +202,6 @@ export default function AdminGeneralOffers() {
   };
 
   const handleSubmit = async () => {
-    // Validaciones
     if (!formData.titulo.trim()) {
       enqueueSnackbar('El título es requerido', { variant: 'warning' });
       return;
@@ -212,13 +215,11 @@ export default function AdminGeneralOffers() {
       return;
     }
 
-    // ⭐ Validar sucursal
     if (!formData.sucursal) {
       enqueueSnackbar('Debes seleccionar una sucursal', { variant: 'warning' });
       return;
     }
 
-    // Validar stock
     const productosIds = formData.productos_data.map(p => p.producto_id);
     const productosSeleccionados = products.filter(p => productosIds.includes(p.id));
     const productosAgotados = productosSeleccionados.filter(p => p.stock === 0);
@@ -251,7 +252,7 @@ export default function AdminGeneralOffers() {
         fecha_inicio: formData.fecha_inicio,
         fecha_fin: formData.fecha_fin,
         precio_oferta: parseFloat(formData.precio_oferta),
-        sucursal: parseInt(formData.sucursal) // ⭐ NUEVO
+        sucursal: parseInt(formData.sucursal)
       };
 
       console.log('📤 Enviando payload:', payload);
@@ -275,9 +276,10 @@ export default function AdminGeneralOffers() {
 
       const errorMsg = error.response?.data?.error
         || error.response?.data?.sucursal?.[0]
+        || error.response?.data?.productos_data?.[0]
         || 'Error al guardar oferta';
 
-      enqueueSnackbar(errorMsg, { variant: 'error' });
+      enqueueSnackbar(errorMsg, { variant: 'error', autoHideDuration: 6000 });
     }
   };
 
@@ -335,13 +337,6 @@ export default function AdminGeneralOffers() {
         .map(pd => {
           const producto = products.find(p => p.id === pd.producto_id);
           return producto ? { ...producto, cantidad_oferta: pd.cantidad } : null;
-        })
-        .filter(Boolean);
-    } else if (offer.productos_ids && Array.isArray(offer.productos_ids)) {
-      return offer.productos_ids
-        .map(prodId => {
-          const producto = products.find(p => p.id === prodId);
-          return producto ? { ...producto, cantidad_oferta: 1 } : null;
         })
         .filter(Boolean);
     }
@@ -580,7 +575,7 @@ export default function AdminGeneralOffers() {
         </div>
       )}
 
-      {/* Modal Crear/Editar */}
+      {/* Modal Crear/Editar - SECCIÓN MODIFICADA */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -611,27 +606,24 @@ export default function AdminGeneralOffers() {
                 </div>
 
                 <div className="space-y-6">
-                  {/* ⭐ Selector de Sucursal - MEJORADO */}
+                  {/* ⭐ Selector de Sucursal MEJORADO */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
                       Sucursal *
                     </label>
 
                     {currentUser?.rol === 'administrador' ? (
-                      // ⭐ Admin Regular: Campo BLOQUEADO
                       <div className="w-full px-4 py-3 border-2 border-purple-300 bg-purple-50 rounded-lg text-gray-700 font-semibold flex items-center gap-2">
-                        <FaStore className="text-purple-600" />
                         <span>{currentUser?.sucursal_nombre || 'Sin asignar'}</span>
                         <span className="ml-auto text-xs bg-purple-600 text-white px-3 py-1 rounded-full">
                           Tu sucursal
                         </span>
                       </div>
                     ) : (
-                      // ⭐ Admin General: Selector normal
                       <>
                         <select
                           value={formData.sucursal}
-                          onChange={(e) => setFormData({ ...formData, sucursal: e.target.value })}
+                          onChange={(e) => handleSucursalChange(e.target.value)}
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                         >
                           <option value="">Seleccionar sucursal...</option>
@@ -648,6 +640,8 @@ export default function AdminGeneralOffers() {
                         )}
                       </>
                     )}
+
+
 
                     {currentUser?.rol === 'administrador' && (
                       <p className="text-xs text-purple-600 mt-1 font-semibold">

@@ -203,7 +203,7 @@ class ProductoSerializer(serializers.ModelSerializer):
 
 
 # ============================================================================
-# OFERTA SERIALIZERS
+# OFERTA SERIALIZERS (SECCIÓN MODIFICADA)
 # ============================================================================
 
 class ProductoOfertaSerializer(serializers.ModelSerializer):
@@ -295,6 +295,7 @@ class OfertaSerializer(serializers.ModelSerializer):
         return value
     
     def validate(self, data):
+        """⭐ CORREGIDO: Validación inteligente de sucursal"""
         fecha_inicio = data.get('fecha_inicio')
         fecha_fin = data.get('fecha_fin')
         
@@ -310,11 +311,15 @@ class OfertaSerializer(serializers.ModelSerializer):
                 'precio_oferta': 'El precio debe ser mayor a 0'
             })
         
+        # ⭐ CRÍTICO: Solo validar productos si están siendo actualizados
         sucursal = data.get('sucursal')
-        productos_data = data.get('productos_data', [])
+        productos_data = data.get('productos_data')
         
+        # Si hay sucursal Y productos_data (ambos están siendo enviados)
         if sucursal and productos_data:
             productos_ids = [p['producto_id'] for p in productos_data]
+            
+            # Verificar que todos los productos pertenezcan a la sucursal
             productos_otra_sucursal = Producto.objects.filter(
                 id__in=productos_ids
             ).exclude(sucursal=sucursal)
@@ -324,6 +329,26 @@ class OfertaSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'productos_data': f'Los siguientes productos no pertenecen a la sucursal seleccionada: {nombres}'
                 })
+        
+        # ⭐ NUEVO: Validación para cuando se actualiza solo la sucursal
+        # Si estamos en actualización (self.instance existe) y solo se cambió sucursal
+        if self.instance and sucursal and not productos_data:
+            # Obtener productos actuales de la oferta
+            productos_actuales = ProductoOferta.objects.filter(
+                oferta=self.instance
+            ).values_list('producto_id', flat=True)
+            
+            if productos_actuales:
+                # Verificar que los productos actuales pertenezcan a la nueva sucursal
+                productos_incompatibles = Producto.objects.filter(
+                    id__in=productos_actuales
+                ).exclude(sucursal=sucursal)
+                
+                if productos_incompatibles.exists():
+                    nombres = ', '.join([p.nombre for p in productos_incompatibles])
+                    raise serializers.ValidationError({
+                        'sucursal': f'No puedes cambiar a esta sucursal porque los siguientes productos no le pertenecen: {nombres}. Debes actualizar los productos también.'
+                    })
         
         return data
     
@@ -336,6 +361,7 @@ class OfertaSerializer(serializers.ModelSerializer):
         
         oferta = Oferta.objects.create(**validated_data)
         print(f"✅ Oferta creada: {oferta.titulo} (ID: {oferta.id})")
+        print(f"   Sucursal: {oferta.sucursal.nombre}")
         
         for item in productos_data:
             producto = Producto.objects.get(id=item['producto_id'])
@@ -353,25 +379,43 @@ class OfertaSerializer(serializers.ModelSerializer):
         return oferta
     
     def update(self, instance, validated_data):
-        """⭐ CRÍTICO: Método update para edición de ofertas"""
+        """⭐ CORREGIDO: Actualización inteligente de oferta"""
         print(f"\n{'='*60}")
-        print("✏️ ACTUALIZANDO OFERTA CON CANTIDADES")
+        print("✏️ ACTUALIZANDO OFERTA")
+        print(f"   Oferta ID: {instance.id}")
+        print(f"   Título: {instance.titulo}")
         print(f"{'='*60}")
         
         productos_data = validated_data.pop('productos_data', None)
         
+        # ⭐ Registrar cambios
+        cambios = []
+        
         # Actualizar campos básicos
         for attr, value in validated_data.items():
+            old_value = getattr(instance, attr)
+            if old_value != value:
+                cambios.append(f"{attr}: {old_value} → {value}")
+                if attr == 'sucursal':
+                    old_sucursal = old_value.nombre if old_value else 'Sin sucursal'
+                    new_sucursal = value.nombre if value else 'Sin sucursal'
+                    print(f"   🏪 Cambio de sucursal: {old_sucursal} → {new_sucursal}")
             setattr(instance, attr, value)
+        
         instance.save()
         
-        print(f"✅ Oferta actualizada: {instance.titulo} (ID: {instance.id})")
+        if cambios:
+            print(f"   ✏️ Campos actualizados:")
+            for cambio in cambios:
+                print(f"      • {cambio}")
         
-        # Si se enviaron productos, actualizar la relación
+        # ⭐ Si se enviaron productos, actualizar la relación
         if productos_data is not None:
+            print(f"   🔄 Actualizando productos...")
+            
             # Eliminar productos antiguos
             ProductoOferta.objects.filter(oferta=instance).delete()
-            print(f"🗑️ Productos antiguos eliminados")
+            print(f"      🗑️ Productos antiguos eliminados")
             
             # Crear nuevas relaciones con cantidades
             for item in productos_data:
@@ -381,7 +425,9 @@ class OfertaSerializer(serializers.ModelSerializer):
                     producto=producto,
                     cantidad=item['cantidad']
                 )
-                print(f"   ✓ {item['cantidad']}x {producto.nombre}")
+                print(f"      ✓ {item['cantidad']}x {producto.nombre} (Sucursal: {producto.sucursal.nombre})")
+        else:
+            print(f"   ℹ️ Productos no modificados")
         
         print(f"{'='*60}\n")
         
