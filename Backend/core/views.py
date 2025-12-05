@@ -254,27 +254,48 @@ class SucursalViewSet(viewsets.ModelViewSet):
 
 class ProductoViewSet(viewsets.ModelViewSet):
     """ViewSet para gestionar productos con filtro de sucursal"""
-    queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def get_queryset(self):
-        """Filtrar productos según rol y sucursal del usuario"""
+        """⭐ CORREGIDO: Filtrar productos por sucursal correctamente"""
         user = self.request.user
+        queryset = Producto.objects.all()
         
+        # ⭐ CRÍTICO: Filtrar por parámetro 'sucursal' en query params
+        sucursal_id = self.request.query_params.get('sucursal', None)
+        
+        print(f"\n{'='*60}")
+        print(f"🔍 ProductoViewSet.get_queryset()")
+        print(f"   Usuario: {user.username if user.is_authenticated else 'Anónimo'}")
+        print(f"   Rol: {user.rol if user.is_authenticated else 'N/A'}")
+        print(f"   Query Param 'sucursal': {sucursal_id}")
+        print(f"{'='*60}")
+        
+        # ⭐ Si viene parámetro sucursal, filtrar por ella (prioridad)
+        if sucursal_id:
+            queryset = queryset.filter(sucursal_id=sucursal_id)
+            print(f"✅ Filtrando por sucursal_id={sucursal_id}")
+            print(f"📊 Productos encontrados: {queryset.count()}")
+            return queryset.order_by('-id')
+        
+        # Si no hay parámetro, aplicar lógica por rol
         if not user.is_authenticated or user.rol == 'cliente':
-            return Producto.objects.filter(sucursal__activa=True).order_by('-id')
+            queryset = queryset.filter(sucursal__activa=True)
+            print(f"👤 Cliente/Anónimo - Mostrando productos de sucursales activas")
+        elif user.rol == 'administrador_general':
+            print(f"👑 Admin General - Mostrando TODOS los productos")
+        elif user.rol == 'administrador' and user.sucursal:
+            queryset = queryset.filter(sucursal=user.sucursal)
+            print(f"🔒 Admin Regular - Solo productos de {user.sucursal.nombre}")
+        else:
+            queryset = Producto.objects.none()
+            print(f"⚠️ Sin permisos - No hay productos")
         
-        if user.rol == 'administrador_general':
-            sucursal_id = self.request.query_params.get('sucursal')
-            if sucursal_id:
-                return Producto.objects.filter(sucursal_id=sucursal_id).order_by('-id')
-            return Producto.objects.all().order_by('-id')
+        print(f"📊 Total productos: {queryset.count()}")
+        print(f"{'='*60}\n")
         
-        if user.rol == 'administrador' and user.sucursal:
-            return Producto.objects.filter(sucursal=user.sucursal).order_by('-id')
-        
-        return Producto.objects.none()
+        return queryset.order_by('-id')
     
     def get_permissions(self):
         if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
@@ -314,7 +335,6 @@ class ProductoViewSet(viewsets.ModelViewSet):
 # ============================================================================
 
 class OfertaViewSet(viewsets.ModelViewSet):
-    queryset = Oferta.objects.all()
     serializer_class = OfertaSerializer
     
     def get_permissions(self):
@@ -323,26 +343,48 @@ class OfertaViewSet(viewsets.ModelViewSet):
         return [EsAdministrador()]
     
     def get_queryset(self):
-        """Filtrar ofertas según rol y sucursal del usuario"""
+        """⭐ CORREGIDO: Filtrar ofertas por sucursal correctamente"""
         user = self.request.user
         
         base_queryset = Oferta.objects.prefetch_related(
             Prefetch('productooferta_set', queryset=ProductoOferta.objects.select_related('producto'))
         )
         
+        # ⭐ CRÍTICO: Filtrar por parámetro 'sucursal' en query params
+        sucursal_id = self.request.query_params.get('sucursal', None)
+        
+        print(f"\n{'='*60}")
+        print(f"🔍 OfertaViewSet.get_queryset()")
+        print(f"   Usuario: {user.username if user.is_authenticated else 'Anónimo'}")
+        print(f"   Rol: {user.rol if user.is_authenticated else 'N/A'}")
+        print(f"   Query Param 'sucursal': {sucursal_id}")
+        print(f"{'='*60}")
+        
+        # ⭐ Si viene parámetro sucursal, filtrar por ella (prioridad)
+        if sucursal_id:
+            queryset = base_queryset.filter(sucursal_id=sucursal_id)
+            print(f"✅ Filtrando por sucursal_id={sucursal_id}")
+            print(f"📊 Ofertas encontradas: {queryset.count()}")
+            return queryset.all()
+        
+        # Si no hay parámetro, aplicar lógica por rol
         if not user.is_authenticated or user.rol == 'cliente':
-            return base_queryset.filter(sucursal__activa=True).all()
+            queryset = base_queryset.filter(sucursal__activa=True)
+            print(f"👤 Cliente/Anónimo - Mostrando ofertas de sucursales activas")
+        elif user.rol == 'administrador_general':
+            queryset = base_queryset
+            print(f"👑 Admin General - Mostrando TODAS las ofertas")
+        elif user.rol == 'administrador' and user.sucursal:
+            queryset = base_queryset.filter(sucursal=user.sucursal)
+            print(f"🔒 Admin Regular - Solo ofertas de {user.sucursal.nombre}")
+        else:
+            queryset = Oferta.objects.none()
+            print(f"⚠️ Sin permisos - No hay ofertas")
         
-        if user.rol == 'administrador_general':
-            sucursal_id = self.request.query_params.get('sucursal')
-            if sucursal_id:
-                return base_queryset.filter(sucursal_id=sucursal_id).all()
-            return base_queryset.all()
+        print(f"📊 Total ofertas: {queryset.count()}")
+        print(f"{'='*60}\n")
         
-        if user.rol == 'administrador' and user.sucursal:
-            return base_queryset.filter(sucursal=user.sucursal).all()
-        
-        return Oferta.objects.none()
+        return queryset.all()
     
     def perform_create(self, serializer):
         """Auto-asignar sucursal del admin regular al crear"""
