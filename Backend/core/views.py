@@ -424,7 +424,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# PEDIDO VIEWSET  (CANCELADO Y ELIMINACIÓN CON RESTRICCIONES)
+# PEDIDO VIEWSET (⭐ CORREGIDO)
 # ============================================================================
 
 class PedidoViewSet(viewsets.ModelViewSet):
@@ -432,205 +432,85 @@ class PedidoViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, EsClienteOAdmin]
 
     def get_queryset(self):
-        user = self.request.user
-        
-        base_queryset = Pedido.objects.select_related('usuario').prefetch_related(
-            Prefetch('detalles', queryset=DetallePedido.objects.select_related('producto'))
-        )
-        
-        if user.rol == 'administrador_general':
-            return base_queryset.all().order_by('-fecha')
-        elif user.rol == 'administrador' and user.sucursal:
-            return base_queryset.filter(
-                detalles__producto__sucursal=user.sucursal
-            ).distinct().order_by('-fecha')
-        
-        return base_queryset.filter(usuario=user).order_by('-fecha')
+        try:
+            user = self.request.user
+            
+            base_queryset = Pedido.objects.select_related('usuario').prefetch_related(
+                Prefetch('detalles', queryset=DetallePedido.objects.select_related('producto'))
+            )
+            
+            if user.rol == 'administrador_general':
+                return base_queryset.all().order_by('-fecha')
+            elif user.rol == 'administrador' and user.sucursal:
+                return base_queryset.filter(
+                    detalles__producto__sucursal=user.sucursal
+                ).distinct().order_by('-fecha')
+            
+            return base_queryset.filter(usuario=user).order_by('-fecha')
+        except Exception as e:
+            print(f"❌ Error en PedidoViewSet.get_queryset: {e}")
+            return Pedido.objects.none()
 
     def get_serializer_class(self):
         if self.action == 'create':
             return PedidoCreateSerializer
         return PedidoSerializer
 
+    # ⭐⭐⭐ CRÍTICO: Sobrescribir create() para evitar el problema con to_representation()
     @transaction.atomic
-    def perform_create(self, serializer):
-        # ... código existente ...
-        pass
-    
-    # ⭐⭐⭐ NUEVO: Método para eliminar pedidos con validaciones
-    def destroy(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         """
-        Elimina un pedido solo si cumple con las restricciones:
-        1. No está en estado 'en_preparacion' o 'listo'
-        2. Si está 'entregado' o 'cancelado', debe tener más de 48 horas
-        3. Solo admins pueden eliminar (de su sucursal o todas si es admin_general)
+        Crear pedido usando PedidoCreateSerializer y retornar con PedidoSerializer
         """
-        pedido = self.get_object()
-        user = request.user
+        # Usar PedidoCreateSerializer para validar y crear
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         
-        print(f"\n{'='*60}")
-        print(f"🗑️  SOLICITUD DE ELIMINACIÓN DE PEDIDO")
-        print(f"   Pedido ID: {pedido.id}")
-        print(f"   Usuario: {user.username} (Rol: {user.rol})")
-        print(f"   Estado del pedido: {pedido.estado}")
-        print(f"{'='*60}")
+        # Ejecutar create() que retorna la instancia de Pedido
+        pedido = serializer.save()
         
-        # ⭐ VALIDACIÓN 1: Solo administradores pueden eliminar
-        if user.rol not in ['administrador', 'administrador_general']:
-            print(f"🚫 Acceso denegado - Solo administradores")
-            return Response({
-                'error': 'Solo los administradores pueden eliminar pedidos',
-                'codigo': 'PERMISO_DENEGADO'
-            }, status=status.HTTP_403_FORBIDDEN)
+        # ⭐ CRÍTICO: Usar PedidoSerializer para la respuesta
+        output_serializer = PedidoSerializer(pedido, context={'request': request})
         
-        # ⭐ VALIDACIÓN 2: Admin regular solo puede eliminar de su sucursal
-        if user.rol == 'administrador':
-            if not user.sucursal:
-                print(f"🚫 Admin sin sucursal asignada")
-                return Response({
-                    'error': 'No tienes una sucursal asignada',
-                    'codigo': 'SIN_SUCURSAL'
-                }, status=status.HTTP_403_FORBIDDEN)
-            
-            # Verificar que el pedido pertenece a su sucursal
-            pedido_sucursales = set(
-                detalle.producto.sucursal_id 
-                for detalle in pedido.detalles.all() 
-                if detalle.producto.sucursal
-            )
-            
-            if user.sucursal.id not in pedido_sucursales:
-                print(f"🚫 Pedido no pertenece a la sucursal del admin")
-                return Response({
-                    'error': f'Este pedido no pertenece a tu sucursal ({user.sucursal.nombre})',
-                    'codigo': 'SUCURSAL_INCORRECTA'
-                }, status=status.HTTP_403_FORBIDDEN)
-        
-        # ⭐ VALIDACIÓN 3: Verificar si el pedido puede eliminarse
-        if not pedido.puede_eliminarse:
-            print(f"🚫 Pedido no puede eliminarse - Estado: {pedido.estado}")
-            
-            # Mensaje específico según el estado
-            if pedido.estado in ['en_preparacion', 'listo']:
-                mensaje = f'No se puede eliminar un pedido en estado "{pedido.get_estado_display()}". Solo puedes eliminar pedidos que estén en estado "Recibido", o pedidos completados/cancelados después de 48 horas.'
-                codigo = 'ESTADO_NO_PERMITIDO'
-            
-            elif pedido.estado in ['entregado', 'cancelado']:
-                tiempo_restante = pedido.tiempo_hasta_auto_delete
-                mensaje = f'Este pedido fue {pedido.get_estado_display().lower()} recientemente. Podrás eliminarlo después de 48 horas. {tiempo_restante}'
-                codigo = 'TIEMPO_INSUFICIENTE'
-            
-            else:
-                mensaje = 'Este pedido no puede eliminarse en este momento'
-                codigo = 'NO_ELIMINABLE'
-            
-            return Response({
-                'error': mensaje,
-                'codigo': codigo,
-                'estado_actual': pedido.estado,
-                'puede_eliminarse': False,
-                'tiempo_hasta_auto_delete': pedido.tiempo_hasta_auto_delete
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # ⭐ ELIMINAR PEDIDO
-        print(f"✅ Validaciones pasadas - Eliminando pedido...")
-        pedido_id = pedido.id
-        usuario_nombre = pedido.usuario.username
-        
-        try:
-            pedido.delete()
-            print(f"✅ Pedido #{pedido_id} eliminado exitosamente")
-            print(f"{'='*60}\n")
-            
-            return Response({
-                'message': f'Pedido #{pedido_id} eliminado exitosamente',
-                'pedido_id': pedido_id,
-                'usuario': usuario_nombre
-            }, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            print(f"❌ Error eliminando pedido: {e}")
-            print(f"{'='*60}\n")
-            return Response({
-                'error': 'Error al eliminar el pedido',
-                'detalle': str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
-    def cambiar_estado(self, request, pk=None):
-        """Cambiar estado del pedido (solo admins)"""
-        pedido = self.get_object()
-        nuevo_estado = request.data.get('estado')
-        
-        # Solo admins pueden cambiar el estado manualmente
-        if request.user.rol not in ['administrador', 'administrador_general']:
-            return Response({
-                'error': 'No tienes permisos para cambiar el estado del pedido'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        estados_validos = ['recibido', 'en_preparacion', 'listo', 'entregado', 'cancelado']
-        if nuevo_estado not in estados_validos:
-            return Response({
-                'error': f'Estado inválido. Debe ser: {", ".join(estados_validos)}'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        estado_anterior = pedido.estado
-        pedido.estado = nuevo_estado
-        pedido.save(update_fields=['estado'])
-        
-        print(f"🔄 Pedido #{pedido.id}: {estado_anterior} → {nuevo_estado}")
-        
-        serializer = self.get_serializer(pedido)
-        return Response({
-            'message': 'Estado actualizado',
-            'pedido': serializer.data
-        })
-    
+        headers = self.get_success_headers(output_serializer.data)
+        return Response(
+            output_serializer.data, 
+            status=status.HTTP_201_CREATED, 
+            headers=headers
+        )
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def cancelar(self, request, pk=None):
-        """
-        Permite al cliente cancelar su pedido.
-        Solo funciona si el pedido está en estado 'recibido'.
-        """
-        pedido = self.get_object()
-        user = request.user
-        
-        print(f"\n{'='*60}")
-        print(f"❌ SOLICITUD DE CANCELACIÓN")
-        print(f"   Pedido ID: {pedido.id}")
-        print(f"   Usuario: {user.username}")
-        print(f"   Estado actual: {pedido.estado}")
-        print(f"{'='*60}")
-        
-        # Verificar que el pedido pertenece al usuario
-        if pedido.usuario != user and user.rol not in ['administrador', 'administrador_general']:
-            print(f"🚫 Usuario no autorizado para cancelar este pedido")
+        """Permite cancelar un pedido"""
+        try:
+            pedido = self.get_object()
+            user = request.user
+            
+            if pedido.usuario != user and user.rol not in ['administrador', 'administrador_general']:
+                return Response({
+                    'error': 'No tienes permiso para cancelar este pedido'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            if not pedido.puede_cancelarse:
+                return Response({
+                    'error': f'No puedes cancelar este pedido en estado "{pedido.get_estado_display()}"',
+                    'estado_actual': pedido.estado
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            pedido.estado = 'cancelado'
+            pedido.save(update_fields=['estado'])
+            
+            serializer = self.get_serializer(pedido)
             return Response({
-                'error': 'No tienes permiso para cancelar este pedido'
-            }, status=status.HTTP_403_FORBIDDEN)
-        
-        # Verificar que el pedido puede cancelarse
-        if not pedido.puede_cancelarse:
-            print(f"🚫 Pedido no se puede cancelar - Estado: {pedido.estado}")
+                'message': 'Pedido cancelado exitosamente',
+                'pedido': serializer.data
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            print(f"❌ Error en cancelar: {e}")
             return Response({
-                'error': f'No puedes cancelar este pedido porque ya está en estado "{pedido.get_estado_display()}". Solo los pedidos en estado "Recibido" pueden cancelarse.',
-                'estado_actual': pedido.estado
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Cambiar estado a cancelado
-        estado_anterior = pedido.estado
-        pedido.estado = 'cancelado'
-        pedido.save(update_fields=['estado'])
-        
-        print(f"✅ Pedido #{pedido.id} cancelado exitosamente")
-        print(f"   Estado: {estado_anterior} → cancelado")
-        print(f"{'='*60}\n")
-        
-        serializer = self.get_serializer(pedido)
-        return Response({
-            'message': 'Pedido cancelado exitosamente',
-            'pedido': serializer.data
-        }, status=status.HTTP_200_OK)
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
 # ============================================================================
 # DETALLE PEDIDO VIEWSET

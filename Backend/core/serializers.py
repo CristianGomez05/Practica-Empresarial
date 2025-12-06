@@ -705,14 +705,7 @@ class PedidoCreateSerializer(serializers.Serializer):
         
         return pedido
     
-    def to_representation(self, instance):
-        """
-        ⭐ CRÍTICO: Retornar la representación completa del pedido DESPUÉS de crearlo
-        Usar PedidoSerializer para mostrar toda la info
-        """
-        # ⭐ IMPORTANTE: 'instance' aquí es el objeto Pedido que acabamos de crear
-        # NO es un diccionario, es una instancia del modelo
-        return PedidoSerializer(instance, context=self.context).data
+    # ⭐ NO necesitamos to_representation() porque lo manejamos en views.py
 
 
 # ============================================================================
