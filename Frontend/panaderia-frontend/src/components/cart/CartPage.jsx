@@ -1,14 +1,25 @@
 // src/components/cart/CartPage.jsx
-// ✅ CORREGIDO: Manejo seguro de precios como números
+// ✅ CORREGIDO: Formato correcto para crear pedidos
 import React, { useContext, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { CartContext } from "./CartContext";
+import { useAuth } from "../auth/AuthContext";
 import { FaTag, FaBox, FaTrash, FaShoppingCart, FaExclamationTriangle } from "react-icons/fa";
+import { useSnackbar } from 'notistack';
+import ConfirmarPedidoModal from '../modals/ConfirmarPedidoModal';
+import DomicilioModal from '../modals/DomicilioModal';
 import api from "../../services/api";
 
 export default function CartPage() {
   const { items, updateQty, remove, clear, total, hasStockIssues } = useContext(CartContext);
+  const { user } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showDomicilioModal, setShowDomicilioModal] = useState(false);
 
   // ✅ Función auxiliar para asegurar números
   const ensureNumber = (value) => {
@@ -26,7 +37,8 @@ export default function CartPage() {
     return numPrice.toFixed(2);
   };
 
-  const handleCreateOrder = async () => {
+  // ⭐ NUEVO: Iniciar proceso de pedido
+  const handleIniciarPedido = () => {
     if (!items.length) return;
 
     if (hasStockIssues()) {
@@ -34,50 +46,64 @@ export default function CartPage() {
       return;
     }
 
+    setShowConfirmModal(true);
+  };
+
+  // ⭐ CORREGIDO: Crear pedido con formato correcto
+  const handleCreateOrder = async (tipoEntrega) => {
     setLoading(true);
     setError(null);
     
+    console.log('\n' + '='.repeat(60));
     console.log('🛒 CREANDO PEDIDO');
+    console.log('📦 Tipo de entrega:', tipoEntrega);
     console.log('📦 Items en carrito:', items);
+    console.log('📍 Domicilio del usuario:', user?.domicilio || 'No configurado');
+    console.log('='.repeat(60));
     
     try {
-      const orderItems = items.flatMap((item) => {
+      // ⭐ CRÍTICO: Construir items en formato que el backend espera
+      const orderItems = [];
+      
+      for (const item of items) {
         console.log('🔍 Procesando item:', item);
         
         if (item.isOffer) {
           console.log('   🎁 Es una OFERTA con', item.productos?.length, 'productos');
           
           if (!item.productos || item.productos.length === 0) {
-            console.error('   ❌ Oferta sin productos');
-            throw new Error('Oferta sin productos válidos');
+            throw new Error(`Oferta "${item.nombre}" no tiene productos válidos`);
           }
           
-          return item.productos.map((producto) => {
-            const itemData = {
+          // ⭐ Para ofertas: agregar cada producto de la oferta
+          for (const producto of item.productos) {
+            const cantidadOferta = producto.cantidad_oferta || 1;
+            
+            orderItems.push({
               producto: producto.id,
-              cantidad: item.qty,
-              precio_unitario: ensureNumber(item.precio) / item.productos.length,
-            };
-            console.log('   ➕ Producto de oferta:', itemData);
-            return itemData;
-          });
+              cantidad: item.qty * cantidadOferta, // ⭐ Cantidad total = qty de oferta * cantidad del producto en oferta
+            });
+            
+            console.log(`   ➕ Producto de oferta: ${producto.nombre} (ID: ${producto.id}) x ${item.qty * cantidadOferta}`);
+          }
         } else {
-          const itemData = {
+          // ⭐ Para productos individuales
+          orderItems.push({
             producto: item.id,
             cantidad: item.qty,
-            precio_unitario: ensureNumber(item.precio),
-          };
-          console.log('   ➕ Producto individual:', itemData);
-          return [itemData];
+          });
+          
+          console.log(`   ➕ Producto individual: ${item.nombre} (ID: ${item.id}) x ${item.qty}`);
         }
-      });
+      }
 
-      console.log('📋 Items preparados para enviar:', orderItems);
+      console.log('📋 Items preparados:', orderItems);
       console.log('💰 Total:', total);
 
+      // ⭐ CRÍTICO: Formato exacto que espera el backend
       const body = {
         items: orderItems,
-        total: ensureNumber(total),
+        tipo_entrega: tipoEntrega, // ⭐ NUEVO: Incluir tipo de entrega
       };
       
       console.log('📤 Enviando al backend:', JSON.stringify(body, null, 2));
@@ -86,19 +112,52 @@ export default function CartPage() {
       
       console.log('✅ Respuesta del servidor:', res.data);
       
-      clear();
-      window.location.href = `/dashboard/pedidos/${res.data.id}`;
+      enqueueSnackbar('✅ ¡Pedido creado exitosamente!', { 
+        variant: 'success',
+        autoHideDuration: 3000 
+      });
+      
+      clear(); // Limpiar carrito
+      setShowConfirmModal(false);
+      
+      // Redirigir a la página del pedido
+      navigate(`/dashboard/pedidos`);
+      
     } catch (err) {
       console.error('❌ Error al crear pedido:', err);
       console.error('   Detalles:', err.response?.data);
       
+      // ⭐ Manejo específico de error de domicilio
+      if (err.response?.data?.codigo === 'DOMICILIO_REQUERIDO') {
+        setShowConfirmModal(false);
+        setShowDomicilioModal(true);
+        enqueueSnackbar('⚠️ Debes configurar tu domicilio primero', { 
+          variant: 'warning',
+          autoHideDuration: 4000 
+        });
+        return;
+      }
+      
       if (err.response?.data?.error) {
         setError(err.response.data.error);
+        enqueueSnackbar(`❌ ${err.response.data.error}`, { 
+          variant: 'error',
+          autoHideDuration: 5000 
+        });
       } else if (err.message) {
         setError(err.message);
+        enqueueSnackbar(`❌ ${err.message}`, { 
+          variant: 'error',
+          autoHideDuration: 5000 
+        });
       } else {
         setError("No se pudo crear el pedido. Intenta nuevamente.");
+        enqueueSnackbar('❌ Error al crear el pedido', { 
+          variant: 'error' 
+        });
       }
+      
+      setShowConfirmModal(false);
     } finally {
       setLoading(false);
     }
@@ -139,7 +198,6 @@ export default function CartPage() {
         const ofertaConProductosAgotados = item.isOffer && item.productos?.some(p => p.stock === 0);
         const tieneProblema = estaAgotado || stockInsuficiente || ofertaConProductosAgotados;
 
-        // ✅ Asegurar que precio sea número
         const precioItem = ensureNumber(item.precio);
 
         return (
@@ -243,21 +301,29 @@ export default function CartPage() {
                       </span>
                     </div>
                     <ul className="space-y-1">
-                      {item.productos.map((producto, idx) => (
-                        <li key={idx} className="text-sm text-gray-600 flex items-center gap-2 justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
-                            {producto.nombre}
-                          </div>
-                          {producto.stock === 0 ? (
-                            <span className="text-red-600 font-semibold text-xs">AGOTADO</span>
-                          ) : producto.stock <= 5 ? (
-                            <span className="text-orange-600 text-xs">Stock: {producto.stock}</span>
-                          ) : (
-                            <span className="text-green-600 text-xs">✓ Disponible</span>
-                          )}
-                        </li>
-                      ))}
+                      {item.productos.map((producto, idx) => {
+                        const cantidadOferta = producto.cantidad_oferta || 1;
+                        return (
+                          <li key={idx} className="text-sm text-gray-600 flex items-center gap-2 justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
+                              {cantidadOferta > 1 && (
+                                <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs font-bold">
+                                  {cantidadOferta}x
+                                </span>
+                              )}
+                              {producto.nombre}
+                            </div>
+                            {producto.stock === 0 ? (
+                              <span className="text-red-600 font-semibold text-xs">AGOTADO</span>
+                            ) : producto.stock <= 5 ? (
+                              <span className="text-orange-600 text-xs">Stock: {producto.stock}</span>
+                            ) : (
+                              <span className="text-green-600 text-xs">✓ Disponible</span>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}
@@ -321,7 +387,7 @@ export default function CartPage() {
 
         <div className="flex gap-3">
           <button
-            onClick={handleCreateOrder}
+            onClick={handleIniciarPedido}
             disabled={loading || cartHasIssues}
             className={`flex-1 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all ${
               loading || cartHasIssues
@@ -329,11 +395,9 @@ export default function CartPage() {
                 : 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white'
             }`}
           >
-            {loading 
-              ? "Creando pedido..." 
-              : cartHasIssues
+            {cartHasIssues
               ? "Ajusta el carrito para continuar"
-              : "Crear pedido"}
+              : "Continuar con el pedido"}
           </button>
           <button
             onClick={clear}
@@ -343,6 +407,26 @@ export default function CartPage() {
           </button>
         </div>
       </div>
+
+      {/* Modal de confirmación */}
+      <ConfirmarPedidoModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleCreateOrder}
+        user={user}
+        total={total}
+        itemsCount={items.reduce((sum, item) => sum + item.qty, 0)}
+      />
+
+      {/* Modal de domicilio */}
+      <DomicilioModal
+        isOpen={showDomicilioModal}
+        onClose={() => setShowDomicilioModal(false)}
+        onSuccess={() => {
+          setShowDomicilioModal(false);
+          setShowConfirmModal(true);
+        }}
+      />
     </div>
   );
 }

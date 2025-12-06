@@ -1,3 +1,5 @@
+// Frontend/panaderia-frontend/src/pages/dashboard/DashboardOrders.jsx
+
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../../services/api";
