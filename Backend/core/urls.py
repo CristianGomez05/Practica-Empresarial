@@ -1,5 +1,5 @@
 # Backend/core/urls.py
-# ⭐ CORREGIDO: basename explícito para ViewSets sin queryset estático
+# ⭐ ACTUALIZADO: Agregadas rutas de recuperación de contraseña
 
 from django.urls import path, include
 from rest_framework import routers
@@ -8,6 +8,12 @@ from django.shortcuts import redirect
 from django.views.generic import View
 from . import views
 from .views_auth import LoginView
+from .views_password import (
+    solicitar_recuperacion_password,
+    validar_token_recuperacion,
+    restablecer_password,
+    cambiar_password
+)
 from .serializers import CustomTokenObtainPairSerializer
 from .views_reportes import estadisticas, exportar_reporte
 
@@ -17,32 +23,20 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 
-# ============================================================================
-# VISTA PARA OAUTH CANCELADO
-# ============================================================================
-
 class LoginCancelledView(View):
-    """
-    Redirecciona al login del frontend cuando el usuario cancela el OAuth
-    """
+    """Redirecciona al login del frontend cuando el usuario cancela el OAuth"""
     def get(self, request):
         print("⚠️ Usuario canceló el login de Google")
-        
-        # URL del frontend en producción
         from django.conf import settings
         frontend_url = settings.FRONTEND_URL
-        
-        # Redireccionar con parámetro
         return redirect(f'{frontend_url}/login?cancelled=true')
 
 
 # ============================================================================
-# ROUTER (⭐ CORREGIDO CON BASENAMES)
+# ROUTER
 # ============================================================================
 
 router = routers.DefaultRouter()
-
-# ⭐ CRÍTICO: Agregar basename cuando el ViewSet usa get_queryset() dinámico
 router.register(r'usuarios', views.UsuarioViewSet, basename='usuario')
 router.register(r'productos', views.ProductoViewSet, basename='producto')
 router.register(r'ofertas', views.OfertaViewSet, basename='oferta')
@@ -56,7 +50,7 @@ router.register(r'sucursales', views.SucursalViewSet, basename='sucursal')
 # ============================================================================
 
 urlpatterns = [
-    # Router (incluye automáticamente /usuarios/me/ gracias al @action en UsuarioViewSet)
+    # Router
     path('', include(router.urls)),
     
     # Auth endpoints
@@ -65,85 +59,25 @@ urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('registro/', views.registro_usuario, name='registro'),
 
-    # ⭐ PERSONALIZACIÓN OAuth: DEBE ir ANTES de 'accounts/'
+    # ⭐⭐⭐ NUEVOS: Password Reset Endpoints
+    path('password/solicitar-recuperacion/', solicitar_recuperacion_password, name='solicitar_recuperacion'),
+    path('password/validar-token/', validar_token_recuperacion, name='validar_token'),
+    path('password/restablecer/', restablecer_password, name='restablecer_password'),
+    path('password/cambiar/', cambiar_password, name='cambiar_password'),
+
+    # OAuth personalization
     path('accounts/3rdparty/login/cancelled/', 
          LoginCancelledView.as_view(), 
          name='socialaccount_login_cancelled'),
     
-    # Allauth (debe ir DESPUÉS de las personalizaciones)
+    # Allauth
     path('accounts/', include('allauth.urls')),
 
-    # Reportes endpoints
+    # Reportes
     path('reportes/estadisticas/', estadisticas, name='reportes_estadisticas'),
     path('reportes/exportar/', exportar_reporte, name='reportes_exportar'),
     
-    # dj-rest-auth (opcional si lo usas)
+    # dj-rest-auth
     path('auth/', include('dj_rest_auth.urls')),
     path('auth/registration/', include('dj_rest_auth.registration.urls')),
 ]
-
-
-# ============================================================================
-# ENDPOINTS DISPONIBLES (DOCUMENTACIÓN)
-# ============================================================================
-"""
-USUARIOS:
-  GET     /api/usuarios/              - Listar usuarios (según permisos)
-  POST    /api/usuarios/              - Crear usuario (solo admin_general)
-  GET     /api/usuarios/{id}/         - Ver usuario específico
-  PUT     /api/usuarios/{id}/         - Actualizar usuario (solo admin_general)
-  PATCH   /api/usuarios/{id}/         - Actualizar parcial (solo admin_general)
-  DELETE  /api/usuarios/{id}/         - Eliminar usuario (solo admin_general)
-  GET     /api/usuarios/me/           - Ver perfil propio ⭐
-  PATCH   /api/usuarios/me/           - Actualizar perfil propio ⭐
-
-SUCURSALES:
-  GET     /api/sucursales/            - Listar sucursales
-  POST    /api/sucursales/            - Crear sucursal (solo admins)
-  GET     /api/sucursales/{id}/       - Ver sucursal específica
-  PUT     /api/sucursales/{id}/       - Actualizar sucursal (solo admins)
-  PATCH   /api/sucursales/{id}/       - Actualizar parcial (solo admins)
-  DELETE  /api/sucursales/{id}/       - Eliminar sucursal (solo admins)
-  GET     /api/sucursales/activas/    - Listar solo sucursales activas ⭐
-
-PRODUCTOS:
-  GET     /api/productos/             - Listar productos (filtrado por sucursal)
-  POST    /api/productos/             - Crear producto (solo admins)
-  GET     /api/productos/{id}/        - Ver producto específico
-  PUT     /api/productos/{id}/        - Actualizar producto (solo admins)
-  PATCH   /api/productos/{id}/        - Actualizar parcial (solo admins)
-  DELETE  /api/productos/{id}/        - Eliminar producto (solo admins)
-
-OFERTAS:
-  GET     /api/ofertas/               - Listar ofertas (filtrado por sucursal)
-  POST    /api/ofertas/               - Crear oferta (solo admins)
-  GET     /api/ofertas/{id}/          - Ver oferta específica
-  PUT     /api/ofertas/{id}/          - Actualizar oferta (solo admins)
-  PATCH   /api/ofertas/{id}/          - Actualizar parcial (solo admins)
-  DELETE  /api/ofertas/{id}/          - Eliminar oferta (solo admins)
-
-PEDIDOS:
-  GET     /api/pedidos/               - Listar pedidos (según permisos)
-  POST    /api/pedidos/               - Crear pedido (valida domicilio) ⭐
-  GET     /api/pedidos/{id}/          - Ver pedido específico
-  PATCH   /api/pedidos/{id}/cambiar_estado/ - Cambiar estado del pedido
-  POST    /api/pedidos/{id}/cancelar/ - Cancelar pedido ⭐
-
-DETALLES PEDIDO:
-  GET     /api/detalles-pedido/       - Listar detalles (solo lectura)
-  GET     /api/detalles-pedido/{id}/  - Ver detalle específico
-
-AUTH:
-  POST    /api/auth/login/            - Login con username o email
-  POST    /api/token/                 - Obtener token JWT
-  POST    /api/token/refresh/         - Refrescar token JWT
-  POST    /api/registro/              - Registrar nuevo usuario
-
-OAUTH:
-  GET     /api/accounts/google/login/          - Iniciar login con Google
-  GET     /api/accounts/3rdparty/login/cancelled/ - Redirección cuando se cancela
-
-REPORTES:
-  GET     /api/reportes/estadisticas/ - Estadísticas generales
-  POST    /api/reportes/exportar/     - Exportar reporte
-"""

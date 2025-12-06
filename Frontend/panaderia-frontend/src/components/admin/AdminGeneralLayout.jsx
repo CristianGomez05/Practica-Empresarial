@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FaHome, FaBox, FaTag, FaShoppingCart, FaUsers, FaChartBar, 
-  FaSignOutAlt, FaBars, FaTimes, FaStore 
+import {
+  FaHome, FaBox, FaTag, FaShoppingCart, FaUsers, FaChartBar,
+  FaSignOutAlt, FaBars, FaTimes, FaStore
 } from 'react-icons/fa';
 import BranchSelector from './BranchSelector';
 
@@ -38,6 +38,7 @@ export default function AdminGeneralLayout() {
     { path: '/admin-general/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
     { path: '/admin-general/usuarios', icon: FaUsers, label: 'Usuarios' },
     { path: '/admin-general/reportes', icon: FaChartBar, label: 'Reportes' },
+    { path: '/admin-general/perfil', icon: FaUser, label: 'Mi Perfil' }, // ⭐⭐⭐ NUEVO
   ];
 
   const isActive = (path, exact = false) => {
@@ -58,7 +59,7 @@ export default function AdminGeneralLayout() {
           >
             {mobileMenuOpen ? <FaTimes className="text-xl" /> : <FaBars className="text-xl" />}
           </button>
-          
+
           <div className="flex items-center gap-2">
             <span className="text-lg">🥐</span>
             <h1 className="font-bold text-base sm:text-lg">Admin General</h1>
@@ -85,7 +86,7 @@ export default function AdminGeneralLayout() {
               onClick={() => setMobileMenuOpen(false)}
               className="lg:hidden fixed inset-0 bg-black/50 z-40"
             />
-            
+
             {/* Sidebar móvil */}
             <motion.aside
               initial={{ x: '-100%' }}
@@ -141,17 +142,16 @@ export default function AdminGeneralLayout() {
                     {menuItems.map((item) => {
                       const Icon = item.icon;
                       const active = isActive(item.path, item.exact);
-                      
+
                       return (
                         <Link
                           key={item.path}
                           to={item.path}
                           onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                            active
+                          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
                               ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg'
                               : 'hover:bg-white/10'
-                          }`}
+                            }`}
                         >
                           <Icon className="text-xl" />
                           <div className="flex items-center justify-between flex-1">
@@ -247,16 +247,15 @@ export default function AdminGeneralLayout() {
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.path, item.exact);
-                
+
                 return (
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                      active
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
                         ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg'
                         : 'hover:bg-white/10'
-                    }`}
+                      }`}
                   >
                     <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
                     {sidebarOpen && (
@@ -307,13 +306,13 @@ export default function AdminGeneralLayout() {
                 Gestión total de todas las sucursales
               </p>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <BranchSelector 
+              <BranchSelector
                 onBranchChange={setSelectedBranch}
                 currentBranch={selectedBranch}
               />
-              
+
               <div className="px-3 sm:px-4 py-2 bg-purple-50 text-purple-700 rounded-lg border border-purple-200">
                 <span className="font-semibold text-sm">👑 Admin General</span>
               </div>

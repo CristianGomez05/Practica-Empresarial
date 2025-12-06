@@ -1,17 +1,22 @@
 // Frontend/src/pages/dashboard/DashboardProfile.jsx
-// ⭐ ACTUALIZADO: Guardar domicilio correctamente usando setUser
+// ⭐ COMPLETO: Con guardar domicilio y cambiar contraseña
 
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "../../components/auth/AuthContext";
-import { FaUser, FaEnvelope, FaSave, FaTimes, FaUserCircle, FaEdit, FaCheckCircle, FaHome, FaMapMarkerAlt } from "react-icons/fa";
+import { 
+  FaUser, FaEnvelope, FaSave, FaTimes, FaUserCircle, FaEdit, 
+  FaCheckCircle, FaHome, FaMapMarkerAlt, FaLock 
+} from "react-icons/fa";
 import { useSnackbar } from "notistack";
 import api from "../../services/api";
+import ChangePasswordModal from "../../components/modals/ChangePasswordModal";
 
 export default function DashboardProfile() {
   const { user, setUser } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const [editing, setEditing] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [form, setForm] = useState({
     email: "",
     first_name: "",
@@ -191,17 +196,31 @@ export default function DashboardProfile() {
               <p className="text-[#8D6E63] text-sm">@{user?.username}</p>
             </div>
 
-            {!editing && (
+            {/* ⭐⭐⭐ Botones de Acción */}
+            <div className="space-y-3">
+              {!editing && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setEditing(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                >
+                  <FaEdit />
+                  Editar Perfil
+                </motion.button>
+              )}
+
+              {/* ⭐⭐⭐ NUEVO: Botón Cambiar Contraseña */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setEditing(true)}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
+                onClick={() => setShowPasswordModal(true)}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
               >
-                <FaEdit />
-                Editar Perfil
+                <FaLock />
+                Cambiar Contraseña
               </motion.button>
-            )}
+            </div>
           </div>
         </motion.div>
 
@@ -376,6 +395,15 @@ export default function DashboardProfile() {
           </div>
         </div>
       </motion.div>
+
+      {/* ⭐⭐⭐ NUEVO: Modal de Cambiar Contraseña */}
+      <ChangePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onSuccess={() => {
+          console.log('✅ Contraseña actualizada desde perfil cliente');
+        }}
+      />
     </div>
   );
 }

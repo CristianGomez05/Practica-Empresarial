@@ -1,5 +1,5 @@
 // Frontend/src/pages/LoginPage.jsx
-// ⭐ COMPLETO: Incluye manejo de OAuth cancelado y domicilio
+// ⭐ ACTUALIZADO: Con enlace "Olvidé mi contraseña"
 
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
@@ -19,7 +19,7 @@ export default function LoginPage() {
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
-  // ⭐ NUEVO: Detectar si viene de cancelación de OAuth
+  // Detectar si viene de cancelación de OAuth
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('cancelled') === 'true') {
@@ -27,7 +27,6 @@ export default function LoginPage() {
         variant: 'info',
         autoHideDuration: 3000 
       });
-      // Limpiar URL
       window.history.replaceState({}, '', '/login');
     }
   }, [enqueueSnackbar]);
@@ -45,20 +44,14 @@ export default function LoginPage() {
         password: form.password
       });
 
-      console.log("✅ Respuesta del servidor:", res.data);
-
       const { access, refresh, user: userData } = res.data;
 
-      // Guardar tokens
       localStorage.setItem('access', access);
       localStorage.setItem('refresh', refresh);
-      console.log("💾 Tokens guardados en localStorage");
 
-      // Actualizar el contexto
       setAccessToken(access);
       setRefreshToken(refresh);
 
-      // ⭐ CRÍTICO: Guardar usuario con TODA la información
       const userInfo = {
         id: userData.id,
         username: userData.username,
@@ -66,46 +59,30 @@ export default function LoginPage() {
         first_name: userData.first_name,
         last_name: userData.last_name,
         rol: userData.rol,
-        domicilio: userData.domicilio || null,              // ⭐ NUEVO
-        tiene_domicilio: userData.tiene_domicilio || false, // ⭐ NUEVO
+        domicilio: userData.domicilio || null,
+        tiene_domicilio: userData.tiene_domicilio || false,
         sucursal_id: userData.sucursal_id,
         sucursal_nombre: userData.sucursal_nombre,
-        sucursal: userData.sucursal_id // Para compatibilidad
+        sucursal: userData.sucursal_id
       };
       
-      console.log("✅ userInfo completo:", userInfo);
-      console.log("👤 Rol:", userInfo.rol);
-      console.log("🏪 Sucursal ID:", userInfo.sucursal_id);
-      console.log("🏪 Sucursal Nombre:", userInfo.sucursal_nombre);
-      console.log("🏠 Domicilio:", userInfo.domicilio || 'No configurado'); // ⭐ NUEVO
-      console.log("✅ Tiene domicilio:", userInfo.tiene_domicilio);           // ⭐ NUEVO
-      
-      // Guardar en localStorage CON DATOS COMPLETOS
       localStorage.setItem('user', JSON.stringify(userInfo));
-      
       setUser(userInfo);
-      console.log("✅ Usuario guardado en contexto");
 
-      // Mostrar notificación de éxito
       enqueueSnackbar(`¡Bienvenido ${userInfo.first_name || userInfo.username}!`, { 
         variant: 'success',
         autoHideDuration: 2000 
       });
 
-      // ⭐ Redirigir según rol
       if (userInfo.rol === 'administrador_general') {
-        console.log("👑👑 Admin General detectado → /admin-general");
         navigate("/admin-general");
       } else if (userInfo.rol === 'administrador') {
-        console.log("👑 Administrador Regular detectado → /admin");
         navigate("/admin");
       } else {
-        console.log("👤 Cliente detectado → /dashboard/inicio");
         navigate("/dashboard/inicio");
       }
     } catch (err) {
       console.error("❌ Error en login:", err);
-      console.error("❌ Respuesta de error:", err.response?.data);
       
       if (err.response?.status === 401) {
         setError("Usuario o contraseña incorrectos");
@@ -113,9 +90,6 @@ export default function LoginPage() {
       } else if (err.response?.status === 400) {
         setError("Por favor ingresa usuario y contraseña");
         enqueueSnackbar("Completa todos los campos", { variant: 'warning' });
-      } else if (err.response?.status === 404) {
-        setError("Endpoint no encontrado. Verifica la configuración del servidor.");
-        enqueueSnackbar("Error de configuración", { variant: 'error' });
       } else {
         setError("Error de conexión. Verifica que el servidor esté corriendo.");
         enqueueSnackbar("Error de conexión con el servidor", { variant: 'error' });
@@ -145,7 +119,7 @@ export default function LoginPage() {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-[#5D4037] mb-2">
               Usuario o Email
@@ -162,9 +136,18 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-[#5D4037] mb-2">
-              Contraseña
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-[#5D4037]">
+                Contraseña
+              </label>
+              {/* ⭐⭐⭐ NUEVO: Enlace Olvidé mi contraseña */}
+              <Link
+                to="/olvide-password"
+                className="text-xs text-[#D2691E] hover:text-[#8B4513] font-semibold transition-colors hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <input
               type="password"
               value={form.password}
@@ -177,7 +160,7 @@ export default function LoginPage() {
           </div>
 
           <button
-            type="submit"
+            onClick={handleSubmit}
             disabled={loading}
             className="w-full bg-gradient-to-r from-[#D2691E] to-[#8B4513] text-white py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
@@ -190,7 +173,7 @@ export default function LoginPage() {
               'Iniciar Sesión'
             )}
           </button>
-        </form>
+        </div>
 
         {/* Divider */}
         <div className="my-6 flex items-center gap-4">

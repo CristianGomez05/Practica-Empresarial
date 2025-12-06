@@ -1,4 +1,6 @@
 // Frontend/panaderia-frontend/src/App.jsx
+// ⭐ ACTUALIZADO: Agregadas rutas de recuperación de contraseña y perfiles de admin
+
 import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
@@ -10,7 +12,11 @@ import RegisterPage from './pages/RegisterPage';
 import ProductDetail from "./components/products/ProductDetail";
 import OrderConfirmation from "./pages/OrderConfirmation";
 
-// ⭐ NUEVO: Importar Dashboard para OAuth
+// ⭐⭐⭐ NUEVAS: Password Reset Pages
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+
+// Dashboard OAuth
 import Dashboard from "./pages/Dashboard";
 
 // Dashboard de Cliente
@@ -22,13 +28,14 @@ import DashboardCart from "./pages/dashboard/DashboardCart";
 import DashboardOrders from "./pages/dashboard/DashboardOrders";
 import DashboardProfile from "./pages/dashboard/DashboardProfile";
 
-// Admin
+// Admin Regular
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminOffers from "./pages/admin/AdminOffers";
 import AdminOrders from "./pages/admin/AdminOrders";
 import AdminReports from "./pages/admin/AdminReports";
+import AdminProfile from "./pages/admin/AdminProfile"; // ⭐⭐⭐ NUEVO
 
 // Admin General
 import AdminGeneralLayout from "./components/admin/AdminGeneralLayout";
@@ -39,6 +46,7 @@ import AdminGeneralOffers from "./pages/admin_general/AdminGeneralOffers";
 import AdminGeneralOrders from "./pages/admin_general/AdminGeneralOrders";
 import AdminGeneralUsers from "./pages/admin_general/AdminGeneralUsers";
 import AdminGeneralReports from "./pages/admin_general/AdminGeneralReports";
+import AdminGeneralProfile from "./pages/admin_general/AdminGeneralProfile"; // ⭐⭐⭐ NUEVO
 
 // Rutas protegidas
 import AdminRoute from "./components/auth/AdminRoute";
@@ -56,21 +64,31 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* RUTAS PÚBLICAS */}
+        {/* ========================================
+            RUTAS PÚBLICAS
+        ======================================== */}
         <Route path="/" element={<Landing />} />
         <Route path="/productos" element={<Catalog />} />
         <Route path="/productos/:id" element={<ProductDetail />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* ⭐⭐⭐ CRÍTICO: Ruta /dashboard SIN Layout para OAuth */}
+        {/* ⭐⭐⭐ NUEVAS: Password Reset Routes */}
+        <Route path="/olvide-password" element={<ForgotPasswordPage />} />
+        <Route path="/recuperar-password/:uid/:token" element={<ResetPasswordPage />} />
+
+        {/* ========================================
+            DASHBOARD OAUTH (Sin Layout)
+        ======================================== */}
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <Dashboard />
           </ProtectedRoute>
         } />
 
-        {/* DASHBOARD DE CLIENTE CON SUBRUTAS */}
+        {/* ========================================
+            DASHBOARD DE CLIENTE (Con Layout)
+        ======================================== */}
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <DashboardLayout />
@@ -85,7 +103,9 @@ function App() {
           <Route path="pedido-confirmado/:id" element={<OrderConfirmation />} />
         </Route>
 
-        {/* PANEL DE ADMINISTRADOR REGULAR */}
+        {/* ========================================
+            PANEL DE ADMINISTRADOR REGULAR
+        ======================================== */}
         <Route path="/admin" element={
           <AdminRoute>
             <AdminLayout />
@@ -96,9 +116,12 @@ function App() {
           <Route path="ofertas" element={<AdminOffers />} />
           <Route path="pedidos" element={<AdminOrders />} />
           <Route path="reportes" element={<AdminReports />} />
+          <Route path="perfil" element={<AdminProfile />} /> {/* ⭐⭐⭐ NUEVO */}
         </Route>
 
-        {/* PANEL DE ADMINISTRADOR GENERAL */}
+        {/* ========================================
+            PANEL DE ADMINISTRADOR GENERAL
+        ======================================== */}
         <Route path="/admin-general" element={
           <AdminGeneralRoute>
             <AdminGeneralLayout />
@@ -111,6 +134,7 @@ function App() {
           <Route path="pedidos" element={<AdminGeneralOrders />} />
           <Route path="usuarios" element={<AdminGeneralUsers />} />
           <Route path="reportes" element={<AdminGeneralReports />} />
+          <Route path="perfil" element={<AdminGeneralProfile />} /> {/* ⭐⭐⭐ NUEVO */}
         </Route>
       </Routes>
     </BrowserRouter>

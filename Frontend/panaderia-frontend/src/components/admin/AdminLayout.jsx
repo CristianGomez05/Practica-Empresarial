@@ -18,7 +18,7 @@ export default function AdminLayout() {
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user'));
     setUser(userData);
-    
+
     // Log para debugging
     if (userData?.rol === 'administrador') {
       console.log('🔒 Admin Regular - Sucursal asignada:', userData.sucursal_nombre);
@@ -41,6 +41,7 @@ export default function AdminLayout() {
     { path: '/admin/ofertas', icon: FaTag, label: 'Ofertas' },
     { path: '/admin/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
     { path: '/admin/reportes', icon: FaChartBar, label: 'Reportes' },
+    { path: '/admin/perfil', icon: FaUser, label: 'Mi Perfil' }, // ⭐⭐⭐ NUEVO
   ];
 
   const isActive = (path, exact = false) => {
@@ -61,7 +62,7 @@ export default function AdminLayout() {
           >
             {mobileMenuOpen ? <FaTimes className="text-xl" /> : <FaBars className="text-xl" />}
           </button>
-          
+
           <div className="flex items-center gap-2">
             <FaStore className="text-lg" />
             <h1 className="font-bold text-base sm:text-lg">Admin Panel</h1>
@@ -88,7 +89,7 @@ export default function AdminLayout() {
               onClick={() => setMobileMenuOpen(false)}
               className="lg:hidden fixed inset-0 bg-black/50 z-40"
             />
-            
+
             {/* Sidebar móvil */}
             <motion.aside
               initial={{ x: '-100%' }}
@@ -133,7 +134,7 @@ export default function AdminLayout() {
                         </p>
                       </div>
                     </div>
-                    
+
                     {user.sucursal_nombre && (
                       <div className="flex items-center gap-2 text-xs text-amber-200 mt-3 pt-3 border-t border-white/20">
                         <FaStore />
@@ -154,11 +155,10 @@ export default function AdminLayout() {
                         key={item.path}
                         to={item.path}
                         onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                          active
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
                             ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg'
                             : 'hover:bg-white/10'
-                        }`}
+                          }`}
                       >
                         <Icon className="text-xl" />
                         <span className="font-medium">{item.label}</span>
@@ -233,7 +233,7 @@ export default function AdminLayout() {
                   </p>
                 </div>
               </div>
-              
+
               {/* Mostrar Sucursal Asignada */}
               {user.sucursal_nombre && (
                 <div className="flex items-center gap-2 text-xs text-amber-200 mt-3 pt-3 border-t border-white/20">
@@ -254,11 +254,10 @@ export default function AdminLayout() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                    active
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
                       ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg'
                       : 'hover:bg-white/10'
-                  }`}
+                    }`}
                 >
                   <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
                   {sidebarOpen && <span className="font-medium">{item.label}</span>}
@@ -294,7 +293,7 @@ export default function AdminLayout() {
                 {menuItems.find(item => isActive(item.path, item.exact))?.label || 'Panel Administrativo'}
               </h2>
               <p className="text-xs sm:text-sm text-gray-600">
-                {user?.sucursal_nombre 
+                {user?.sucursal_nombre
                   ? `Gestionando: ${user.sucursal_nombre}`
                   : 'Gestiona tu sucursal de forma eficiente'
                 }
@@ -313,7 +312,7 @@ export default function AdminLayout() {
         {/* Content Area */}
         <div className="p-4 sm:p-6 lg:p-8">
           {/* ⭐ Pasar la sucursal del admin automáticamente */}
-          <Outlet context={{ 
+          <Outlet context={{
             selectedBranch: user?.sucursal_id || null,
             branchName: user?.sucursal_nombre || null
           }} />
