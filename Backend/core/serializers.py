@@ -541,8 +541,6 @@ class PedidoSerializer(serializers.ModelSerializer):
     es_domicilio = serializers.BooleanField(read_only=True)
     es_recoger = serializers.BooleanField(read_only=True)
     puede_cancelarse = serializers.BooleanField(read_only=True)
-    
-    # ⭐⭐⭐ NUEVO: Campos para eliminación
     puede_eliminarse = serializers.BooleanField(read_only=True)
     tiempo_hasta_auto_delete = serializers.CharField(read_only=True)
     fecha_completado = serializers.DateTimeField(read_only=True)
@@ -555,7 +553,6 @@ class PedidoSerializer(serializers.ModelSerializer):
             'cantidad_items', 'tiempo_transcurrido', 'es_oferta',
             'direccion_entrega', 'tipo_entrega', 'tipo_entrega_display',
             'es_domicilio', 'es_recoger', 'puede_cancelarse',
-            # ⭐ NUEVO
             'puede_eliminarse', 'tiempo_hasta_auto_delete', 'fecha_completado'
         ]
         read_only_fields = [
@@ -676,7 +673,7 @@ class PedidoCreateSerializer(serializers.Serializer):
             estado='recibido',
             total=0,
             tipo_entrega=tipo_entrega,
-            direccion_entrega=direccion_entrega  # ⭐ Será None si es para recoger
+            direccion_entrega=direccion_entrega
         )
         
         print(f"✅ Pedido #{pedido.id} creado")
@@ -698,6 +695,7 @@ class PedidoCreateSerializer(serializers.Serializer):
             )
             
             total += producto.precio * cantidad
+            print(f"   ✓ {cantidad}x {producto.nombre} - ₡{producto.precio * cantidad}")
         
         pedido.total = total
         pedido.save()
@@ -708,7 +706,12 @@ class PedidoCreateSerializer(serializers.Serializer):
         return pedido
     
     def to_representation(self, instance):
-        """Retorna la representación completa del pedido creado"""
+        """
+        ⭐ CRÍTICO: Retornar la representación completa del pedido DESPUÉS de crearlo
+        Usar PedidoSerializer para mostrar toda la info
+        """
+        # ⭐ IMPORTANTE: 'instance' aquí es el objeto Pedido que acabamos de crear
+        # NO es un diccionario, es una instancia del modelo
         return PedidoSerializer(instance, context=self.context).data
 
 
