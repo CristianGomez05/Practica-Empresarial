@@ -1,5 +1,5 @@
 # Backend/core/urls.py
-# ⭐ COMPLETO: Incluye todos los endpoints + OAuth cancelled fix
+# ⭐ CORREGIDO: basename explícito para ViewSets sin queryset estático
 
 from django.urls import path, include
 from rest_framework import routers
@@ -37,16 +37,18 @@ class LoginCancelledView(View):
 
 
 # ============================================================================
-# ROUTER
+# ROUTER (⭐ CORREGIDO CON BASENAMES)
 # ============================================================================
 
 router = routers.DefaultRouter()
-router.register(r'usuarios', views.UsuarioViewSet)
-router.register(r'productos', views.ProductoViewSet)
-router.register(r'ofertas', views.OfertaViewSet)
+
+# ⭐ CRÍTICO: Agregar basename cuando el ViewSet usa get_queryset() dinámico
+router.register(r'usuarios', views.UsuarioViewSet, basename='usuario')
+router.register(r'productos', views.ProductoViewSet, basename='producto')
+router.register(r'ofertas', views.OfertaViewSet, basename='oferta')
 router.register(r'pedidos', views.PedidoViewSet, basename='pedido')
-router.register(r'detalles-pedido', views.DetallePedidoViewSet)
-router.register(r'sucursales', views.SucursalViewSet)
+router.register(r'detalles-pedido', views.DetallePedidoViewSet, basename='detallepedido')
+router.register(r'sucursales', views.SucursalViewSet, basename='sucursal')
 
 
 # ============================================================================
@@ -82,7 +84,7 @@ urlpatterns = [
 
 
 # ============================================================================
-# ENDPOINTS DISPONIBLES
+# ENDPOINTS DISPONIBLES (DOCUMENTACIÓN)
 # ============================================================================
 """
 USUARIOS:
@@ -92,8 +94,8 @@ USUARIOS:
   PUT     /api/usuarios/{id}/         - Actualizar usuario (solo admin_general)
   PATCH   /api/usuarios/{id}/         - Actualizar parcial (solo admin_general)
   DELETE  /api/usuarios/{id}/         - Eliminar usuario (solo admin_general)
-  GET     /api/usuarios/me/           - Ver perfil propio ⭐ NUEVO
-  PATCH   /api/usuarios/me/           - Actualizar perfil propio (domicilio) ⭐ NUEVO
+  GET     /api/usuarios/me/           - Ver perfil propio ⭐
+  PATCH   /api/usuarios/me/           - Actualizar perfil propio ⭐
 
 SUCURSALES:
   GET     /api/sucursales/            - Listar sucursales
@@ -102,7 +104,7 @@ SUCURSALES:
   PUT     /api/sucursales/{id}/       - Actualizar sucursal (solo admins)
   PATCH   /api/sucursales/{id}/       - Actualizar parcial (solo admins)
   DELETE  /api/sucursales/{id}/       - Eliminar sucursal (solo admins)
-  GET     /api/sucursales/activas/    - Listar solo sucursales activas
+  GET     /api/sucursales/activas/    - Listar solo sucursales activas ⭐
 
 PRODUCTOS:
   GET     /api/productos/             - Listar productos (filtrado por sucursal)
@@ -122,23 +124,24 @@ OFERTAS:
 
 PEDIDOS:
   GET     /api/pedidos/               - Listar pedidos (según permisos)
-  POST    /api/pedidos/               - Crear pedido (valida domicilio) ⭐ ACTUALIZADO
+  POST    /api/pedidos/               - Crear pedido (valida domicilio) ⭐
   GET     /api/pedidos/{id}/          - Ver pedido específico
   PATCH   /api/pedidos/{id}/cambiar_estado/ - Cambiar estado del pedido
+  POST    /api/pedidos/{id}/cancelar/ - Cancelar pedido ⭐
 
 DETALLES PEDIDO:
   GET     /api/detalles-pedido/       - Listar detalles (solo lectura)
   GET     /api/detalles-pedido/{id}/  - Ver detalle específico
 
 AUTH:
-  POST    /api/auth/login/            - Login con username o email ⭐ RETORNA DOMICILIO
-  POST    /api/token/                 - Obtener token JWT ⭐ RETORNA DOMICILIO
+  POST    /api/auth/login/            - Login con username o email
+  POST    /api/token/                 - Obtener token JWT
   POST    /api/token/refresh/         - Refrescar token JWT
   POST    /api/registro/              - Registrar nuevo usuario
 
 OAUTH:
   GET     /api/accounts/google/login/          - Iniciar login con Google
-  GET     /api/accounts/3rdparty/login/cancelled/ - Redirección cuando se cancela ⭐ NUEVO
+  GET     /api/accounts/3rdparty/login/cancelled/ - Redirección cuando se cancela
 
 REPORTES:
   GET     /api/reportes/estadisticas/ - Estadísticas generales
