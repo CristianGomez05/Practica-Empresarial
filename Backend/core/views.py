@@ -479,6 +479,42 @@ class PedidoViewSet(viewsets.ModelViewSet):
             headers=headers
         )
 
+    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
+    def cambiar_estado(self, request, pk=None):
+        """Cambiar estado del pedido (solo admins)"""
+        try:
+            pedido = self.get_object()
+            nuevo_estado = request.data.get('estado')
+            
+            # Solo admins pueden cambiar el estado manualmente
+            if request.user.rol not in ['administrador', 'administrador_general']:
+                return Response({
+                    'error': 'No tienes permisos para cambiar el estado del pedido'
+                }, status=status.HTTP_403_FORBIDDEN)
+            
+            estados_validos = ['recibido', 'en_preparacion', 'listo', 'entregado', 'cancelado']
+            if nuevo_estado not in estados_validos:
+                return Response({
+                    'error': f'Estado inválido. Debe ser: {", ".join(estados_validos)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            estado_anterior = pedido.estado
+            pedido.estado = nuevo_estado
+            pedido.save(update_fields=['estado'])
+            
+            print(f"🔄 Pedido #{pedido.id}: {estado_anterior} → {nuevo_estado}")
+            
+            serializer = self.get_serializer(pedido)
+            return Response({
+                'message': 'Estado actualizado',
+                'pedido': serializer.data
+            })
+        except Exception as e:
+            print(f"❌ Error en cambiar_estado: {e}")
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def cancelar(self, request, pk=None):
         """Permite cancelar un pedido"""
