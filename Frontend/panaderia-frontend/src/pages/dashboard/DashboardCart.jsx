@@ -1,5 +1,5 @@
 // Frontend/src/pages/dashboard/DashboardCart.jsx
-// ⭐ ACTUALIZADO: Incluye modal de confirmación con tipo de entrega
+// ⭐ CORREGIDO: Formato correcto de pedidos (solo producto + cantidad)
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,58 +51,60 @@ export default function DashboardCart() {
     setShowConfirmModal(true);
   };
 
+  // ⭐ CORREGIDO: Mismo formato que CartPage.jsx
   const handleConfirmOrder = async (tipoEntrega) => {
     setLoading(true);
+    
+    console.log('\n' + '='.repeat(60));
+    console.log('🛒 CREANDO PEDIDO');
+    console.log('📦 Tipo de entrega:', tipoEntrega);
+    console.log('📦 Items en carrito:', items);
+    console.log('📍 Domicilio del usuario:', user?.domicilio || 'No configurado');
+    console.log('='.repeat(60));
+    
     try {
-      console.log('🛒 CREANDO PEDIDO');
-      console.log('📦 Tipo de entrega:', tipoEntrega);
-      console.log('📦 Items en carrito:', items);
-      console.log('📍 Domicilio del usuario:', user.domicilio);
-
-      const orderItems = items.flatMap((item) => {
+      // ⭐ CRÍTICO: Construir items SOLO con producto + cantidad
+      const orderItems = [];
+      
+      for (const item of items) {
         console.log('🔍 Procesando item:', item);
-
+        
         if (item.isOffer) {
-          console.log('   🎁 Es una OFERTA');
-          const productosConCantidad = item.productos_con_cantidad || item.productos || [];
-
-          if (productosConCantidad.length === 0) {
-            console.error('   ❌ Oferta sin productos');
-            throw new Error('Oferta sin productos válidos');
+          console.log('   🎁 Es una OFERTA con', item.productos?.length, 'productos');
+          
+          if (!item.productos || item.productos.length === 0) {
+            throw new Error(`Oferta "${item.nombre}" no tiene productos válidos`);
           }
-
-          const precioOferta = parseFloat(item.precio);
-          const numProductos = productosConCantidad.length;
-          const precioPorProducto = precioOferta / numProductos;
-
-          return productosConCantidad.map((producto) => {
-            const cantidadTotal = (producto.cantidad_unitaria || producto.cantidad || 1) * item.qty;
-
-            return {
-              producto: producto.id || producto.producto_id,
-              cantidad: cantidadTotal,
-              precio_unitario: precioPorProducto,
-              es_oferta: true,
-              oferta_titulo: item.nombre
-            };
-          });
+          
+          // ⭐ Para ofertas: agregar cada producto de la oferta
+          for (const producto of item.productos) {
+            const cantidadOferta = producto.cantidad_oferta || 1;
+            
+            orderItems.push({
+              producto: producto.id,
+              cantidad: item.qty * cantidadOferta,
+            });
+            
+            console.log(`   ➕ Producto de oferta: ${producto.nombre} (ID: ${producto.id}) x ${item.qty * cantidadOferta}`);
+          }
         } else {
-          return [{
+          // ⭐ Para productos individuales
+          orderItems.push({
             producto: item.id,
             cantidad: item.qty,
-            precio_unitario: parseFloat(item.precio),
-            es_oferta: false
-          }];
+          });
+          
+          console.log(`   ➕ Producto individual: ${item.nombre} (ID: ${item.id}) x ${item.qty}`);
         }
-      });
+      }
 
       console.log('📋 Items preparados:', orderItems);
       console.log('💰 Total:', total);
 
+      // ⭐ CRÍTICO: Formato exacto que espera el backend
       const body = {
         items: orderItems,
-        total,
-        tipo_entrega: tipoEntrega
+        tipo_entrega: tipoEntrega,
       };
 
       console.log('📤 Enviando al backend:', JSON.stringify(body, null, 2));
@@ -122,15 +124,23 @@ export default function DashboardCart() {
       setTimeout(() => {
         navigate("/dashboard/pedidos");
       }, 1000);
+      
     } catch (error) {
       console.error('❌ Error al crear pedido:', error);
       console.error('   Detalles:', error.response?.data);
 
+      // ⭐ Manejo específico de error de domicilio
       if (error.response?.data?.codigo === 'DOMICILIO_REQUERIDO') {
         setShowConfirmModal(false);
         setShowDomicilioModal(true);
-        enqueueSnackbar(error.response.data.error || error.response.data.domicilio, { variant: "warning" });
-      } else if (error.response?.data?.error) {
+        enqueueSnackbar('⚠️ Debes configurar tu domicilio primero', { 
+          variant: 'warning',
+          autoHideDuration: 4000 
+        });
+        return;
+      }
+
+      if (error.response?.data?.error) {
         enqueueSnackbar(error.response.data.error, { variant: "error" });
       } else if (error.message) {
         enqueueSnackbar(error.message, { variant: "error" });
