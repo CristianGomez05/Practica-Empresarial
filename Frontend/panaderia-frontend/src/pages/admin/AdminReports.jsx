@@ -1,4 +1,5 @@
 // Frontend/src/pages/admin/AdminReports.jsx
+// ⭐⭐⭐ CORREGIDO: Solo contar pedidos ENTREGADOS en todos los cálculos
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -40,12 +41,20 @@ export default function AdminReports() {
 
       const pedidosData = pedidos.data.results || pedidos.data;
       
+      // ⭐⭐⭐ CRÍTICO: Filtrar SOLO pedidos entregados
+      const pedidosEntregados = pedidosData.filter(p => p.estado === 'entregado');
+      
+      console.log('📊 Análisis de pedidos:');
+      console.log('   Total pedidos:', pedidosData.length);
+      console.log('   Pedidos entregados:', pedidosEntregados.length);
+      console.log('   Pedidos NO entregados:', pedidosData.length - pedidosEntregados.length);
+      
       // ⭐ FIX: Obtener fecha actual en zona horaria local
       const hoy = new Date();
       const hoySoloFecha = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
       
       const inicioSemana = new Date(hoySoloFecha);
-      inicioSemana.setDate(hoySoloFecha.getDate() - 6); // Últimos 7 días incluyendo hoy
+      inicioSemana.setDate(hoySoloFecha.getDate() - 6);
       
       const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
@@ -54,7 +63,6 @@ export default function AdminReports() {
       console.log('   Inicio Semana:', inicioSemana.toLocaleDateString());
       console.log('   Inicio Mes:', inicioMes.toLocaleDateString());
 
-      // ⭐ FIX: Función para comparar fechas ignorando la hora
       const esMismaFecha = (fecha1, fecha2) => {
         const f1 = new Date(fecha1);
         const f2 = new Date(fecha2);
@@ -63,18 +71,18 @@ export default function AdminReports() {
                f1.getDate() === f2.getDate();
       };
 
-      // ⭐ CORREGIDO: Calcular ventas por período
-      const pedidosHoy = pedidosData.filter(p => {
+      // ⭐⭐⭐ CORREGIDO: Calcular ventas SOLO de pedidos entregados
+      const pedidosHoy = pedidosEntregados.filter(p => {
         const fechaPedido = new Date(p.fecha);
         return esMismaFecha(fechaPedido, hoySoloFecha);
       });
 
-      const pedidosSemana = pedidosData.filter(p => {
+      const pedidosSemana = pedidosEntregados.filter(p => {
         const fechaPedido = new Date(p.fecha);
         return fechaPedido >= inicioSemana && fechaPedido <= hoy;
       });
 
-      const pedidosMes = pedidosData.filter(p => {
+      const pedidosMes = pedidosEntregados.filter(p => {
         const fechaPedido = new Date(p.fecha);
         return fechaPedido >= inicioMes && fechaPedido <= hoy;
       });
@@ -83,12 +91,11 @@ export default function AdminReports() {
       const ventasSemana = pedidosSemana.reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
       const ventasMes = pedidosMes.reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
 
-      console.log('💰 Ventas calculadas:');
-      console.log('   Hoy:', ventasHoy, `(${pedidosHoy.length} pedidos)`);
-      console.log('   Semana:', ventasSemana, `(${pedidosSemana.length} pedidos)`);
-      console.log('   Mes:', ventasMes, `(${pedidosMes.length} pedidos)`);
+      console.log('💰 Ventas calculadas (SOLO ENTREGADOS):');
+      console.log('   Hoy:', ventasHoy, `(${pedidosHoy.length} pedidos entregados)`);
+      console.log('   Semana:', ventasSemana, `(${pedidosSemana.length} pedidos entregados)`);
+      console.log('   Mes:', ventasMes, `(${pedidosMes.length} pedidos entregados)`);
 
-      // Pedidos del período actual
       let pedidosPeriodo = 0;
       let pedidosFiltrados = [];
       
@@ -103,7 +110,6 @@ export default function AdminReports() {
         pedidosPeriodo = pedidosMes.length;
       }
 
-      // ⭐ NUEVO: Calcular ventas por producto para la gráfica circular
       const productoContador = {};
       const productoVentas = {};
       
@@ -120,12 +126,10 @@ export default function AdminReports() {
         }
       });
 
-      // Producto más vendido
       const productoMasVendido = Object.keys(productoContador).length > 0
         ? Object.entries(productoContador).sort((a, b) => b[1] - a[1])[0][0]
         : 'N/A';
 
-      // ⭐ NUEVO: Preparar datos para gráfica circular (top 5 productos)
       const productosPorVentas = Object.entries(productoContador)
         .map(([nombre, cantidad]) => ({
           nombre,
@@ -133,19 +137,16 @@ export default function AdminReports() {
           ventas: productoVentas[nombre] || 0
         }))
         .sort((a, b) => b.cantidad - a.cantidad)
-        .slice(0, 5); // Top 5 productos
+        .slice(0, 5);
 
-      // Calcular totales para porcentajes
       const totalCantidad = productosPorVentas.reduce((sum, p) => sum + p.cantidad, 0);
       const totalVentasProductos = productosPorVentas.reduce((sum, p) => sum + p.ventas, 0);
 
-      // Agregar porcentajes
       productosPorVentas.forEach(p => {
         p.porcentaje = totalCantidad > 0 ? (p.cantidad / totalCantidad * 100) : 0;
         p.porcentajeVentas = totalVentasProductos > 0 ? (p.ventas / totalVentasProductos * 100) : 0;
       });
 
-      // Promedio por venta
       const totalVentas = periodo === 'hoy' ? ventasHoy : periodo === 'semana' ? ventasSemana : ventasMes;
       const promedioVenta = pedidosPeriodo > 0 ? totalVentas / pedidosPeriodo : 0;
 
@@ -153,7 +154,7 @@ export default function AdminReports() {
         ventasHoy,
         ventasSemana,
         ventasMes,
-        pedidosTotal: pedidosData.length,
+        pedidosTotal: pedidosEntregados.length,
         pedidosPeriodo,
         clientesActivos: (usuarios.data.results || usuarios.data).length,
         productoMasVendido,
@@ -181,7 +182,6 @@ export default function AdminReports() {
     return Object.entries(dias)
       .map(([fecha, total]) => ({ fecha, total }))
       .sort((a, b) => {
-        // Parsear fechas en formato dd/mm/yyyy
         const [diaA, mesA, añoA] = a.fecha.split('/');
         const [diaB, mesB, añoB] = b.fecha.split('/');
         return new Date(añoA, mesA - 1, diaA) - new Date(añoB, mesB - 1, diaB);
@@ -218,6 +218,16 @@ export default function AdminReports() {
             .header p {
               color: #8D6E63;
               margin: 5px 0;
+            }
+            .important-note {
+              background: #fff3cd;
+              border-left: 4px solid #ffc107;
+              padding: 15px;
+              margin: 20px 0;
+              border-radius: 5px;
+            }
+            .important-note strong {
+              color: #856404;
             }
             .stats-grid {
               display: grid;
@@ -280,13 +290,18 @@ export default function AdminReports() {
             })}</p>
           </div>
 
+          <div class="important-note">
+            <strong>⚠️ IMPORTANTE:</strong> Este reporte incluye únicamente pedidos con estado <strong>"Entregado"</strong>. 
+            Los pedidos en otros estados (Recibido, En preparación, Listo, Cancelado) no se contabilizan como ventas.
+          </div>
+
           <div class="stats-grid">
             <div class="stat-card">
-              <h3>Total Ventas (${nombrePeriodo})</h3>
+              <h3>Ventas del ${nombrePeriodo} (Entregados)</h3>
               <div class="value">₡${totalVentas.toFixed(2)}</div>
             </div>
             <div class="stat-card">
-              <h3>Total Pedidos</h3>
+              <h3>Pedidos Entregados</h3>
               <div class="value">${stats.pedidosPeriodo}</div>
             </div>
             <div class="stat-card">
@@ -294,13 +309,13 @@ export default function AdminReports() {
               <div class="value">₡${stats.promedioVenta.toFixed(2)}</div>
             </div>
             <div class="stat-card">
-              <h3>Producto Más Vendido</h3>
-              <div class="value" style="font-size: 18px;">${stats.productoMasVendido}</div>
+              <h3>Total Productos</h3>
+              <div class="value">${stats.clientesActivos}</div>
             </div>
           </div>
 
           <div class="table-container">
-            <h2 style="color: #5D4037;">Ventas por Día</h2>
+            <h2 style="color: #5D4037;">Ventas por Día (Solo Entregados)</h2>
             <table>
               <thead>
                 <tr>
@@ -320,7 +335,7 @@ export default function AdminReports() {
           </div>
 
           <div class="table-container">
-            <h2 style="color: #5D4037;">Top 5 Productos Más Vendidos</h2>
+            <h2 style="color: #5D4037;">Top 5 Productos Más Vendidos (Pedidos Entregados)</h2>
             <table>
               <thead>
                 <tr>
@@ -344,8 +359,9 @@ export default function AdminReports() {
           </div>
 
           <div class="footer">
-            <p>Este reporte fue generado automáticamente por el sistema de Panadería Artesanal</p>
-            <p>Para más información, contacte al administrador del sistema</p>
+            <p><strong>Panadería Santa Clara</strong> - Sistema de Gestión</p>
+            <p>Este reporte fue generado automáticamente por el sistema</p>
+            <p style="margin-top: 10px;"><em>Solo se incluyen pedidos con estado "Entregado"</em></p>
           </div>
         </body>
         </html>
@@ -379,7 +395,6 @@ export default function AdminReports() {
     }
   };
 
-  // ⭐ NUEVO: Colores para la gráfica circular
   const coloresGrafica = [
     'from-blue-500 to-blue-600',
     'from-green-500 to-green-600',
@@ -394,7 +409,7 @@ export default function AdminReports() {
       value: `₡${stats.ventasHoy.toFixed(2)}`,
       icon: FaDollarSign,
       color: 'from-green-500 to-emerald-600',
-      trend: `${periodo === 'hoy' ? stats.pedidosPeriodo : '-'} pedidos`,
+      trend: `${periodo === 'hoy' ? stats.pedidosPeriodo : '-'} entregados`,
       active: periodo === 'hoy'
     },
     {
@@ -402,7 +417,7 @@ export default function AdminReports() {
       value: `₡${stats.ventasSemana.toFixed(2)}`,
       icon: FaChartLine,
       color: 'from-blue-500 to-blue-600',
-      trend: `${periodo === 'semana' ? stats.pedidosPeriodo : '-'} pedidos`,
+      trend: `${periodo === 'semana' ? stats.pedidosPeriodo : '-'} entregados`,
       active: periodo === 'semana'
     },
     {
@@ -410,11 +425,11 @@ export default function AdminReports() {
       value: `₡${stats.ventasMes.toFixed(2)}`,
       icon: FaChartBar,
       color: 'from-purple-500 to-purple-600',
-      trend: `${periodo === 'mes' ? stats.pedidosPeriodo : '-'} pedidos`,
+      trend: `${periodo === 'mes' ? stats.pedidosPeriodo : '-'} entregados`,
       active: periodo === 'mes'
     },
     {
-      title: 'Total Pedidos',
+      title: 'Total Pedidos Entregados',
       value: stats.pedidosPeriodo,
       icon: FaShoppingCart,
       color: 'from-orange-500 to-red-600',
@@ -455,7 +470,7 @@ export default function AdminReports() {
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Reportes y Estadísticas</h1>
             <p className="text-gray-600">
-              Análisis {periodo === 'hoy' ? 'diario' : periodo === 'semana' ? 'semanal' : 'mensual'}
+              Análisis {periodo === 'hoy' ? 'diario' : periodo === 'semana' ? 'semanal' : 'mensual'} (Solo entregados)
             </p>
           </div>
         </div>
@@ -475,6 +490,22 @@ export default function AdminReports() {
               {p === 'hoy' ? 'Hoy' : p === 'semana' ? 'Semana' : 'Mes'}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Nota importante */}
+      <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
+        <div className="flex items-start gap-3">
+          <div className="text-amber-600 text-xl">⚠️</div>
+          <div>
+            <p className="text-amber-800 font-semibold">
+              Solo pedidos entregados
+            </p>
+            <p className="text-amber-700 text-sm mt-1">
+              Los reportes muestran únicamente pedidos con estado "Entregado". 
+              Los pedidos en otros estados no se contabilizan como ventas.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -517,7 +548,7 @@ export default function AdminReports() {
         >
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <FaCalendar className="text-green-600" />
-            Ventas por Día
+            Ventas por Día (Entregados)
           </h2>
           <div className="space-y-3 max-h-80 overflow-y-auto">
             {stats.ventasPorDia.length > 0 ? (
@@ -545,7 +576,7 @@ export default function AdminReports() {
           </div>
         </motion.div>
 
-        {/* ⭐ NUEVA: Gráfica Circular de Productos */}
+        {/* Gráfica Circular de Productos */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -558,7 +589,6 @@ export default function AdminReports() {
           </h2>
           {stats.productosPorVentas.length > 0 ? (
             <div className="space-y-4">
-              {/* Gráfica de barras horizontal */}
               {stats.productosPorVentas.map((producto, idx) => (
                 <div key={idx} className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -616,7 +646,7 @@ export default function AdminReports() {
             </span>
           </div>
           <div className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
-            <span className="text-gray-600 font-medium">Pedidos completados</span>
+            <span className="text-gray-600 font-medium">Pedidos entregados</span>
             <span className="text-2xl font-bold text-green-700">
               {stats.pedidosPeriodo}
             </span>
@@ -629,7 +659,7 @@ export default function AdminReports() {
           </div>
         </div>
         
-        <button 
+         <button 
           onClick={exportarPDF}
           className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md transition-all hover:shadow-lg"
         >
