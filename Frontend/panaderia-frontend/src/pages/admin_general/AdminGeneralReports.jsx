@@ -1,15 +1,17 @@
 // Frontend/src/pages/admin_general/AdminGeneralReports.jsx
+// ⭐⭐⭐ CORREGIDO: Solo contar pedidos ENTREGADOS en todos los cálculos
+
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FaChartBar, FaCalendar, FaMoneyBillWave, FaShoppingCart, FaBox, FaDownload, FaSync, FaTrophy } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
-import useSmartRefresh from '../../hooks/useAutoRefresh';
+import useSmartRefresh from '../../hooks/useSmartRefresh';
 
 export default function AdminGeneralReports() {
   const { selectedBranch } = useOutletContext();
-  
+
   const [estadisticas, setEstadisticas] = useState(null);
   const [sucursales, setSucursales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,13 +33,13 @@ export default function AdminGeneralReports() {
   const cargarEstadisticas = useCallback(async () => {
     try {
       if (!loading) setRefreshing(true);
-      
+
       const params = selectedBranch ? { sucursal: selectedBranch } : {};
       const response = await api.get('/reportes/estadisticas/', { params });
-      
-      console.log('📊 Estadísticas cargadas');
+
+      console.log('📊 Estadísticas cargadas (del backend - solo entregados)');
       setEstadisticas(response.data);
-      
+
       if (refreshing) {
         enqueueSnackbar('Datos actualizados', { variant: 'info', autoHideDuration: 2000 });
       }
@@ -76,28 +78,27 @@ export default function AdminGeneralReports() {
     }
 
     try {
-      const totalVentas = periodo === 'dia' ? estadisticas.ventas_hoy : 
-                         periodo === 'semana' ? estadisticas.ventas_semana : 
-                         estadisticas.ventas_mes;
-      
-      const pedidosTotal = periodo === 'dia' ? estadisticas.pedidos_hoy : 
-                          periodo === 'semana' ? estadisticas.pedidos_semana : 
-                          estadisticas.pedidos_mes;
+      const totalVentas = periodo === 'dia' ? estadisticas.ventas_hoy :
+        periodo === 'semana' ? estadisticas.ventas_semana :
+          estadisticas.ventas_mes;
 
-      const nombrePeriodo = periodo === 'dia' ? 'Diario' : 
-                           periodo === 'semana' ? 'Semanal' : 
-                           'Mensual';
+      const pedidosTotal = periodo === 'dia' ? estadisticas.pedidos_hoy :
+        periodo === 'semana' ? estadisticas.pedidos_semana :
+          estadisticas.pedidos_mes;
 
-      // ⭐ Obtener nombre real de la sucursal
+      const nombrePeriodo = periodo === 'dia' ? 'Diario' :
+        periodo === 'semana' ? 'Semanal' :
+          'Mensual';
+
       let sucursalNombre = 'Todas las Sucursales';
-      
+
       if (selectedBranch && sucursales.length > 0) {
         const sucursalEncontrada = sucursales.find(s => s.id === selectedBranch);
         if (sucursalEncontrada) {
           sucursalNombre = sucursalEncontrada.nombre;
         }
       }
-      
+
       const contenidoHTML = `
         <!DOCTYPE html>
         <html>
@@ -145,6 +146,16 @@ export default function AdminGeneralReports() {
               font-size: 14px;
               margin: 10px 0;
               box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+            }
+            .important-note {
+              background: #fff3cd;
+              border-left: 4px solid #ffc107;
+              padding: 15px;
+              margin: 20px 0;
+              border-radius: 5px;
+            }
+            .important-note strong {
+              color: #856404;
             }
             .stats-grid {
               display: grid;
@@ -264,22 +275,27 @@ export default function AdminGeneralReports() {
               </p>
               <span class="badge">${sucursalNombre}</span>
               <p style="font-size: 12px; color: #999; margin-top: 10px;">
-                Generado el ${new Date().toLocaleDateString('es-ES', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
+                Generado el ${new Date().toLocaleDateString('es-ES', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })}
               </p>
+            </div>
+
+            <div class="important-note">
+              <strong>⚠️ IMPORTANTE:</strong> Este reporte incluye únicamente pedidos con estado <strong>"Entregado"</strong>. 
+              Los pedidos en otros estados (Recibido, En preparación, Listo, Cancelado) no se contabilizan como ventas.
             </div>
 
             <div class="stats-grid">
               <div class="stat-card">
-                <h3>Ventas del Período</h3>
+                <h3>Ventas del Período (Entregados)</h3>
                 <div class="value">₡${totalVentas.toLocaleString('es-CR', { maximumFractionDigits: 0 })}</div>
               </div>
               <div class="stat-card">
-                <h3>Pedidos</h3>
+                <h3>Pedidos Entregados</h3>
                 <div class="value">${pedidosTotal}</div>
               </div>
               <div class="stat-card">
@@ -294,18 +310,18 @@ export default function AdminGeneralReports() {
 
             ${estadisticas.ventas_por_dia && estadisticas.ventas_por_dia.length > 0 ? `
               <div class="section">
-                <h2>📊 Ventas por Día (Últimos 7 días)</h2>
+                <h2>📊 Ventas por Día (Últimos 7 días - Solo Entregados)</h2>
                 ${estadisticas.ventas_por_dia.map(dia => {
-                  const maxVenta = Math.max(...estadisticas.ventas_por_dia.map(d => d.total));
-                  const porcentaje = maxVenta > 0 ? (dia.total / maxVenta * 100) : 0;
-                  return `
+        const maxVenta = Math.max(...estadisticas.ventas_por_dia.map(d => d.total));
+        const porcentaje = maxVenta > 0 ? (dia.total / maxVenta * 100) : 0;
+        return `
                     <div class="chart-bar">
                       <span style="min-width: 100px; font-weight: bold; color: #5D4037;">
-                        ${new Date(dia.fecha + 'T00:00:00').toLocaleDateString('es-ES', { 
-                          weekday: 'short', 
-                          day: 'numeric', 
-                          month: 'short' 
-                        })}
+                        ${new Date(dia.fecha + 'T00:00:00').toLocaleDateString('es-ES', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short'
+        })}
                       </span>
                       <div class="bar-container">
                         <div class="bar-fill" style="width: ${porcentaje}%">
@@ -317,13 +333,13 @@ export default function AdminGeneralReports() {
                       </span>
                     </div>
                   `;
-                }).join('')}
+      }).join('')}
               </div>
             ` : ''}
 
             ${estadisticas.top_productos && estadisticas.top_productos.length > 0 ? `
               <div class="section">
-                <h2>🏆 Top 5 Productos Más Vendidos</h2>
+                <h2>🏆 Top 5 Productos Más Vendidos (Pedidos Entregados)</h2>
                 <table>
                   <thead>
                     <tr>
@@ -335,8 +351,8 @@ export default function AdminGeneralReports() {
                   </thead>
                   <tbody>
                     ${estadisticas.top_productos.slice(0, 5).map((producto, idx) => {
-                      const medalla = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅';
-                      return `
+        const medalla = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅';
+        return `
                         <tr>
                           <td>${medalla}</td>
                           <td><strong>${producto.nombre}</strong></td>
@@ -344,7 +360,7 @@ export default function AdminGeneralReports() {
                           <td style="color: #5D4037; font-weight: bold;">₡${producto.total_ingresos.toLocaleString('es-CR', { maximumFractionDigits: 0 })}</td>
                         </tr>
                       `;
-                    }).join('')}
+      }).join('')}
                   </tbody>
                 </table>
               </div>
@@ -370,7 +386,7 @@ export default function AdminGeneralReports() {
             ` : ''}
 
             <div class="section">
-              <h2>📋 Resumen General</h2>
+              <h2>📋 Resumen General (Solo Entregados)</h2>
               <table>
                 <thead>
                   <tr>
@@ -405,13 +421,13 @@ export default function AdminGeneralReports() {
               <p style="margin-top: 10px; color: #f59e0b; font-weight: bold;">
                 Para guardar como PDF: Archivo → Imprimir → Guardar como PDF
               </p>
+              <p style="margin-top: 10px;"><em>Solo se incluyen pedidos con estado "Entregado"</em></p>
             </div>
           </div>
         </body>
         </html>
       `;
 
-      // Crear blob y descargar HTML
       const blob = new Blob([contenidoHTML], { type: 'text/html' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -422,18 +438,17 @@ export default function AdminGeneralReports() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
-      // Abrir en nueva ventana para imprimir
       const ventana = window.open('', '_blank');
       ventana.document.write(contenidoHTML);
       ventana.document.close();
-      
+
       setTimeout(() => {
         ventana.print();
       }, 500);
 
-      enqueueSnackbar('Reporte generado. Usa Ctrl+P para guardar como PDF', { 
+      enqueueSnackbar('Reporte generado. Usa Ctrl+P para guardar como PDF', {
         variant: 'success',
-        autoHideDuration: 5000 
+        autoHideDuration: 5000
       });
     } catch (error) {
       console.error('Error exportando reporte:', error);
@@ -497,9 +512,7 @@ export default function AdminGeneralReports() {
         <p className="text-gray-500">No hay datos disponibles</p>
       </div>
     );
-  }
-
-  return (
+  } return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -509,16 +522,15 @@ export default function AdminGeneralReports() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[#5D4037]">Reportes y Estadísticas</h1>
-            <p className="text-[#8D6E63]">Análisis de ventas y rendimiento</p>
+            <p className="text-[#8D6E63]">Análisis de ventas y rendimiento (Solo entregados)</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={cargarEstadisticas}
             disabled={refreshing}
-            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-blue-500 transition-all ${
-              refreshing ? 'animate-spin' : ''
-            }`}
+            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-blue-500 transition-all ${refreshing ? 'animate-spin' : ''
+              }`}
             title="Actualizar datos"
           >
             <FaSync className="text-gray-600" />
@@ -533,6 +545,22 @@ export default function AdminGeneralReports() {
         </div>
       </div>
 
+      {/* Nota importante */}
+      <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
+        <div className="flex items-start gap-3">
+          <div className="text-amber-600 text-xl">⚠️</div>
+          <div>
+            <p className="text-amber-800 font-semibold">
+              Solo pedidos entregados
+            </p>
+            <p className="text-amber-700 text-sm mt-1">
+              Los reportes muestran únicamente pedidos con estado "Entregado".
+              Los pedidos en otros estados no se contabilizan como ventas.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Selector de Período */}
       <div className="bg-white rounded-xl shadow p-4">
         <div className="flex items-center gap-3">
@@ -543,11 +571,10 @@ export default function AdminGeneralReports() {
               <button
                 key={p}
                 onClick={() => setPeriodo(p)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  periodo === p
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${periodo === p
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 {p === 'dia' ? 'Hoy' : p === 'semana' ? 'Esta Semana' : 'Este Mes'}
               </button>
@@ -571,7 +598,7 @@ export default function AdminGeneralReports() {
               {getPeriodoLabel()}
             </span>
           </div>
-          <p className="text-sm opacity-90 mb-1">Ventas</p>
+          <p className="text-sm opacity-90 mb-1">Ventas (Entregados)</p>
           <p className="text-3xl font-bold">
             ₡{getVentasPorPeriodo().toLocaleString('es-CR')}
           </p>
@@ -590,7 +617,7 @@ export default function AdminGeneralReports() {
               {getPeriodoLabel()}
             </span>
           </div>
-          <p className="text-sm opacity-90 mb-1">Pedidos</p>
+          <p className="text-sm opacity-90 mb-1">Pedidos Entregados</p>
           <p className="text-3xl font-bold">{getPedidosPorPeriodo()}</p>
         </motion.div>
 
@@ -630,21 +657,21 @@ export default function AdminGeneralReports() {
           <div className="bg-white rounded-xl shadow-lg p-6">
             <h3 className="text-xl font-bold text-[#5D4037] mb-4 flex items-center gap-2">
               <FaChartBar className="text-blue-600" />
-              Ventas por Día (Últimos 7 días)
+              Ventas por Día (Últimos 7 días - Entregados)
             </h3>
             <div className="space-y-3">
               {estadisticas.ventas_por_dia.map((dia, index) => {
                 const maxVenta = Math.max(...estadisticas.ventas_por_dia.map(d => d.total));
                 const porcentaje = maxVenta > 0 ? (dia.total / maxVenta) * 100 : 0;
-                
+
                 return (
                   <div key={index} className="space-y-1">
                     <div className="flex items-center justify-between text-sm">
                       <span className="font-medium text-gray-700">
-                        {new Date(dia.fecha + 'T00:00:00').toLocaleDateString('es-ES', { 
-                          weekday: 'short', 
-                          day: 'numeric', 
-                          month: 'short' 
+                        {new Date(dia.fecha + 'T00:00:00').toLocaleDateString('es-ES', {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short'
                         })}
                       </span>
                       <span className="font-bold text-[#5D4037]">
@@ -671,20 +698,19 @@ export default function AdminGeneralReports() {
           <div className="bg-white rounded-xl shadow-lg p-6">
             <h3 className="text-xl font-bold text-[#5D4037] mb-4 flex items-center gap-2">
               <FaTrophy className="text-amber-500" />
-              Top 5 Productos Más Vendidos
+              Top 5 Productos Más Vendidos (Entregados)
             </h3>
             <div className="space-y-3">
               {estadisticas.top_productos.slice(0, 5).map((producto, index) => (
-                <div 
+                <div
                   key={index}
                   className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200"
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
-                    index === 0 ? 'bg-amber-500' :
-                    index === 1 ? 'bg-gray-400' :
-                    index === 2 ? 'bg-orange-600' :
-                    'bg-blue-500'
-                  }`}>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${index === 0 ? 'bg-amber-500' :
+                      index === 1 ? 'bg-gray-400' :
+                        index === 2 ? 'bg-orange-600' :
+                          'bg-blue-500'
+                    }`}>
                     {index + 1}
                   </div>
                   <div className="flex-1">
@@ -733,7 +759,7 @@ export default function AdminGeneralReports() {
 
       {/* Resumen General */}
       <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-xl font-bold text-[#5D4037] mb-4">Resumen General</h3>
+        <h3 className="text-xl font-bold text-[#5D4037] mb-4">Resumen General (Solo Entregados)</h3>
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
@@ -778,7 +804,7 @@ export default function AdminGeneralReports() {
         <ul className="list-disc list-inside space-y-1 text-blue-700">
           <li>Los datos se actualizan automáticamente cada minuto</li>
           <li>Puedes exportar reportes y guardarlos como PDF usando Ctrl+P</li>
-          <li>Los reportes muestran solo pedidos entregados</li>
+          <li><strong>Los reportes muestran solo pedidos entregados</strong></li>
           {selectedBranch && <li className="font-semibold">Filtrando por sucursal seleccionada</li>}
         </ul>
       </div>
