@@ -5,7 +5,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaHome, FaBox, FaTag, FaShoppingCart, FaChartBar,
-  FaSignOutAlt, FaBars, FaTimes, FaStore
+  FaSignOutAlt, FaBars, FaTimes, FaStore, FaUser
 } from 'react-icons/fa';
 
 export default function AdminLayout() {
