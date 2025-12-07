@@ -1,11 +1,10 @@
-
-// Frontend/src/pages/admin/AdminGeneralOffers.jsx
-// ⭐ MEJORADO: UI clara para cambio de sucursal en ofertas
+// Frontend/src/pages/admin_general/AdminGeneralOffers.jsx
+// ⭐⭐⭐ CORREGIDO: Recargar productos cuando cambia la sucursal en el modal
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus, FaInfoCircle } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaTag, FaSave, FaTimes, FaEnvelope, FaExclamationTriangle, FaCheck, FaSync, FaMinus, FaInfoCircle, FaStore } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
@@ -23,7 +22,8 @@ export default function AdminGeneralOffers() {
   const [offerToDelete, setOfferToDelete] = useState(null);
   const [editingOffer, setEditingOffer] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [sucursalCambiada, setSucursalCambiada] = useState(false); // ⭐ NUEVO
+  const [sucursalCambiada, setSucursalCambiada] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false); // ⭐ NUEVO
 
   const [formData, setFormData] = useState({
     titulo: '',
@@ -72,6 +72,34 @@ export default function AdminGeneralOffers() {
     }
   }, [loading, refreshing, selectedBranch, enqueueSnackbar]);
 
+  // ⭐⭐⭐ NUEVA FUNCIÓN: Cargar productos por sucursal específica
+  const cargarProductosPorSucursal = useCallback(async (sucursalId) => {
+    if (!sucursalId) {
+      setProducts([]);
+      return;
+    }
+
+    try {
+      setLoadingProducts(true);
+      console.log(`🔄 Cargando productos de sucursal ${sucursalId}...`);
+      
+      const response = await api.get('/productos/', {
+        params: { sucursal: sucursalId }
+      });
+      
+      const productosData = response.data.results || response.data;
+      setProducts(productosData);
+      
+      console.log(`✅ Productos cargados: ${productosData.length}`);
+    } catch (error) {
+      console.error('❌ Error cargando productos:', error);
+      enqueueSnackbar('Error al cargar productos de la sucursal', { variant: 'error' });
+      setProducts([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  }, [enqueueSnackbar]);
+
   useEffect(() => {
     if (!loading) {
       fetchData();
@@ -98,7 +126,7 @@ export default function AdminGeneralOffers() {
   };
 
   const handleOpenModal = (offer = null) => {
-    setSucursalCambiada(false); // Reset
+    setSucursalCambiada(false);
 
     if (offer) {
       setEditingOffer(offer);
@@ -127,6 +155,11 @@ export default function AdminGeneralOffers() {
         fecha_fin: formatDateForInput(offer.fecha_fin),
         sucursal: sucursalParaEditar
       });
+
+      // ⭐ Cargar productos de la sucursal de la oferta al editar
+      if (sucursalParaEditar) {
+        cargarProductosPorSucursal(sucursalParaEditar);
+      }
     } else {
       setEditingOffer(null);
 
@@ -146,21 +179,35 @@ export default function AdminGeneralOffers() {
         fecha_fin: '',
         sucursal: sucursalDefault
       });
+
+      // ⭐ Cargar productos de la sucursal por defecto al crear
+      if (sucursalDefault) {
+        cargarProductosPorSucursal(sucursalDefault);
+      } else {
+        setProducts([]);
+      }
     }
     setShowModal(true);
   };
 
-  // ⭐ NUEVA FUNCIÓN: Detectar cambio de sucursal
-  const handleSucursalChange = (newSucursalId) => {
+  // ⭐⭐⭐ FUNCIÓN MEJORADA: Detectar cambio de sucursal Y recargar productos
+  const handleSucursalChange = async (newSucursalId) => {
     const changed = editingOffer && editingOffer.sucursal !== parseInt(newSucursalId);
     setSucursalCambiada(changed);
 
     setFormData(prev => ({
       ...prev,
       sucursal: newSucursalId,
-      // ⭐ Si cambió la sucursal, limpiar productos para evitar conflictos
+      // Si cambió la sucursal, limpiar productos seleccionados
       productos_data: changed ? [] : prev.productos_data
     }));
+
+    // ⭐⭐⭐ CRÍTICO: Recargar productos de la nueva sucursal
+    if (newSucursalId) {
+      await cargarProductosPorSucursal(newSucursalId);
+    } else {
+      setProducts([]);
+    }
   };
 
   const handleCloseModal = () => {
@@ -277,76 +324,36 @@ export default function AdminGeneralOffers() {
       const errorMsg = error.response?.data?.error
         || error.response?.data?.sucursal?.[0]
         || error.response?.data?.productos_data?.[0]
-        || 'Error al guardar oferta';
+        || 'Error al guardar la oferta';
 
-      enqueueSnackbar(errorMsg, { variant: 'error', autoHideDuration: 6000 });
+      enqueueSnackbar(errorMsg, { variant: 'error' });
     }
   };
 
-  const handleOpenDeleteModal = (offer) => {
+  const handleDeleteClick = (offer) => {
     setOfferToDelete(offer);
     setShowDeleteModal(true);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleDeleteConfirm = async () => {
     if (!offerToDelete) return;
 
     try {
       await api.delete(`/ofertas/${offerToDelete.id}/`);
-      enqueueSnackbar('Oferta eliminada exitosamente', { variant: 'success' });
+      enqueueSnackbar('Oferta eliminada', { variant: 'success' });
       await fetchData();
       setShowDeleteModal(false);
       setOfferToDelete(null);
     } catch (error) {
       console.error('Error eliminando oferta:', error);
-      enqueueSnackbar('Error al eliminar oferta', { variant: 'error' });
+      enqueueSnackbar('Error al eliminar la oferta', { variant: 'error' });
     }
-  };
-
-  const getEstadoOferta = (oferta) => {
-    const hoy = new Date().toISOString().split('T')[0];
-    const offerProducts = getOfferProducts(oferta);
-    const tieneAgotados = offerProducts.some(p => p.stock === 0);
-
-    if (tieneAgotados) {
-      return {
-        text: 'Productos Agotados',
-        bg: 'bg-red-100',
-        textColor: 'text-red-700',
-        icon: <FaExclamationTriangle />
-      };
-    }
-
-    if (oferta.fecha_inicio > hoy) {
-      return { text: 'Próxima', bg: 'bg-blue-100', textColor: 'text-blue-700' };
-    } else if (oferta.fecha_fin < hoy) {
-      return { text: 'Expirada', bg: 'bg-gray-100', textColor: 'text-gray-700' };
-    } else {
-      return { text: 'Activa', bg: 'bg-green-100', textColor: 'text-green-700' };
-    }
-  };
-
-  const getOfferProducts = (offer) => {
-    if (offer.productos_con_cantidad && Array.isArray(offer.productos_con_cantidad)) {
-      return offer.productos_con_cantidad.map(pc => ({
-        ...pc.producto,
-        cantidad_oferta: pc.cantidad
-      }));
-    } else if (offer.productos_data && Array.isArray(offer.productos_data)) {
-      return offer.productos_data
-        .map(pd => {
-          const producto = products.find(p => p.id === pd.producto_id);
-          return producto ? { ...producto, cantidad_oferta: pd.cantidad } : null;
-        })
-        .filter(Boolean);
-    }
-    return [];
   };
 
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-700"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-700"></div>
       </div>
     );
   }
@@ -361,23 +368,14 @@ export default function AdminGeneralOffers() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-[#5D4037]">Gestión de Ofertas</h1>
-            <p className="text-[#8D6E63]">
-              {offers.length} ofertas registradas
-              {/* ⭐ Mostrar filtro activo */}
-              {selectedBranch && sucursales.length > 0 && (
-                <span className="ml-2 text-purple-600 font-semibold">
-                  • {sucursales.find(s => s.id === selectedBranch)?.nombre || 'Filtrado'}
-                </span>
-              )}
-            </p>
+            <p className="text-[#8D6E63]">Crea y administra ofertas especiales</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={fetchData}
             disabled={refreshing}
-            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-amber-500 transition-all ${refreshing ? 'animate-spin' : ''
-              }`}
+            className={`p-3 rounded-xl border-2 border-gray-300 hover:border-orange-500 transition-all ${refreshing ? 'animate-spin' : ''}`}
             title="Actualizar datos"
           >
             <FaSync className="text-gray-600" />
@@ -392,179 +390,9 @@ export default function AdminGeneralOffers() {
         </div>
       </div>
 
-      {/* Offers Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <AnimatePresence>
-          {offers.map((offer, index) => {
-            const estado = getEstadoOferta(offer);
-            const offerProducts = getOfferProducts(offer);
-            const firstProduct = offerProducts[0];
-            const productosAgotados = offerProducts.filter(p => p.stock === 0);
-            const tieneAgotados = productosAgotados.length > 0;
-
-            return (
-              <motion.div
-                key={offer.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ delay: index * 0.05 }}
-                className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 transition-all ${tieneAgotados
-                  ? 'border-red-300 bg-red-50'
-                  : 'border-orange-100 hover:border-orange-300'
-                  }`}
-              >
-                {/* Image */}
-                <div className={`relative h-48 bg-gradient-to-br from-orange-100 to-red-100 ${tieneAgotados ? 'opacity-60' : ''
-                  }`}>
-                  {firstProduct?.imagen ? (
-                    <img
-                      src={firstProduct.imagen}
-                      alt={offer.titulo}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <FaTag className="text-6xl text-orange-300" />
-                    </div>
-                  )}
-
-                  <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1`}>
-                    {estado.icon}
-                    <span>{estado.text}</span>
-                  </div>
-
-                  {offerProducts.length > 1 && (
-                    <div className="absolute top-3 left-3 bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
-                      {offerProducts.length} productos
-                    </div>
-                  )}
-                </div>
-
-                {/* Content */}
-                <div className="p-5">
-                  {tieneAgotados && (
-                    <div className="mb-3 bg-red-100 border border-red-300 rounded-lg p-3 flex items-start gap-2">
-                      <FaExclamationTriangle className="text-red-600 flex-shrink-0 mt-0.5" />
-                      <div className="text-sm text-red-800">
-                        <p className="font-semibold">Productos agotados en esta oferta:</p>
-                        <ul className="mt-1 space-y-1">
-                          {productosAgotados.map((p, idx) => (
-                            <li key={idx}>• {p.nombre}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  )}
-
-                  <h3 className="text-xl font-bold text-[#5D4037] mb-2">
-                    {offer.titulo}
-                  </h3>
-                  <p className="text-sm text-[#8D6E63] mb-3 line-clamp-2">
-                    {offer.descripcion}
-                  </p>
-
-                  {/* ⭐ Mostrar sucursal */}
-                  {offer.sucursal_nombre && (
-                    <div className="mb-3 flex items-center gap-2 text-sm text-purple-600">
-                      <span className="font-semibold">📍 {offer.sucursal_nombre}</span>
-                    </div>
-                  )}
-
-                  {/* Products Info con CANTIDADES */}
-                  <div className="bg-amber-50 rounded-lg p-3 mb-3">
-                    <p className="text-xs text-[#8D6E63] mb-2">
-                      {offerProducts.length > 1 ? 'Productos incluidos' : 'Producto'}
-                    </p>
-
-                    {offerProducts.length > 0 ? (
-                      <div className="space-y-2">
-                        {offerProducts.map((producto, idx) => {
-                          const agotado = producto.stock === 0;
-                          const stockBajo = producto.stock > 0 && producto.stock <= 5;
-                          const cantidad = producto.cantidad_oferta || 1;
-
-                          return (
-                            <div key={idx} className={`flex justify-between items-center ${agotado ? 'opacity-60' : ''
-                              }`}>
-                              <div className="flex items-center gap-2">
-                                {cantidad > 1 && (
-                                  <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
-                                    {cantidad}x
-                                  </span>
-                                )}
-                                <p className="font-semibold text-[#5D4037] text-sm">
-                                  {producto.nombre}
-                                </p>
-                                {agotado && (
-                                  <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">
-                                    AGOTADO
-                                  </span>
-                                )}
-                                {stockBajo && !agotado && (
-                                  <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">
-                                    Stock: {producto.stock}
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-sm text-gray-600">
-                                ₡{producto.precio}
-                              </p>
-                            </div>
-                          );
-                        })}
-                        <div className="pt-2 mt-2 border-t border-amber-200">
-                          <div className="flex justify-between items-center">
-                            <p className="text-sm font-semibold text-amber-800">
-                              Precio Oferta:
-                            </p>
-                            <p className="text-lg font-bold text-amber-700">
-                              ₡{offer.precio_oferta}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 italic">Sin productos</p>
-                    )}
-                  </div>
-
-                  {/* Dates */}
-                  <div className="text-sm text-[#8D6E63] mb-4 space-y-1">
-                    <p>Inicio: {new Date(offer.fecha_inicio + 'T00:00:00').toLocaleDateString('es-ES')}</p>
-                    <p>Fin: {new Date(offer.fecha_fin + 'T00:00:00').toLocaleDateString('es-ES')}</p>
-                    {offer.dias_restantes > 0 && !tieneAgotados && (
-                      <p className="font-semibold text-orange-600">
-                        {offer.dias_restantes} días restantes
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleOpenModal(offer)}
-                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-                    >
-                      <FaEdit />
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleOpenDeleteModal(offer)}
-                      className="flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg transition-colors"
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </AnimatePresence>
-      </div>
-
-      {offers.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
+      {/* Lista de Ofertas */}
+      {offers.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl shadow">
           <FaTag className="text-6xl text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">
             {selectedBranch
@@ -573,9 +401,69 @@ export default function AdminGeneralOffers() {
             }
           </p>
         </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {offers.map(offer => (
+            <motion.div
+              key={offer.id}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white rounded-xl shadow-lg overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-3">
+                  <h3 className="text-xl font-bold text-[#5D4037]">{offer.titulo}</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleOpenModal(offer)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Editar"
+                    >
+                      <FaEdit />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(offer)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar"
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-gray-600 text-sm mb-4">{offer.descripcion}</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Precio:</span>
+                    <span className="text-lg font-bold text-green-600">
+                      ₡{offer.precio_oferta?.toLocaleString('es-CR')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Desde:</span>
+                    <span className="text-gray-800">
+                      {new Date(offer.fecha_inicio + 'T00:00:00').toLocaleDateString('es-ES')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Hasta:</span>
+                    <span className="text-gray-800">
+                      {new Date(offer.fecha_fin + 'T00:00:00').toLocaleDateString('es-ES')}
+                    </span>
+                  </div>
+                  {offer.sucursal_nombre && (
+                    <div className="flex items-center gap-2 pt-2 border-t">
+                      <FaStore className="text-purple-600" />
+                      <span className="text-sm text-gray-600">{offer.sucursal_nombre}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       )}
 
-      {/* Modal Crear/Editar - SECCIÓN MODIFICADA */}
+      {/* Modal Crear/Editar */}
       <AnimatePresence>
         {showModal && (
           <motion.div
@@ -606,7 +494,7 @@ export default function AdminGeneralOffers() {
                 </div>
 
                 <div className="space-y-6">
-                  {/* ⭐ Selector de Sucursal MEJORADO */}
+                  {/* Selector de Sucursal */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
                       Sucursal *
@@ -614,6 +502,7 @@ export default function AdminGeneralOffers() {
 
                     {currentUser?.rol === 'administrador' ? (
                       <div className="w-full px-4 py-3 border-2 border-purple-300 bg-purple-50 rounded-lg text-gray-700 font-semibold flex items-center gap-2">
+                        <FaStore className="text-purple-600" />
                         <span>{currentUser?.sucursal_nombre || 'Sin asignar'}</span>
                         <span className="ml-auto text-xs bg-purple-600 text-white px-3 py-1 rounded-full">
                           Tu sucursal
@@ -641,7 +530,16 @@ export default function AdminGeneralOffers() {
                       </>
                     )}
 
-
+                    {/* ⭐ Advertencia cuando se cambia sucursal */}
+                    {sucursalCambiada && (
+                      <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+                        <FaExclamationTriangle className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-yellow-800">
+                          <p className="font-semibold">Sucursal cambiada</p>
+                          <p>Los productos seleccionados se han limpiado. Selecciona productos de la nueva sucursal.</p>
+                        </div>
+                      </div>
+                    )}
 
                     {currentUser?.rol === 'administrador' && (
                       <p className="text-xs text-purple-600 mt-1 font-semibold">
@@ -678,21 +576,35 @@ export default function AdminGeneralOffers() {
                     />
                   </div>
 
-                  {/* Selección de Productos CON CANTIDADES */}
+                  {/* Selección de Productos */}
                   <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-3">
                       Productos Incluidos en la Oferta *
                       <span className="text-xs text-gray-500 ml-2">(Selecciona y ajusta cantidades)</span>
                     </label>
-                    {products.length === 0 ? (
+
+                    {/* ⭐ Mostrar estado de carga */}
+                    {loadingProducts ? (
+                      <div className="flex justify-center items-center p-8 border-2 border-gray-200 rounded-lg bg-gray-50">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto mb-2"></div>
+                          <p className="text-sm text-gray-600">Cargando productos...</p>
+                        </div>
+                      </div>
+                    ) : !formData.sucursal ? (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                        <FaInfoCircle className="text-blue-600 text-2xl mx-auto mb-2" />
+                        <p className="text-blue-800">
+                          Selecciona una sucursal primero para ver los productos disponibles
+                        </p>
+                      </div>
+                    ) : products.length === 0 ? (
                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
                         <p className="text-yellow-800">
                           ⚠️ No hay productos disponibles en esta sucursal.
-                          {currentUser?.rol === 'administrador_general' && (
-                            <span className="block mt-2 text-sm">
-                              Selecciona otra sucursal o crea productos primero.
-                            </span>
-                          )}
+                          <span className="block mt-2 text-sm">
+                            Crea productos primero o selecciona otra sucursal.
+                          </span>
                         </p>
                       </div>
                     ) : (
@@ -707,86 +619,78 @@ export default function AdminGeneralOffers() {
                           return (
                             <div
                               key={product.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${agotado
-                                ? 'border-red-200 bg-red-50 opacity-50'
-                                : isSelected
+                              className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
+                                agotado
+                                  ? 'border-red-200 bg-red-50 opacity-50'
+                                  : isSelected
                                   ? 'border-orange-500 bg-orange-50 shadow-md'
                                   : 'border-gray-200 bg-white hover:border-orange-300'
-                                }`}
+                              }`}
                             >
                               {/* Checkbox */}
                               <button
                                 type="button"
                                 onClick={() => !agotado && toggleProductSelection(product.id)}
                                 disabled={agotado}
-                                className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${agotado
-                                  ? 'border-red-300 bg-red-100 cursor-not-allowed'
-                                  : isSelected
-                                    ? 'bg-orange-500 border-orange-500 cursor-pointer'
-                                    : 'border-gray-300 cursor-pointer hover:border-orange-400'
-                                  }`}
+                                className={`w-6 h-6 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
+                                  agotado
+                                    ? 'border-red-300 bg-red-100 cursor-not-allowed'
+                                    : isSelected
+                                    ? 'bg-orange-600 border-orange-600'
+                                    : 'border-gray-300 hover:border-orange-500'
+                                }`}
                               >
-                                {isSelected && !agotado && <FaCheck className="text-white text-xs" />}
-                                {agotado && <FaTimes className="text-red-600 text-xs" />}
+                                {isSelected && <FaCheck className="text-white text-xs" />}
                               </button>
 
                               {/* Info del Producto */}
                               <div className="flex-1 min-w-0">
-                                <p className={`font-semibold text-sm truncate ${agotado
-                                  ? 'text-red-600'
-                                  : isSelected
-                                    ? 'text-orange-900'
-                                    : 'text-gray-800'
-                                  }`}>
+                                <p className={`font-semibold text-sm truncate ${
+                                  agotado ? 'text-red-700' : 'text-gray-800'
+                                }`}>
                                   {product.nombre}
                                 </p>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <p className="text-xs text-gray-500">
-                                    ₡{product.precio}
-                                  </p>
-                                  {agotado ? (
-                                    <span className="text-xs text-red-600 font-semibold">
-                                      AGOTADO
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-gray-600">
+                                    Stock: {product.stock}
+                                  </span>
+                                  {stockBajo && !agotado && (
+                                    <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                                      Bajo
                                     </span>
-                                  ) : stockBajo ? (
-                                    <span className="text-xs text-orange-600 font-semibold">
-                                      Stock: {product.stock}
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs text-green-600">
-                                      Stock: {product.stock}
+                                  )}
+                                  {agotado && (
+                                    <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                                      Agotado
                                     </span>
                                   )}
                                 </div>
                               </div>
 
-                              {/* Selector de Cantidad */}
+                              {/* Control de Cantidad */}
                               {isSelected && !agotado && (
-                                <div className="flex items-center gap-2 bg-white rounded-lg border border-orange-300 px-2 py-1">
+                                <div className="flex items-center gap-1">
                                   <button
                                     type="button"
                                     onClick={() => updateProductQuantity(product.id, cantidad - 1)}
                                     disabled={cantidad <= 1}
-                                    className={`w-6 h-6 flex items-center justify-center rounded ${cantidad <= 1
-                                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                      : 'bg-orange-100 text-orange-600 hover:bg-orange-200'
-                                      }`}
+                                    className="w-6 h-6 rounded bg-orange-100 hover:bg-orange-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                                   >
-                                    <FaMinus className="text-xs" />
+                                    <FaMinus className="text-orange-600 text-xs" />
                                   </button>
                                   <input
                                     type="number"
                                     min="1"
                                     value={cantidad}
                                     onChange={(e) => updateProductQuantity(product.id, e.target.value)}
-                                    className="w-12 text-center font-bold text-orange-700 bg-transparent focus:outline-none"
+                                    className="w-12 text-center border border-gray-300 rounded py-1 text-sm"
                                   />
                                   <button
                                     type="button"
                                     onClick={() => updateProductQuantity(product.id, cantidad + 1)}
-                                    className="w-6 h-6 flex items-center justify-center rounded bg-orange-100 text-orange-600 hover:bg-orange-200"
+                                    className="w-6 h-6 rounded bg-orange-100 hover:bg-orange-200 flex items-center justify-center"
                                   >
-                                    <FaPlus className="text-xs" />
+                                    <FaPlus className="text-orange-600 text-xs" />
                                   </button>
                                 </div>
                               )}
@@ -795,41 +699,28 @@ export default function AdminGeneralOffers() {
                         })}
                       </div>
                     )}
-                    <div className="mt-2 flex items-center justify-between text-sm">
-                      <p className="text-gray-600">
-                        ✓ {formData.productos_data.length} producto(s) seleccionado(s)
-                      </p>
-                      {formData.productos_data.length > 0 && (
-                        <p className="text-purple-600 font-semibold">
-                          Total items: {formData.productos_data.reduce((sum, p) => sum + p.cantidad, 0)}
-                        </p>
-                      )}
-                    </div>
                   </div>
 
-                  {/* Precio de la Oferta */}
-                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                  {/* Precio de Oferta */}
+                  <div>
                     <label className="block text-sm font-medium text-[#5D4037] mb-2">
-                      Precio de la Oferta Completa (₡) *
+                      Precio de la Oferta (₡) *
                     </label>
                     <input
                       type="number"
                       step="0.01"
                       value={formData.precio_oferta}
                       onChange={(e) => setFormData({ ...formData, precio_oferta: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-amber-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-lg font-semibold"
-                      placeholder="0.00"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      placeholder="5000.00"
                     />
-                    <p className="text-xs text-amber-700 mt-2">
-                      💡 Este será el precio total de la oferta que incluye todos los productos seleccionados con sus cantidades
-                    </p>
                   </div>
 
                   {/* Fechas */}
                   <div className="grid md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-[#5D4037] mb-2">
-                        Fecha de Inicio *
+                        Fecha Inicio *
                       </label>
                       <input
                         type="date"
@@ -840,7 +731,7 @@ export default function AdminGeneralOffers() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-[#5D4037] mb-2">
-                        Fecha de Fin *
+                        Fecha Fin *
                       </label>
                       <input
                         type="date"
@@ -851,31 +742,20 @@ export default function AdminGeneralOffers() {
                     </div>
                   </div>
 
-                  {/* Info Box */}
-                  {!editingOffer && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-                      <FaEnvelope className="text-blue-600 text-xl flex-shrink-0 mt-1" />
-                      <div className="text-sm text-blue-800">
-                        <p className="font-semibold mb-1">Notificación Automática</p>
-                        <p>Al crear la oferta, se enviará un correo automático a todos los usuarios registrados.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Buttons */}
+                  {/* Botones */}
                   <div className="flex gap-3 pt-4">
                     <button
-                      onClick={handleSubmit}
-                      className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg transition-all"
-                    >
-                      <FaSave />
-                      {editingOffer ? 'Guardar Cambios' : 'Crear Oferta'}
-                    </button>
-                    <button
                       onClick={handleCloseModal}
-                      className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                      className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
                     >
                       Cancelar
+                    </button>
+                    <button
+                      onClick={handleSubmit}
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-xl font-semibold shadow-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <FaSave />
+                      {editingOffer ? 'Actualizar' : 'Crear'} Oferta
                     </button>
                   </div>
                 </div>
@@ -885,7 +765,7 @@ export default function AdminGeneralOffers() {
         )}
       </AnimatePresence>
 
-      {/* Modal de Confirmación de Eliminación */}
+      {/* Modal Eliminar */}
       <AnimatePresence>
         {showDeleteModal && (
           <motion.div
@@ -896,33 +776,30 @@ export default function AdminGeneralOffers() {
             onClick={() => setShowDeleteModal(false)}
           >
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
               className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FaExclamationTriangle className="text-red-600 text-3xl" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-800 mb-2">
-                  ¿Eliminar Oferta?
+                <FaExclamationTriangle className="text-red-600 text-5xl mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-[#5D4037] mb-2">
+                  ¿Eliminar oferta?
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  ¿Estás seguro de que deseas eliminar "<strong>{offerToDelete?.titulo}</strong>"?
                   Esta acción no se puede deshacer.
                 </p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => setShowDeleteModal(false)}
-                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
+                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50"
                   >
                     Cancelar
                   </button>
                   <button
-                    onClick={handleConfirmDelete}
-                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-colors shadow-lg"
+                    onClick={handleDeleteConfirm}
+                    className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold"
                   >
                     Eliminar
                   </button>
