@@ -350,6 +350,63 @@ export default function AdminGeneralOffers() {
     }
   };
 
+  // ⭐ FUNCIÓN: Obtener productos de la oferta
+  const getOfferProducts = (offer) => {
+    if (offer.productos_con_cantidad && Array.isArray(offer.productos_con_cantidad)) {
+      return offer.productos_con_cantidad.map(pc => ({
+        ...pc.producto,
+        cantidad_oferta: pc.cantidad
+      }));
+    } else if (offer.productos_data && Array.isArray(offer.productos_data)) {
+      return offer.productos_data
+        .map(pd => {
+          const producto = products.find(p => p.id === pd.producto_id);
+          return producto ? { ...producto, cantidad_oferta: pd.cantidad } : null;
+        })
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  // ⭐ FUNCIÓN: Obtener estado de la oferta
+  const getEstadoOferta = (oferta) => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const offerProducts = getOfferProducts(oferta);
+    const tieneAgotados = offerProducts.some(p => p.stock === 0);
+
+    if (tieneAgotados) {
+      return {
+        text: 'Productos Agotados',
+        bg: 'bg-red-100',
+        textColor: 'text-red-700',
+        icon: <FaExclamationTriangle />
+      };
+    }
+
+    if (oferta.fecha_inicio > hoy) {
+      return { 
+        text: 'Próxima', 
+        bg: 'bg-blue-100', 
+        textColor: 'text-blue-700',
+        icon: <FaInfoCircle />
+      };
+    } else if (oferta.fecha_fin < hoy) {
+      return { 
+        text: 'Expirada', 
+        bg: 'bg-gray-100', 
+        textColor: 'text-gray-700',
+        icon: <FaTimes />
+      };
+    } else {
+      return { 
+        text: 'Activa', 
+        bg: 'bg-green-100', 
+        textColor: 'text-green-700',
+        icon: <FaCheck />
+      };
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
