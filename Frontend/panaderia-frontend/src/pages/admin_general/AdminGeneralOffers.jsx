@@ -390,9 +390,180 @@ export default function AdminGeneralOffers() {
         </div>
       </div>
 
-      {/* Lista de Ofertas */}
-      {offers.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl shadow">
+      {/* Offers Grid */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <AnimatePresence>
+          {offers.map((offer, index) => {
+            const estado = getEstadoOferta(offer);
+            const offerProducts = getOfferProducts(offer);
+            const firstProduct = offerProducts[0];
+            const productosAgotados = offerProducts.filter(p => p.stock === 0);
+            const tieneAgotados = productosAgotados.length > 0;
+
+            return (
+              <motion.div
+                key={offer.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ delay: index * 0.05 }}
+                className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 transition-all ${tieneAgotados
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-orange-100 hover:border-orange-300'
+                  }`}
+              >
+                {/* Image */}
+                <div className={`relative h-48 bg-gradient-to-br from-orange-100 to-red-100 ${tieneAgotados ? 'opacity-60' : ''
+                  }`}>
+                  {firstProduct?.imagen ? (
+                    <img
+                      src={firstProduct.imagen}
+                      alt={offer.titulo}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <FaTag className="text-6xl text-orange-300" />
+                    </div>
+                  )}
+
+                  <div className={`absolute top-3 right-3 ${estado.bg} ${estado.textColor} px-3 py-1 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1`}>
+                    {estado.icon}
+                    <span>{estado.text}</span>
+                  </div>
+
+                  {offerProducts.length > 1 && (
+                    <div className="absolute top-3 left-3 bg-purple-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg">
+                      {offerProducts.length} productos
+                    </div>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="p-5">
+                  {tieneAgotados && (
+                    <div className="mb-3 bg-red-100 border border-red-300 rounded-lg p-3 flex items-start gap-2">
+                      <FaExclamationTriangle className="text-red-600 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-red-800">
+                        <p className="font-semibold">Productos agotados en esta oferta:</p>
+                        <ul className="mt-1 space-y-1">
+                          {productosAgotados.map((p, idx) => (
+                            <li key={idx}>• {p.nombre}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+
+                  <h3 className="text-xl font-bold text-[#5D4037] mb-2">
+                    {offer.titulo}
+                  </h3>
+                  <p className="text-sm text-[#8D6E63] mb-3 line-clamp-2">
+                    {offer.descripcion}
+                  </p>
+
+                  {/* ⭐ Mostrar sucursal */}
+                  {offer.sucursal_nombre && (
+                    <div className="mb-3 flex items-center gap-2 text-sm text-purple-600">
+                      <FaStore className="text-purple-600" />
+                      <span className="font-semibold">{offer.sucursal_nombre}</span>
+                    </div>
+                  )}
+
+                  {/* Products Info con CANTIDADES */}
+                  <div className="bg-amber-50 rounded-lg p-3 mb-3">
+                    <p className="text-xs text-[#8D6E63] mb-2">
+                      {offerProducts.length > 1 ? 'Productos incluidos' : 'Producto'}
+                    </p>
+
+                    {offerProducts.length > 0 ? (
+                      <div className="space-y-2">
+                        {offerProducts.map((producto, idx) => {
+                          const agotado = producto.stock === 0;
+                          const stockBajo = producto.stock > 0 && producto.stock <= 5;
+                          const cantidad = producto.cantidad_oferta || 1;
+
+                          return (
+                            <div key={idx} className={`flex justify-between items-center ${agotado ? 'opacity-60' : ''
+                              }`}>
+                              <div className="flex items-center gap-2">
+                                {cantidad > 1 && (
+                                  <span className="bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                                    {cantidad}x
+                                  </span>
+                                )}
+                                <p className="font-semibold text-[#5D4037] text-sm">
+                                  {producto.nombre}
+                                </p>
+                                {agotado && (
+                                  <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">
+                                    AGOTADO
+                                  </span>
+                                )}
+                                {stockBajo && !agotado && (
+                                  <span className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full">
+                                    Stock: {producto.stock}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600">
+                                ₡{producto.precio}
+                              </p>
+                            </div>
+                          );
+                        })}
+                        <div className="pt-2 mt-2 border-t border-amber-200">
+                          <div className="flex justify-between items-center">
+                            <p className="text-sm font-semibold text-amber-800">
+                              Precio Oferta:
+                            </p>
+                            <p className="text-lg font-bold text-amber-700">
+                              ₡{offer.precio_oferta}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">Sin productos</p>
+                    )}
+                  </div>
+
+                  {/* Dates */}
+                  <div className="text-sm text-[#8D6E63] mb-4 space-y-1">
+                    <p>Inicio: {new Date(offer.fecha_inicio + 'T00:00:00').toLocaleDateString('es-ES')}</p>
+                    <p>Fin: {new Date(offer.fecha_fin + 'T00:00:00').toLocaleDateString('es-ES')}</p>
+                    {offer.dias_restantes > 0 && !tieneAgotados && (
+                      <p className="font-semibold text-orange-600">
+                        {offer.dias_restantes} días restantes
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleOpenModal(offer)}
+                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                    >
+                      <FaEdit />
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleOpenDeleteModal(offer)}
+                      className="flex items-center justify-center bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-lg transition-colors"
+                    >
+                      <FaTrash />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+
+      {offers.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-lg shadow">
           <FaTag className="text-6xl text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">
             {selectedBranch
@@ -400,66 +571,6 @@ export default function AdminGeneralOffers() {
               : 'No hay ofertas registradas'
             }
           </p>
-        </div>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {offers.map(offer => (
-            <motion.div
-              key={offer.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white rounded-xl shadow-lg overflow-hidden"
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-xl font-bold text-[#5D4037]">{offer.titulo}</h3>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleOpenModal(offer)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Editar"
-                    >
-                      <FaEdit />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(offer)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Eliminar"
-                    >
-                      <FaTrash />
-                    </button>
-                  </div>
-                </div>
-                <p className="text-gray-600 text-sm mb-4">{offer.descripcion}</p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Precio:</span>
-                    <span className="text-lg font-bold text-green-600">
-                      ₡{offer.precio_oferta?.toLocaleString('es-CR')}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Desde:</span>
-                    <span className="text-gray-800">
-                      {new Date(offer.fecha_inicio + 'T00:00:00').toLocaleDateString('es-ES')}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Hasta:</span>
-                    <span className="text-gray-800">
-                      {new Date(offer.fecha_fin + 'T00:00:00').toLocaleDateString('es-ES')}
-                    </span>
-                  </div>
-                  {offer.sucursal_nombre && (
-                    <div className="flex items-center gap-2 pt-2 border-t">
-                      <FaStore className="text-purple-600" />
-                      <span className="text-sm text-gray-600">{offer.sucursal_nombre}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          ))}
         </div>
       )}
 
