@@ -643,12 +643,30 @@ export default function AdminGeneralOffers() {
                                 {isSelected && <FaCheck className="text-white text-xs" />}
                               </button>
 
+                              {/* Imagen del Producto */}
+                              <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                                {product.imagen ? (
+                                  <img
+                                    src={product.imagen}
+                                    alt={product.nombre}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <FaTag className="text-2xl text-gray-300" />
+                                  </div>
+                                )}
+                              </div>
+
                               {/* Info del Producto */}
                               <div className="flex-1 min-w-0">
                                 <p className={`font-semibold text-sm truncate ${
                                   agotado ? 'text-red-700' : 'text-gray-800'
                                 }`}>
                                   {product.nombre}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  ₡{Number(product.precio).toLocaleString('es-CR')}
                                 </p>
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-xs text-gray-600">
