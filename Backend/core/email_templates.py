@@ -319,10 +319,9 @@ def template_nueva_oferta(oferta, url_ofertas):
     
     return get_base_template(content)
 
-# CONTINUACIÓN DE email_templates.py - PARTE 2/3
 
 def template_confirmacion_pedido(pedido, url_pedidos):
-    """Template para confirmación de pedido con detalles"""
+    """Template para confirmación de pedido con detalles, tipo de entrega y dirección"""
     productos_html = ""
     for detalle in pedido.detalles.all():
         imagen_url = detalle.producto.imagen.url if detalle.producto.imagen else "https://via.placeholder.com/80x80?text=Sin+Imagen"
@@ -345,6 +344,32 @@ def template_confirmacion_pedido(pedido, url_pedidos):
         </tr>
         """
     
+    # ⭐⭐⭐ NUEVO: Determinar tipo de entrega y dirección
+    if pedido.es_domicilio:
+        tipo_entrega_emoji = "🚚"
+        tipo_entrega_texto = "Entrega a Domicilio"
+        tipo_entrega_color = "#10b981"
+        direccion_html = f"""
+        <div style="margin-top: 20px; padding: 20px; background-color: #f0fdf4; border-left: 4px solid #10b981; border-radius: 8px;">
+            <h4 style="color: #059669; margin: 0 0 10px 0; font-size: 16px;">📍 Dirección de Entrega</h4>
+            <p style="color: #111827; margin: 0; font-size: 15px; line-height: 1.6;">
+                {pedido.direccion_entrega}
+            </p>
+        </div>
+        """
+    else:
+        tipo_entrega_emoji = "🏪"
+        tipo_entrega_texto = "Recoger en Sucursal"
+        tipo_entrega_color = "#f59e0b"
+        direccion_html = f"""
+        <div style="margin-top: 20px; padding: 20px; background-color: #fff7ed; border-left: 4px solid #f59e0b; border-radius: 8px;">
+            <h4 style="color: #d97706; margin: 0 0 10px 0; font-size: 16px;">🏪 Recoger en Sucursal</h4>
+            <p style="color: #111827; margin: 0; font-size: 15px; line-height: 1.6;">
+                Tu pedido estará listo para ser recogido en nuestra sucursal. Te notificaremos cuando puedas pasar a recogerlo.
+            </p>
+        </div>
+        """
+    
     content = f"""
     <div class="header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
         <h1>✅ ¡Pedido Confirmado!</h1>
@@ -360,7 +385,16 @@ def template_confirmacion_pedido(pedido, url_pedidos):
         <div class="product-card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left-color: #10b981;">
             <h3 style="color: #111827; margin-bottom: 20px; font-size: 18px;">Resumen del Pedido</h3>
             
-            <table style="width: 100%; border-collapse: collapse;">
+            <div style="margin-bottom: 20px; padding: 15px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; text-align: center;">
+                <p style="font-size: 14px; color: #6b7280; margin: 0 0 5px 0;">Tipo de Pedido</p>
+                <p style="font-size: 20px; color: {tipo_entrega_color}; margin: 0; font-weight: 700;">
+                    {tipo_entrega_emoji} {tipo_entrega_texto}
+                </p>
+            </div>
+            
+            {direccion_html}
+            
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
                 <thead>
                     <tr style="background-color: rgba(16, 185, 129, 0.1);">
                         <th style="padding: 12px; text-align: left; font-size: 14px; color: #6b7280;">Imagen</th>
@@ -638,6 +672,32 @@ def template_notificacion_pedido_admin(pedido, url_admin_pedidos):
     cliente_email = pedido.usuario.email or "No proporcionado"
     cliente_usuario = pedido.usuario.username
     
+    # ⭐⭐⭐ NUEVO: Información de entrega
+    if pedido.es_domicilio:
+        tipo_entrega_emoji = "🚚"
+        tipo_entrega_texto = "Entrega a Domicilio"
+        tipo_entrega_color = "#10b981"
+        direccion_html = f"""
+        <div style="margin-top: 15px;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">📍 Dirección de Entrega</p>
+            <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 5px 0; line-height: 1.6;">
+                {pedido.direccion_entrega}
+            </p>
+        </div>
+        """
+    else:
+        tipo_entrega_emoji = "🏪"
+        tipo_entrega_texto = "Recoger en Sucursal"
+        tipo_entrega_color = "#f59e0b"
+        direccion_html = """
+        <div style="margin-top: 15px;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">🏪 Recoger en Sucursal</p>
+            <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 5px 0;">
+                El cliente recogerá el pedido en sucursal
+            </p>
+        </div>
+        """
+    
     content = f"""
     <div class="header" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
         <h1>🔔 Nuevo Pedido Recibido</h1>
@@ -669,8 +729,21 @@ def template_notificacion_pedido_admin(pedido, url_admin_pedidos):
             </div>
         </div>
         
+        <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #111827; margin-top: 0; font-size: 18px; margin-bottom: 15px;">📦 Detalles del Pedido</h3>
+            
+            <div style="margin-bottom: 20px; padding: 15px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; text-align: center;">
+                <p style="font-size: 14px; color: #6b7280; margin: 0 0 5px 0;">Tipo de Pedido</p>
+                <p style="font-size: 20px; color: {tipo_entrega_color}; margin: 0; font-weight: 700;">
+                    {tipo_entrega_emoji} {tipo_entrega_texto}
+                </p>
+            </div>
+            
+            {direccion_html}
+        </div>
+        
         <div class="product-card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left-color: #10b981;">
-            <h3 style="color: #111827; margin-bottom: 20px; font-size: 18px;">🛒 Detalles del Pedido</h3>
+            <h3 style="color: #111827; margin-bottom: 20px; font-size: 18px;">🛒 Productos del Pedido</h3>
             
             <table style="width: 100%; border-collapse: collapse;">
                 <thead>
@@ -717,7 +790,7 @@ def template_notificacion_pedido_admin(pedido, url_admin_pedidos):
                 <li>Verificar disponibilidad de productos</li>
                 <li>Confirmar el pedido con el cliente si es necesario</li>
                 <li>Actualizar el estado del pedido según avance la preparación</li>
-                <li>Notificar al cliente cuando esté listo para entrega</li>
+                <li>Notificar al cliente cuando esté listo para {"entrega" if pedido.es_domicilio else "recoger"}</li>
             </ul>
         </div>
         
