@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import { FaChartBar, FaCalendar, FaMoneyBillWave, FaShoppingCart, FaBox, FaDownload, FaSync, FaTrophy } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
-import useSmartRefresh from '../../hooks/useSmartRefresh';
+import useSmartRefresh from '../../hooks/useAutoRefresh';
 
 export default function AdminGeneralReports() {
   const { selectedBranch } = useOutletContext();
