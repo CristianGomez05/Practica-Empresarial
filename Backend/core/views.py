@@ -436,7 +436,7 @@ class PedidoViewSet(viewsets.ModelViewSet):
         try:
             user = self.request.user
             
-            base_queryset = Pedido.objects.select_related('usuario', 'sucursal').prefetch_related(
+            base_queryset = Pedido.objects.select_related('usuario').prefetch_related(
                 Prefetch('detalles', queryset=DetallePedido.objects.select_related('producto'))
             )
             
