@@ -728,3 +728,154 @@ def template_notificacion_pedido_admin(pedido, url_admin_pedidos):
     """
     
     return get_base_template(content)
+
+def template_pedido_cancelado_admin(pedido, url_admin_pedidos):
+    """
+    ⭐ NUEVA FUNCIÓN: Template para notificar a admins cuando un cliente cancela un pedido
+    """
+    productos_html = ""
+    for detalle in pedido.detalles.all():
+        imagen_url = detalle.producto.imagen.url if detalle.producto.imagen else "https://via.placeholder.com/80x80?text=Sin+Imagen"
+        subtotal = detalle.producto.precio * detalle.cantidad
+        productos_html += f"""
+        <tr>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb;">
+                <img src="{imagen_url}" alt="{detalle.producto.nombre}" 
+                     style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; vertical-align: middle;">
+            </td>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #111827;">
+                {detalle.producto.nombre}
+            </td>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: center; color: #6b7280;">
+                x{detalle.cantidad}
+            </td>
+            <td style="padding: 15px; border-bottom: 1px solid #e5e7eb; text-align: right; font-weight: 600; color: #111827;">
+                ₡{subtotal:,.2f}
+            </td>
+        </tr>
+        """
+    
+    cliente_nombre = pedido.usuario.get_full_name() or pedido.usuario.username
+    cliente_email = pedido.usuario.email or "No proporcionado"
+    cliente_usuario = pedido.usuario.username
+    
+    # Determinar información de entrega
+    tipo_entrega = "🚚 Entrega a Domicilio" if pedido.es_domicilio else "🏪 Recoger en Sucursal"
+    direccion_html = ""
+    if pedido.es_domicilio and pedido.direccion_entrega:
+        direccion_html = f"""
+        <div style="margin-top: 15px;">
+            <p style="color: #6b7280; font-size: 14px; margin: 0;">Dirección de Entrega</p>
+            <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 5px 0;">{pedido.direccion_entrega}</p>
+        </div>
+        """
+    
+    sucursal_nombre = "N/A"
+    primer_detalle = pedido.detalles.first()
+    if primer_detalle and primer_detalle.producto.sucursal:
+        sucursal_nombre = primer_detalle.producto.sucursal.nombre
+    
+    content = f"""
+    <div class="header" style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);">
+        <h1>❌ Pedido Cancelado</h1>
+        <p class="subtitle">Pedido #{pedido.id}</p>
+    </div>
+    <div class="content">
+        <p class="greeting">¡Atención Administrador!</p>
+        <p style="font-size: 16px; color: #6b7280; margin-bottom: 30px;">
+            El cliente ha cancelado el siguiente pedido:
+        </p>
+        
+        <div style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-left: 4px solid #dc2626; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #111827; margin-top: 0; font-size: 18px; margin-bottom: 15px;">📋 Información del Cliente</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                <div style="flex: 1; min-width: 200px;">
+                    <p style="color: #6b7280; font-size: 14px; margin: 0;">Nombre Completo</p>
+                    <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 5px 0;">{cliente_nombre}</p>
+                </div>
+                <div style="flex: 1; min-width: 200px;">
+                    <p style="color: #6b7280; font-size: 14px; margin: 0;">Usuario</p>
+                    <p style="color: #111827; font-size: 16px; font-weight: 600; margin: 5px 0;">{cliente_usuario}</p>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <p style="color: #6b7280; font-size: 14px; margin: 0;">Email de Contacto</p>
+                <p style="color: #dc2626; font-size: 16px; font-weight: 600; margin: 5px 0;">
+                    <a href="mailto:{cliente_email}" style="color: #dc2626; text-decoration: none;">{cliente_email}</a>
+                </p>
+            </div>
+        </div>
+        
+        <div style="background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #111827; margin-top: 0; font-size: 18px; margin-bottom: 15px;">📦 Detalles del Pedido</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 15px;">
+                <div style="flex: 1; min-width: 150px; text-align: center; margin: 10px;">
+                    <p style="color: #6b7280; font-size: 14px; margin: 0;">Sucursal</p>
+                    <p style="color: #111827; font-size: 18px; font-weight: 700; margin: 5px 0;">{sucursal_nombre}</p>
+                </div>
+                <div style="flex: 1; min-width: 150px; text-align: center; margin: 10px;">
+                    <p style="color: #6b7280; font-size: 14px; margin: 0;">Tipo de Pedido</p>
+                    <p style="color: #111827; font-size: 18px; font-weight: 700; margin: 5px 0;">{tipo_entrega}</p>
+                </div>
+            </div>
+            {direccion_html}
+        </div>
+        
+        <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead style="background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);">
+                    <tr>
+                        <th style="padding: 15px; text-align: left; color: #111827; font-weight: 600;">Imagen</th>
+                        <th style="padding: 15px; text-align: left; color: #111827; font-weight: 600;">Producto</th>
+                        <th style="padding: 15px; text-align: center; color: #111827; font-weight: 600;">Cantidad</th>
+                        <th style="padding: 15px; text-align: right; color: #111827; font-weight: 600;">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {productos_html}
+                </tbody>
+                <tfoot style="background-color: #fef2f2;">
+                    <tr>
+                        <td colspan="3" style="padding: 20px; text-align: right; font-weight: 600; color: #dc2626; font-size: 18px;">
+                            TOTAL:
+                        </td>
+                        <td style="padding: 20px; text-align: right; font-weight: 700; color: #dc2626; font-size: 20px;">
+                            ₡{pedido.total:,.2f}
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <div style="margin: 20px; padding: 15px; background-color: rgba(220, 38, 38, 0.1); border-radius: 8px; text-align: center;">
+                <p style="font-size: 14px; color: #dc2626; margin: 0;">
+                    <strong>Estado:</strong> ❌ Cancelado por el Cliente
+                </p>
+            </div>
+        </div>
+        
+        <div class="button-container">
+            <a href="{url_admin_pedidos}" class="button" style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);">
+                Ver Pedidos
+            </a>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div style="background-color: #fef2f2; padding: 20px; border-radius: 8px; border-left: 4px solid #dc2626;">
+            <h3 style="color: #dc2626; margin-top: 0; font-size: 16px;">⚡ Acciones Recomendadas:</h3>
+            <ul style="color: #6b7280; margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+                <li><strong>Verificar</strong> que no se haya iniciado la preparación del pedido</li>
+                <li><strong>Devolver productos</strong> al inventario si ya fueron separados</li>
+                <li><strong>Contactar al cliente</strong> si es necesario para confirmar la cancelación</li>
+                <li><strong>Documentar</strong> la razón de la cancelación si el cliente la proporcionó</li>
+                <li><strong>Evaluar</strong> si es necesario tomar alguna acción adicional</li>
+            </ul>
+        </div>
+        
+        <p style="text-align: center; color: #6b7280; margin-top: 30px; font-size: 14px;">
+            Este email fue enviado automáticamente cuando el cliente canceló el pedido.
+        </p>
+    </div>
+    """
+    
+    return get_base_template(content)

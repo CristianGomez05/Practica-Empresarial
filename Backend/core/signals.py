@@ -8,20 +8,21 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def ejecutar_email_background(func, *args, **kwargs):
+def ejecutar_email_background(funcion_email, *args, **kwargs):
     """
-    Ejecuta una función de email en un hilo separado para no bloquear
+    Ejecuta una función de email en un hilo separado (background)
+    para no bloquear el request/response.
     """
-    def wrapper():
+    def enviar():
         try:
-            func(*args, **kwargs)
+            funcion_email(*args, **kwargs)
         except Exception as e:
-            logger.error(f"❌ Error en email background: {str(e)}")
+            print(f"❌ Error en email background: {str(e)}")
     
-    thread = threading.Thread(target=wrapper)
+    import threading
+    thread = threading.Thread(target=enviar)
     thread.daemon = True
     thread.start()
-    logger.info(f"📧 Email programado en background: {func.__name__}")
 
 
 @receiver(post_save, sender=Producto)
@@ -37,6 +38,38 @@ def notificar_nuevo_producto(sender, instance, created, **kwargs):
         from .emails import enviar_notificacion_nuevo_producto
         ejecutar_email_background(enviar_notificacion_nuevo_producto, instance.id)
 
+
+@receiver(pre_save, sender=Pedido)
+def detectar_cancelacion_pedido(sender, instance, **kwargs):
+    """
+    ⭐ NUEVO: Detecta cuando un pedido es cancelado por el cliente
+    """
+    if instance.pk:  # Solo si el pedido ya existe (es una actualización)
+        try:
+            pedido_anterior = Pedido.objects.get(pk=instance.pk)
+            # Detectar si cambió a cancelado
+            if pedido_anterior.estado != 'cancelado' and instance.estado == 'cancelado':
+                instance._pedido_fue_cancelado = True
+                print(f"❌ Pedido #{instance.id} fue CANCELADO")
+        except Pedido.DoesNotExist:
+            pass
+
+
+@receiver(post_save, sender=Pedido)
+def notificar_pedido_cancelado(sender, instance, created, **kwargs):
+    """
+    ⭐ NUEVO: Envía notificación a admins cuando un pedido es cancelado
+    Se ejecuta en background
+    """
+    if not created and hasattr(instance, '_pedido_fue_cancelado'):
+        print(f"📧 Enviando notificación de cancelación para pedido #{instance.id}")
+        
+        # Ejecutar email en background
+        from .emails import enviar_notificacion_pedido_cancelado
+        ejecutar_email_background(enviar_notificacion_pedido_cancelado, instance.id)
+        
+        # Limpiar flag
+        delattr(instance, '_pedido_fue_cancelado')
 
 # ============================================================================
 # DETECCIÓN DE CAMBIOS EN STOCK
