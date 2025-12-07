@@ -1,9 +1,5 @@
 # Backend/core/emails.py
-# ⭐⭐⭐ VERSIÓN CORREGIDA - Incluye:
-# 1. Filtrado por sucursal en notificaciones de pedidos
-# 2. Filtrado por sucursal en alertas de stock
-# 3. Inclusión de admin_general en todas las notificaciones
-# 4. Nueva función para pedidos cancelados
+# ⭐⭐⭐ VERSIÓN CORREGIDA - Incluye enviar_alerta_sin_stock
 
 from django.core.mail import EmailMultiAlternatives
 from django.conf import settings
@@ -14,8 +10,9 @@ from .email_templates import (
     template_confirmacion_pedido,
     template_actualizacion_estado,
     template_alerta_stock_bajo,
+    template_alerta_sin_stock,  # ⭐ NUEVO
     template_notificacion_pedido_admin,
-    template_pedido_cancelado_admin  # ⭐ NUEVA PLANTILLA
+    template_pedido_cancelado_admin
 )
 import logging
 
@@ -32,9 +29,7 @@ URL_ADMIN_PEDIDOS = f"{FRONTEND_URL}/admin/pedidos"
 
 
 def enviar_email_seguro(subject, html_content, text_content, recipients):
-    """
-    Wrapper para enviar emails con manejo robusto de errores
-    """
+    """Wrapper para enviar emails con manejo robusto de errores"""
     if not recipients:
         logger.warning("⚠️ No hay destinatarios para el email")
         return False
@@ -71,15 +66,10 @@ def enviar_email_seguro(subject, html_content, text_content, recipients):
 
 def obtener_admins_por_sucursal(sucursal):
     """
-    ⭐ NUEVA FUNCIÓN: Obtiene admins de una sucursal específica + admin_general
-    
-    Args:
-        sucursal: Objeto Sucursal
-    
-    Returns:
-        Lista de emails de administradores
+    Obtiene admins de una sucursal específica + admin_general
     """
-    # Admin de la sucursal específica
+    from django.db.models import Q
+    
     admins_sucursal = Usuario.objects.filter(
         rol='administrador',
         sucursal=sucursal,
@@ -87,18 +77,16 @@ def obtener_admins_por_sucursal(sucursal):
         email__isnull=False
     ).exclude(email='')
     
-    # Admin general (puede ver/gestionar todo)
     admins_generales = Usuario.objects.filter(
         rol='administrador_general',
         is_active=True,
         email__isnull=False
     ).exclude(email='')
     
-    # Combinar emails
     emails_sucursal = [admin.email for admin in admins_sucursal if admin.email]
     emails_generales = [admin.email for admin in admins_generales if admin.email]
     
-    todos_emails = list(set(emails_sucursal + emails_generales))  # Eliminar duplicados
+    todos_emails = list(set(emails_sucursal + emails_generales))
     
     logger.info(f"📧 Admins para notificar en {sucursal.nombre}:")
     logger.info(f"   - Admins de sucursal: {len(emails_sucursal)}")
@@ -206,11 +194,10 @@ def enviar_notificacion_oferta(oferta_id):
 
 def enviar_confirmacion_pedido(pedido_id):
     """
-    ⭐⭐⭐ CORREGIDO: Envía correo de confirmación al cliente Y notifica a admins
-    Ahora filtra admins por sucursal del pedido
+    Envía correo de confirmación al cliente Y notifica a admins
     """
     try:
-        pedido = Pedido.objects.select_related('usuario').prefetch_related('detalles__producto').get(id=pedido_id)
+        pedido = Pedido.objects.select_related('usuario').prefetch_related('detalles__producto__sucursal').get(id=pedido_id)
         
         # 1. Enviar confirmación al cliente
         if pedido.usuario.email:
@@ -248,8 +235,7 @@ def enviar_confirmacion_pedido(pedido_id):
             
             enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
         
-        # 2. ⭐ CORREGIDO: Notificar solo a admins de la sucursal + admin_general
-        # Determinar la sucursal del pedido basado en los productos
+        # 2. Notificar a admins de la sucursal
         sucursal_pedido = None
         primer_detalle = pedido.detalles.first()
         if primer_detalle and primer_detalle.producto.sucursal:
@@ -289,20 +275,11 @@ def enviar_confirmacion_pedido(pedido_id):
                 
                 Gestionar pedido: {URL_ADMIN_PEDIDOS}
                 
-                PRÓXIMOS PASOS:
-                - Verificar disponibilidad de productos
-                - Confirmar el pedido con el cliente si es necesario
-                - Actualizar el estado según avance la preparación
-                - Notificar al cliente cuando esté listo
-                
                 ---
                 Panadería Santa Clara
-                Sistema de Gestión de Pedidos
                 """
                 
                 enviar_email_seguro(asunto_admin, html_admin, text_admin, emails_admin)
-        else:
-            logger.warning(f"⚠️ Pedido #{pedido.id} sin sucursal definida, no se notifica a admins")
         
         return True
         
@@ -313,13 +290,11 @@ def enviar_confirmacion_pedido(pedido_id):
 
 def enviar_notificacion_pedido_cancelado(pedido_id):
     """
-    ⭐⭐⭐ NUEVA FUNCIÓN: Notifica a admins cuando un cliente cancela un pedido
-    Filtra por sucursal + admin_general
+    Notifica a admins cuando un cliente cancela un pedido
     """
     try:
-        pedido = Pedido.objects.select_related('usuario').prefetch_related('detalles__producto').get(id=pedido_id)
+        pedido = Pedido.objects.select_related('usuario').prefetch_related('detalles__producto__sucursal').get(id=pedido_id)
         
-        # Determinar la sucursal del pedido
         sucursal_pedido = None
         primer_detalle = pedido.detalles.first()
         if primer_detalle and primer_detalle.producto.sucursal:
@@ -329,7 +304,6 @@ def enviar_notificacion_pedido_cancelado(pedido_id):
             logger.warning(f"⚠️ Pedido #{pedido.id} sin sucursal, no se notifica cancelación")
             return False
         
-        # Obtener admins de la sucursal + admin_general
         emails_admin = obtener_admins_por_sucursal(sucursal_pedido)
         
         if not emails_admin:
@@ -350,13 +324,9 @@ def enviar_notificacion_pedido_cancelado(pedido_id):
         text_content = f"""
         ❌ PEDIDO CANCELADO
         
-        El cliente ha cancelado el siguiente pedido:
-        
         Pedido: #{pedido.id}
         Sucursal: {sucursal_pedido.nombre}
         Cliente: {pedido.usuario.get_full_name() or pedido.usuario.username}
-        Usuario: {pedido.usuario.username}
-        Email: {pedido.usuario.email}
         
         Tipo de pedido: {tipo_entrega_texto}{direccion_texto}
         
@@ -365,16 +335,10 @@ def enviar_notificacion_pedido_cancelado(pedido_id):
         
         TOTAL: ₡{pedido.total:,.2f}
         
-        ACCIONES RECOMENDADAS:
-        - Verificar que no se haya iniciado la preparación
-        - Si ya se prepararon productos, considerar devolverlos al inventario
-        - Contactar al cliente si es necesario para confirmar la cancelación
-        
         Ver detalles: {URL_ADMIN_PEDIDOS}
         
         ---
         Panadería Santa Clara
-        Sistema de Gestión de Pedidos
         """
         
         logger.info(f"📧 Notificando cancelación del pedido #{pedido.id} a {len(emails_admin)} admins")
@@ -388,61 +352,96 @@ def enviar_notificacion_pedido_cancelado(pedido_id):
         return False
 
 
-def enviar_alerta_stock_bajo(producto_id):
+def enviar_alerta_sin_stock(producto_id):
     """
-    ⭐⭐⭐ CORREGIDO: Notifica a administradores cuando un producto tiene stock bajo (≤10) o agotado (=0)
-    Ahora filtra por sucursal del producto + admin_general
+    ⭐⭐⭐ NUEVA FUNCIÓN: Notifica cuando un producto queda SIN STOCK (agotado = 0)
     """
     try:
         producto = Producto.objects.select_related('sucursal').get(id=producto_id)
         
         if not producto.sucursal:
-            logger.warning(f"⚠️ Producto {producto.nombre} sin sucursal, no se envía alerta")
+            logger.warning(f"⚠️ Producto {producto.nombre} sin sucursal")
             return False
         
-        # ⭐ Obtener admins de la sucursal + admin_general
         destinatarios = obtener_admins_por_sucursal(producto.sucursal)
         
         if not destinatarios:
-            logger.warning(f"⚠️ No hay admins para notificar stock de {producto.nombre}")
+            logger.warning(f"⚠️ No hay admins para notificar sin stock de {producto.nombre}")
             return False
         
-        # Determinar el tipo de alerta
-        if producto.stock == 0:
-            tipo_alerta = "SIN STOCK"
-            emoji = "🔴"
-        else:
-            tipo_alerta = "STOCK BAJO"
-            emoji = "⚠️"
-        
-        asunto = f"{emoji} ALERTA: {tipo_alerta} - {producto.nombre} ({producto.sucursal.nombre})"
-        html_content = template_alerta_stock_bajo(producto, URL_ADMIN_PRODUCTOS)
+        asunto = f"🔴 URGENTE: Producto AGOTADO - {producto.nombre} ({producto.sucursal.nombre})"
+        html_content = template_alerta_sin_stock(producto, URL_ADMIN_PRODUCTOS)
         
         text_content = f"""
-        {emoji} ALERTA DE INVENTARIO
+        🔴 ALERTA URGENTE: PRODUCTO AGOTADO
         
-        Producto con {tipo_alerta.lower()}: {producto.nombre}
+        Producto: {producto.nombre}
         Sucursal: {producto.sucursal.nombre}
-        {producto.descripcion or ''}
-        
-        Stock Actual: {producto.stock}
+        Stock Actual: 0 unidades
         Precio: ₡{producto.precio:,.2f}
-        Estado: {emoji} {tipo_alerta}
         
-        ACCIÓN REQUERIDA:
-        - Verificar stock físico en bodega
-        - Actualizar cantidad disponible
+        ACCIÓN URGENTE REQUERIDA:
+        - Verificar stock físico inmediatamente
+        - Contactar proveedores para reabastecimiento
         - Evaluar demanda del producto
-        - Coordinar con proveedores si es necesario
         
         Gestionar inventario: {URL_ADMIN_PRODUCTOS}
         
         ---
         Panadería Santa Clara
-        Sistema de Gestión de Inventario
         """
         
-        logger.info(f"📧 Enviando alerta de {tipo_alerta} para {producto.nombre} ({producto.sucursal.nombre})")
+        logger.info(f"📧 Enviando alerta de AGOTADO para {producto.nombre}")
+        return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
+        
+    except Producto.DoesNotExist:
+        logger.error(f"❌ Producto {producto_id} no encontrado")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error en enviar_alerta_sin_stock: {str(e)}")
+        return False
+
+
+def enviar_alerta_stock_bajo(producto_id):
+    """
+    Notifica cuando un producto tiene stock bajo (≤10)
+    """
+    try:
+        producto = Producto.objects.select_related('sucursal').get(id=producto_id)
+        
+        if not producto.sucursal:
+            logger.warning(f"⚠️ Producto {producto.nombre} sin sucursal")
+            return False
+        
+        destinatarios = obtener_admins_por_sucursal(producto.sucursal)
+        
+        if not destinatarios:
+            logger.warning(f"⚠️ No hay admins para notificar stock bajo de {producto.nombre}")
+            return False
+        
+        asunto = f"⚠️ ALERTA: Stock Bajo - {producto.nombre} ({producto.sucursal.nombre})"
+        html_content = template_alerta_stock_bajo(producto, URL_ADMIN_PRODUCTOS)
+        
+        text_content = f"""
+        ⚠️ ALERTA DE INVENTARIO
+        
+        Producto: {producto.nombre}
+        Sucursal: {producto.sucursal.nombre}
+        Stock Actual: {producto.stock}
+        Precio: ₡{producto.precio:,.2f}
+        
+        ACCIÓN REQUERIDA:
+        - Verificar stock físico
+        - Evaluar demanda
+        - Coordinar con proveedores
+        
+        Gestionar inventario: {URL_ADMIN_PRODUCTOS}
+        
+        ---
+        Panadería Santa Clara
+        """
+        
+        logger.info(f"📧 Enviando alerta de STOCK BAJO para {producto.nombre}")
         return enviar_email_seguro(asunto, html_content, text_content, destinatarios)
         
     except Producto.DoesNotExist:
@@ -487,7 +486,6 @@ def enviar_actualizacion_estado(pedido_id):
         
         ---
         Panadería Santa Clara
-        Alajuela, Costa Rica
         """
         
         return enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
