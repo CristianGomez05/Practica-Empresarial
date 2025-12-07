@@ -1,5 +1,5 @@
 # Backend/core/views.py
-# ⭐ CORREGIDO: PedidoViewSet usa PedidoCreateSerializer correctamente
+# ⭐⭐⭐ CORREGIDO: Filtro de pedidos por sucursal + Stock + Emails
 
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -18,7 +18,7 @@ from .serializers import (
     ProductoSerializer, 
     OfertaSerializer, 
     PedidoSerializer,
-    PedidoCreateSerializer,  # ⭐ NUEVO: Import
+    PedidoCreateSerializer,
     DetallePedidoSerializer,
     SucursalSerializer
 )
@@ -424,7 +424,7 @@ class OfertaViewSet(viewsets.ModelViewSet):
 
 
 # ============================================================================
-# PEDIDO VIEWSET (⭐ CORREGIDO)
+# PEDIDO VIEWSET (⭐⭐⭐ CORREGIDO - FILTRO POR SUCURSAL)
 # ============================================================================
 
 class PedidoViewSet(viewsets.ModelViewSet):
@@ -432,21 +432,55 @@ class PedidoViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, EsClienteOAdmin]
 
     def get_queryset(self):
+        """⭐⭐⭐ CORREGIDO: Filtrar pedidos por sucursal correctamente"""
         try:
             user = self.request.user
             
-            base_queryset = Pedido.objects.select_related('usuario').prefetch_related(
+            base_queryset = Pedido.objects.select_related('usuario', 'sucursal').prefetch_related(
                 Prefetch('detalles', queryset=DetallePedido.objects.select_related('producto'))
             )
             
-            if user.rol == 'administrador_general':
-                return base_queryset.all().order_by('-fecha')
-            elif user.rol == 'administrador' and user.sucursal:
-                return base_queryset.filter(
-                    detalles__producto__sucursal=user.sucursal
-                ).distinct().order_by('-fecha')
+            # ⭐⭐⭐ CRÍTICO: Filtrar por parámetro 'sucursal' en query params
+            sucursal_id = self.request.query_params.get('sucursal', None)
             
-            return base_queryset.filter(usuario=user).order_by('-fecha')
+            print(f"\n{'='*60}")
+            print(f"🔍 PedidoViewSet.get_queryset()")
+            print(f"   Usuario: {user.username if user.is_authenticated else 'Anónimo'}")
+            print(f"   Rol: {user.rol if user.is_authenticated else 'N/A'}")
+            print(f"   Query Param 'sucursal': {sucursal_id}")
+            print(f"{'='*60}")
+            
+            # ⭐⭐⭐ Si viene parámetro sucursal, filtrar por ella (prioridad)
+            if sucursal_id:
+                # Filtrar pedidos que tengan productos de esa sucursal
+                queryset = base_queryset.filter(
+                    detalles__producto__sucursal_id=sucursal_id
+                ).distinct()
+                print(f"✅ Filtrando por sucursal_id={sucursal_id}")
+                print(f"📊 Pedidos encontrados: {queryset.count()}")
+                return queryset.order_by('-fecha')
+            
+            # Si no hay parámetro, aplicar lógica por rol
+            if user.rol == 'administrador_general':
+                queryset = base_queryset
+                print(f"👑 Admin General - Mostrando TODOS los pedidos")
+            elif user.rol == 'administrador' and user.sucursal:
+                queryset = base_queryset.filter(
+                    detalles__producto__sucursal=user.sucursal
+                ).distinct()
+                print(f"🔒 Admin Regular - Solo pedidos de {user.sucursal.nombre}")
+            elif user.rol == 'cliente':
+                queryset = base_queryset.filter(usuario=user)
+                print(f"👤 Cliente - Solo sus pedidos")
+            else:
+                queryset = Pedido.objects.none()
+                print(f"⚠️ Sin permisos - No hay pedidos")
+            
+            print(f"📊 Total pedidos: {queryset.count()}")
+            print(f"{'='*60}\n")
+            
+            return queryset.order_by('-fecha')
+            
         except Exception as e:
             print(f"❌ Error en PedidoViewSet.get_queryset: {e}")
             return Pedido.objects.none()

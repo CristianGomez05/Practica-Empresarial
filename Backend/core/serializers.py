@@ -1,5 +1,5 @@
 # Backend/core/serializers.py
-# ⭐ CORREGIDO: tipo_entrega funciona correctamente
+# ⭐⭐⭐ CORREGIDO: Reducción de stock + Envío de emails + tipo_entrega
 
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -649,7 +649,7 @@ class PedidoCreateSerializer(serializers.Serializer):
         return data
     
     def create(self, validated_data):
-        """⭐ CORREGIDO: Crear pedido con tipo_entrega correcto"""
+        """⭐⭐⭐ CORREGIDO: Crear pedido + Reducir stock + Enviar emails"""
         items_data = validated_data.pop('items')
         tipo_entrega = validated_data.get('tipo_entrega', 'domicilio')
         usuario = self.context['request'].user
@@ -688,6 +688,21 @@ class PedidoCreateSerializer(serializers.Serializer):
             producto = Producto.objects.get(id=item['producto'])
             cantidad = item['cantidad']
             
+            # ⭐⭐⭐ CRÍTICO: REDUCIR STOCK DEL PRODUCTO
+            if producto.stock >= cantidad:
+                producto.stock -= cantidad
+                if producto.stock == 0:
+                    producto.disponible = False
+                producto.save()
+                print(f"   📦 Stock reducido: {producto.nombre} ({producto.stock + cantidad} → {producto.stock})")
+            else:
+                # Si no hay suficiente stock, revertir pedido
+                pedido.delete()
+                raise serializers.ValidationError({
+                    'stock': f'Stock insuficiente para {producto.nombre}. Disponible: {producto.stock}, Solicitado: {cantidad}'
+                })
+            
+            # Crear detalle del pedido
             DetallePedido.objects.create(
                 pedido=pedido,
                 producto=producto,
@@ -702,6 +717,26 @@ class PedidoCreateSerializer(serializers.Serializer):
         
         print(f"💵 TOTAL: ₡{total}")
         print(f"{'='*60}\n")
+        
+        # ⭐⭐⭐ NUEVO: ENVIAR EMAILS DE CONFIRMACIÓN
+        print(f"📧 Programando envío de correos de confirmación...")
+        try:
+            import threading
+            from .emails import enviar_confirmacion_pedido
+            
+            def enviar_email():
+                try:
+                    enviar_confirmacion_pedido(pedido.id)
+                    print(f"✅ Correos de confirmación enviados para pedido #{pedido.id}\n")
+                except Exception as e:
+                    print(f"❌ Error enviando correos: {e}\n")
+            
+            thread = threading.Thread(target=enviar_email)
+            thread.daemon = True
+            thread.start()
+            print(f"✅ Email programado en background\n")
+        except Exception as e:
+            print(f"❌ Error programando email: {e}\n")
         
         return pedido
     
