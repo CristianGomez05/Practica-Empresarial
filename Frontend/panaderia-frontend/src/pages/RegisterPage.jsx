@@ -1,7 +1,8 @@
-// src/pages/RegisterPage.jsx - CORREGIDO
+// src/pages/RegisterPage.jsx - MEJORADO
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
+import { FiEye, FiEyeOff } from "react-icons/fi"; // Iconos minimalistas
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -30,7 +31,6 @@ export default function RegisterPage() {
     try {
       console.log("📝 Intentando registro con:", form.username);
       
-      // ⭐ FIX: URL correcta es /api/registro/ (NO /core/registro/)
       const res = await axios.post(`${API_BASE}/api/registro/`, {
         username: form.username,
         email: form.email,
@@ -200,9 +200,14 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-amber-600 transition-colors p-1 rounded"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-amber-600 transition-colors focus:outline-none"
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
-                {showPassword ? "🙈" : "👁️"}
+                {showPassword ? (
+                  <FiEyeOff className="w-5 h-5" />
+                ) : (
+                  <FiEye className="w-5 h-5" />
+                )}
               </button>
             </div>
             {errors.password && (
@@ -232,9 +237,14 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-amber-600 transition-colors p-1 rounded"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-amber-600 transition-colors focus:outline-none"
+                aria-label={showPasswordConfirm ? "Ocultar contraseña" : "Mostrar contraseña"}
               >
-                {showPasswordConfirm ? "🙈" : "👁️"}
+                {showPasswordConfirm ? (
+                  <FiEyeOff className="w-5 h-5" />
+                ) : (
+                  <FiEye className="w-5 h-5" />
+                )}
               </button>
             </div>
             {errors.password_confirm && (
@@ -271,11 +281,6 @@ export default function RegisterPage() {
             </Link>
           </p>
         </div>
-      </div>
-
-      {/* Debug Info */}
-      <div className="mt-4 text-xs text-gray-500 text-center">
-        <p>✅ Endpoint correcto: {API_BASE}/api/registro/</p>
       </div>
     </div>
   );

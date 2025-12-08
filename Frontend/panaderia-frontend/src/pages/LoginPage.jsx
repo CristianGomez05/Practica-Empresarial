@@ -1,12 +1,11 @@
-// Frontend/src/pages/LoginPage.jsx
-// ⭐ ACTUALIZADO: Con enlace "Olvidé mi contraseña"
-
+// Frontend/src/pages/LoginPage.jsx - MEJORADO
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../components/auth/AuthContext";
 import { useSnackbar } from "notistack";
 import axios from "axios";
 import GoogleLoginButton from "../components/auth/GoogleLoginButton";
+import { FiEye, FiEyeOff } from "react-icons/fi"; // Iconos minimalistas
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -16,6 +15,7 @@ export default function LoginPage() {
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
@@ -140,7 +140,6 @@ export default function LoginPage() {
               <label className="block text-sm font-medium text-[#5D4037]">
                 Contraseña
               </label>
-              {/* ⭐⭐⭐ NUEVO: Enlace Olvidé mi contraseña */}
               <Link
                 to="/olvide-password"
                 className="text-xs text-[#D2691E] hover:text-[#8B4513] font-semibold transition-colors hover:underline"
@@ -148,15 +147,29 @@ export default function LoginPage() {
                 ¿Olvidaste tu contraseña?
               </Link>
             </div>
-            <input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full px-4 py-3 border-2 border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
-              placeholder="••••••••"
-              required
-              disabled={loading}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="w-full px-4 py-3 pr-12 border-2 border-[#D2B48C] rounded-lg focus:ring-2 focus:ring-[#D2691E] focus:border-transparent transition-all"
+                placeholder="••••••••"
+                required
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#D2691E] transition-colors focus:outline-none"
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showPassword ? (
+                  <FiEyeOff className="w-5 h-5" />
+                ) : (
+                  <FiEye className="w-5 h-5" />
+                )}
+              </button>
+            </div>
           </div>
 
           <button
