@@ -722,14 +722,19 @@ class PedidoCreateSerializer(serializers.Serializer):
         print(f"📧 Programando envío de correos de confirmación...")
         try:
             import threading
+            import time
             from .emails import enviar_confirmacion_pedido
             
             def enviar_email():
                 try:
+                    # ⭐ CRÍTICO: Pequeño delay para asegurar que el pedido esté en DB
+                    time.sleep(0.5)  # 500ms de espera
                     enviar_confirmacion_pedido(pedido.id)
                     print(f"✅ Correos de confirmación enviados para pedido #{pedido.id}\n")
                 except Exception as e:
                     print(f"❌ Error enviando correos: {e}\n")
+                    import traceback
+                    traceback.print_exc()
             
             thread = threading.Thread(target=enviar_email)
             thread.daemon = True
