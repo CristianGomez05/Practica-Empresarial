@@ -1,4 +1,4 @@
-//src/pages/admin/AdminOrders.jsx
+//src/pages/admin/AdminOrders.jsx - CORREGIDO
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -9,6 +9,7 @@ import {
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import DeleteOrderModal from '../../components/modals/DeleteOrderModal';
+import OrderDetailsModal from '../../components/modals/OrderDetailsModal'; // ⭐ NUEVO
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([]);
@@ -106,13 +107,20 @@ export default function AdminOrders() {
       });
       enqueueSnackbar('Estado actualizado', { variant: 'success' });
       fetchOrders();
+      
+      // ⭐ Si el modal de detalles está abierto, actualizar el pedido seleccionado
+      if (selectedOrder?.id === orderId) {
+        const updatedOrder = orders.find(o => o.id === orderId);
+        if (updatedOrder) {
+          setSelectedOrder({ ...updatedOrder, estado: nuevoEstado });
+        }
+      }
     } catch (error) {
       console.error('Error actualizando estado:', error);
       enqueueSnackbar('Error al actualizar estado', { variant: 'error' });
     }
   };
 
-  // ⭐⭐⭐ NUEVA FUNCIÓN: Eliminar pedido
   const handleDeleteOrder = async (orderId) => {
     try {
       console.log('🗑️ Eliminando pedido:', orderId);
@@ -133,6 +141,7 @@ export default function AdminOrders() {
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(null);
       }
+      setDeleteOrder(null);
       
     } catch (error) {
       console.error('❌ Error eliminando pedido:', error);
@@ -323,7 +332,6 @@ export default function AdminOrders() {
                             {order.es_domicilio ? 'Domicilio' : 'Recoger'}
                           </span>
                           
-                          {/* ⭐ NUEVO: Badge de auto-delete */}
                           {order.tiempo_hasta_auto_delete && (
                             <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">
                               🕐 {order.tiempo_hasta_auto_delete}
@@ -390,7 +398,6 @@ export default function AdminOrders() {
                       </button>
                     )}
 
-                    {/* ⭐⭐⭐ NUEVO: Botón Eliminar */}
                     <button
                       onClick={() => setDeleteOrder(order)}
                       disabled={!order.puede_eliminarse}
@@ -423,7 +430,14 @@ export default function AdminOrders() {
         )}
       </div>
 
-      {/* ⭐⭐⭐ NUEVO: Modal de Eliminación */}
+      {/* ⭐⭐⭐ NUEVO: Modal de Detalles */}
+      <OrderDetailsModal
+        isOpen={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        order={selectedOrder}
+      />
+
+      {/* Modal de Eliminación */}
       <DeleteOrderModal
         isOpen={!!deleteOrder}
         onClose={() => setDeleteOrder(null)}
