@@ -1,5 +1,5 @@
 // Frontend/src/pages/admin_general/AdminGeneralOrders.jsx
-// ⭐⭐⭐ CORREGIDO: Filtro por sucursal funcionando correctamente
+// ⭐⭐⭐ MEJORADO: Usando OrderDetailsModal profesional
 
 import { useState, useEffect, useCallback } from 'react';
 import { useOutletContext } from 'react-router-dom';
@@ -7,27 +7,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaShoppingCart, FaEye, FaCheck, FaTimes, FaClock, FaBox, 
   FaUser, FaPhone, FaMapMarkerAlt, FaCalendar, FaMoneyBillWave, 
-  FaSync, FaReceipt, FaTruck, FaStore, FaTrash 
+  FaSync, FaTruck, FaStore, FaTrash 
 } from 'react-icons/fa';
 import { useSnackbar } from 'notistack';
 import api from '../../services/api';
 import useSmartRefresh from '../../hooks/useAutoRefresh';
 import DeleteOrderModal from '../../components/modals/DeleteOrderModal';
+import OrderDetailsModal from '../../components/modals/OrderDetailsModal'; // ⭐ NUEVO
 
 export default function AdminGeneralOrders() {
   const { selectedBranch } = useOutletContext();
   
   const [pedidos, setPedidos] = useState([]);
-  const [sucursales, setSucursales] = useState([]); // ⭐ NUEVO: Para mostrar nombres
+  const [sucursales, setSucursales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPedido, setSelectedPedido] = useState(null);
   const [deleteOrder, setDeleteOrder] = useState(null);
-  const [showModal, setShowModal] = useState(false);
 
   const { enqueueSnackbar } = useSnackbar();
 
-  // ⭐ NUEVO: Cargar sucursales para mostrar el nombre en el header
   const cargarSucursales = useCallback(async () => {
     try {
       const response = await api.get('/sucursales/activas/');
@@ -42,7 +41,6 @@ export default function AdminGeneralOrders() {
     try {
       if (!loading) setRefreshing(true);
       
-      // ⭐ CRÍTICO: Aplicar filtro por sucursal si está seleccionada
       const params = selectedBranch ? { sucursal: selectedBranch } : {};
       console.log('🔍 Cargando pedidos con params:', params);
       
@@ -66,13 +64,11 @@ export default function AdminGeneralOrders() {
     }
   }, [loading, refreshing, selectedBranch, enqueueSnackbar]);
 
-  // ⭐ Cargar datos iniciales
   useEffect(() => {
     cargarPedidos();
     cargarSucursales();
   }, []);
 
-  // ⭐ CRÍTICO: Recargar cuando cambia la sucursal seleccionada
   useEffect(() => {
     if (!loading) {
       console.log('🔄 selectedBranch cambió a:', selectedBranch);
@@ -82,7 +78,7 @@ export default function AdminGeneralOrders() {
 
   useSmartRefresh(cargarPedidos, {
     interval: 30000,
-    enabled: !showModal && !deleteOrder,
+    enabled: !selectedPedido && !deleteOrder, // ⭐ Actualizado
     refreshOnFocus: true
   });
 
@@ -95,8 +91,13 @@ export default function AdminGeneralOrders() {
         variant: 'success' 
       });
       await cargarPedidos();
+      
+      // ⭐ Actualizar el pedido seleccionado si está abierto el modal
       if (selectedPedido?.id === pedidoId) {
-        setSelectedPedido(prev => ({ ...prev, estado: nuevoEstado }));
+        const updatedOrder = pedidos.find(p => p.id === pedidoId);
+        if (updatedOrder) {
+          setSelectedPedido({ ...updatedOrder, estado: nuevoEstado });
+        }
       }
     } catch (error) {
       console.error('❌ Error actualizando estado:', error);
@@ -104,7 +105,6 @@ export default function AdminGeneralOrders() {
     }
   };
 
-  // ⭐⭐⭐ NUEVA FUNCIÓN: Eliminar pedido
   const handleDeleteOrder = async (orderId) => {
     try {
       console.log('🗑️ Eliminando pedido:', orderId);
@@ -118,20 +118,18 @@ export default function AdminGeneralOrders() {
         { variant: 'success' }
       );
       
-      // Actualizar lista
       await cargarPedidos();
       
-      // Cerrar modales si están abiertos
       if (selectedPedido?.id === orderId) {
         setSelectedPedido(null);
-        setShowModal(false);
       }
+      setDeleteOrder(null);
       
     } catch (error) {
       console.error('❌ Error eliminando pedido:', error);
       
       if (error.response?.data) {
-        const { error: errorMsg, codigo, tiempo_hasta_auto_delete } = error.response.data;
+        const { error: errorMsg, tiempo_hasta_auto_delete } = error.response.data;
         
         let mensaje = errorMsg || 'Error al eliminar el pedido';
         
@@ -149,16 +147,6 @@ export default function AdminGeneralOrders() {
       
       throw error;
     }
-  };
-
-  const verDetalle = (pedido) => {
-    setSelectedPedido(pedido);
-    setShowModal(true);
-  };
-
-  const cerrarModal = () => {
-    setShowModal(false);
-    setSelectedPedido(null);
   };
 
   const getEstadoConfig = (estado) => {
@@ -255,7 +243,6 @@ export default function AdminGeneralOrders() {
             <h1 className="text-3xl font-bold text-[#5D4037]">Gestión de Pedidos</h1>
             <p className="text-[#8D6E63]">
               {pedidos.length} pedidos registrados
-              {/* ⭐ Mostrar filtro activo */}
               {selectedBranch && sucursales.length > 0 && (
                 <span className="ml-2 text-purple-600 font-semibold">
                   • {sucursales.find(s => s.id === selectedBranch)?.nombre || 'Filtrado'}
@@ -333,7 +320,6 @@ export default function AdminGeneralOrders() {
                             {estado.text}
                           </span>
                           
-                          {/* Badge de tipo de entrega */}
                           <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center gap-1 ${
                             pedido.es_domicilio 
                               ? 'bg-blue-100 text-blue-700' 
@@ -343,7 +329,6 @@ export default function AdminGeneralOrders() {
                             {pedido.tipo_entrega_display || (pedido.es_domicilio ? 'Domicilio' : 'Recoger')}
                           </span>
 
-                          {/* ⭐ Badge de auto-delete */}
                           {pedido.tiempo_hasta_auto_delete && (
                             <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">
                               🕐 {pedido.tiempo_hasta_auto_delete}
@@ -392,7 +377,6 @@ export default function AdminGeneralOrders() {
                           </div>
                         </div>
 
-                        {/* Información de entrega */}
                         {pedido.es_domicilio && pedido.direccion_entrega && (
                           <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
                             <div className="flex items-start gap-2">
@@ -422,7 +406,6 @@ export default function AdminGeneralOrders() {
                           </div>
                         )}
 
-                        {/* Items Preview */}
                         <div className="mt-3 flex flex-wrap gap-2">
                           {pedido.detalles?.slice(0, 3).map((item, idx) => (
                             <span key={idx} className="bg-gray-100 px-3 py-1 rounded-full text-xs text-gray-700">
@@ -442,7 +425,7 @@ export default function AdminGeneralOrders() {
                   {/* Actions */}
                   <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
                     <button
-                      onClick={() => verDetalle(pedido)}
+                      onClick={() => setSelectedPedido(pedido)}
                       className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
                     >
                       <FaEye />
@@ -463,7 +446,6 @@ export default function AdminGeneralOrders() {
                       );
                     })}
 
-                    {/* ⭐⭐⭐ NUEVO: Botón Eliminar */}
                     <button
                       onClick={() => setDeleteOrder(pedido)}
                       disabled={!pedido.puede_eliminarse}
@@ -501,216 +483,14 @@ export default function AdminGeneralOrders() {
         </div>
       )}
 
-      {/* Modal de Detalle */}
-      <AnimatePresence>
-        {showModal && selectedPedido && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-            onClick={cerrarModal}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-[#5D4037]">
-                    Detalle del Pedido #{selectedPedido.id}
-                  </h2>
-                  <button
-                    onClick={cerrarModal}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <FaTimes size={24} />
-                  </button>
-                </div>
+      {/* ⭐⭐⭐ NUEVO: Modal Profesional de Detalles */}
+      <OrderDetailsModal
+        isOpen={!!selectedPedido}
+        onClose={() => setSelectedPedido(null)}
+        order={selectedPedido}
+      />
 
-                <div className="space-y-6">
-                  {/* Estado Actual */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-2">Estado Actual</p>
-                    <div className={`${getEstadoConfig(selectedPedido.estado).bg} ${getEstadoConfig(selectedPedido.estado).textColor} px-4 py-2 rounded-lg inline-flex items-center gap-2 font-semibold`}>
-                      {getEstadoConfig(selectedPedido.estado).icon}
-                      {getEstadoConfig(selectedPedido.estado).text}
-                    </div>
-                  </div>
-
-                  {/* Tipo de Entrega */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-2">Tipo de Entrega</p>
-                    <div className={`px-4 py-2 rounded-lg inline-flex items-center gap-2 font-semibold ${
-                      selectedPedido.es_domicilio 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'bg-purple-100 text-purple-700'
-                    }`}>
-                      {selectedPedido.es_domicilio ? <FaTruck /> : <FaStore />}
-                      {selectedPedido.tipo_entrega_display || (selectedPedido.es_domicilio ? 'Entrega a Domicilio' : 'Recoger en Sucursal')}
-                    </div>
-                  </div>
-
-                  {/* Dirección de entrega si aplica */}
-                  {selectedPedido.es_domicilio && selectedPedido.direccion_entrega && (
-                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <FaMapMarkerAlt className="text-blue-600 text-lg mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-blue-800 font-semibold mb-1">
-                            📍 Dirección de entrega:
-                          </p>
-                          <p className="text-blue-700">
-                            {selectedPedido.direccion_entrega}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedPedido.es_recoger && (
-                    <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-lg">
-                      <div className="flex items-start gap-3">
-                        <FaStore className="text-purple-600 text-lg mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-purple-800 font-semibold">
-                            🏪 Cliente recogerá el pedido en sucursal
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Información del Cliente */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-3 font-semibold">Información del Cliente</p>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FaUser className="text-purple-600" />
-                        <span>{selectedPedido.usuario?.username || 'Cliente'}</span>
-                      </div>
-                      {selectedPedido.telefono && (
-                        <div className="flex items-center gap-2">
-                          <FaPhone className="text-green-600" />
-                          <span>{selectedPedido.telefono}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <FaCalendar className="text-blue-600" />
-                        <span>
-                          {new Date(selectedPedido.fecha).toLocaleString('es-ES', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
-                      </div>
-                      {selectedPedido.sucursal?.nombre && (
-                        <div className="flex items-center gap-2">
-                          <FaBox className="text-amber-600" />
-                          <span className="font-semibold text-purple-600">
-                            {selectedPedido.sucursal.nombre}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Items del Pedido */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <p className="text-sm text-gray-600 mb-3 font-semibold flex items-center gap-2">
-                      <FaReceipt />
-                      Items del Pedido
-                    </p>
-                    <div className="space-y-3">
-                      {selectedPedido.detalles?.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-lg">
-                          <div>
-                            <p className="font-semibold text-[#5D4037]">
-                              {item.producto?.nombre || 'Producto'}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Cantidad: {item.cantidad} • Precio: ₡{parseFloat(item.precio_unitario || 0).toLocaleString('es-CR')}
-                            </p>
-                          </div>
-                          <p className="font-bold text-[#5D4037]">
-                            ₡{(parseFloat(item.precio_unitario || 0) * item.cantidad).toLocaleString('es-CR')}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-gray-300">
-                      <div className="flex justify-between items-center">
-                        <p className="text-lg font-semibold text-[#5D4037]">TOTAL</p>
-                        <p className="text-2xl font-bold text-[#5D4037]">
-                          ₡{parseFloat(selectedPedido.total || 0).toLocaleString('es-CR')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Cambiar Estado */}
-                  {getEstadosSiguientes(selectedPedido.estado).length > 0 && (
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                      <p className="text-sm text-blue-800 mb-3 font-semibold">Cambiar Estado</p>
-                      <div className="flex flex-wrap gap-2">
-                        {getEstadosSiguientes(selectedPedido.estado).map((siguienteEstado) => {
-                          const config = getEstadoConfig(siguienteEstado);
-                          return (
-                            <button
-                              key={siguienteEstado}
-                              onClick={() => {
-                                cambiarEstado(selectedPedido.id, siguienteEstado);
-                                cerrarModal();
-                              }}
-                              className={`flex items-center gap-2 ${config.buttonColor} text-white px-4 py-2 rounded-lg transition-colors`}
-                            >
-                              {config.icon}
-                              Marcar como {config.text}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ⭐ Botón Eliminar en Modal */}
-                  {selectedPedido.puede_eliminarse && (
-                    <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                      <p className="text-sm text-red-800 mb-3 font-semibold">Eliminar Pedido</p>
-                      <button
-                        onClick={() => {
-                          cerrarModal();
-                          setDeleteOrder(selectedPedido);
-                        }}
-                        className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors font-semibold"
-                      >
-                        <FaTrash />
-                        Eliminar este Pedido
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Botón Cerrar */}
-                  <button
-                    onClick={cerrarModal}
-                    className="w-full py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-colors"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ⭐⭐⭐ Modal de Eliminación */}
+      {/* Modal de Eliminación */}
       <DeleteOrderModal
         isOpen={!!deleteOrder}
         onClose={() => setDeleteOrder(null)}
