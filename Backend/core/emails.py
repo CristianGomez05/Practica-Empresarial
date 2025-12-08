@@ -195,56 +195,75 @@ def enviar_notificacion_oferta(oferta_id):
 def enviar_confirmacion_pedido(pedido_id):
     """
     Envía correo de confirmación al cliente Y notifica a admins
+    ⭐⭐⭐ CORREGIDO: Emails en paralelo usando threads separados
     """
     try:
         pedido = Pedido.objects.select_related('usuario').prefetch_related('detalles__producto__sucursal').get(id=pedido_id)
         
-        # 1. Enviar confirmación al cliente
-        if pedido.usuario.email:
-            asunto = f"✅ Confirmación de Pedido #{pedido.id}"
-            html_content = template_confirmacion_pedido(pedido, URL_PEDIDOS_CLIENTE)
-            
-            productos_texto = "\n".join([
-                f"  - {d.producto.nombre} x{d.cantidad} = ₡{d.producto.precio * d.cantidad:,.2f}"
-                for d in pedido.detalles.all()
-            ])
-            
-            tipo_entrega_texto = "Entrega a domicilio" if pedido.es_domicilio else "Recoger en sucursal"
-            direccion_texto = f"\nDirección: {pedido.direccion_entrega}" if pedido.es_domicilio else ""
-            
-            text_content = f"""
-            ¡Pedido Confirmado!
-            
-            Hola {pedido.usuario.first_name or pedido.usuario.username},
-            
-            Tu pedido #{pedido.id} ha sido recibido y está siendo preparado.
-            
-            Tipo de entrega: {tipo_entrega_texto}{direccion_texto}
-            
-            Productos:
-            {productos_texto}
-            
-            TOTAL: ₡{pedido.total:,.2f}
-            
-            Ver mis pedidos: {URL_PEDIDOS_CLIENTE}
-            
-            ---
-            Panadería Santa Clara
-            Alajuela, Costa Rica
-            """
-            
-            enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
+        import threading
         
-        # 2. Notificar a admins de la sucursal
-        sucursal_pedido = None
-        primer_detalle = pedido.detalles.first()
-        if primer_detalle and primer_detalle.producto.sucursal:
-            sucursal_pedido = primer_detalle.producto.sucursal
+        # ⭐⭐⭐ FUNCIÓN 1: Email al cliente (thread separado)
+        def enviar_a_cliente():
+            try:
+                if not pedido.usuario.email:
+                    return
+                
+                asunto = f"✅ Confirmación de Pedido #{pedido.id}"
+                html_content = template_confirmacion_pedido(pedido, URL_PEDIDOS_CLIENTE)
+                
+                productos_texto = "\n".join([
+                    f"  - {d.producto.nombre} x{d.cantidad} = ₡{d.producto.precio * d.cantidad:,.2f}"
+                    for d in pedido.detalles.all()
+                ])
+                
+                tipo_entrega_texto = "Entrega a domicilio" if pedido.es_domicilio else "Recoger en sucursal"
+                direccion_texto = f"\nDirección: {pedido.direccion_entrega}" if pedido.es_domicilio else ""
+                
+                text_content = f"""
+                ¡Pedido Confirmado!
+                
+                Hola {pedido.usuario.first_name or pedido.usuario.username},
+                
+                Tu pedido #{pedido.id} ha sido recibido y está siendo preparado.
+                
+                Tipo de entrega: {tipo_entrega_texto}{direccion_texto}
+                
+                Productos:
+                {productos_texto}
+                
+                TOTAL: ₡{pedido.total:,.2f}
+                
+                Ver mis pedidos: {URL_PEDIDOS_CLIENTE}
+                
+                ---
+                Panadería Santa Clara
+                Alajuela, Costa Rica
+                """
+                
+                enviar_email_seguro(asunto, html_content, text_content, [pedido.usuario.email])
+                logger.info(f"✅ Email enviado al cliente para pedido #{pedido.id}")
+            except Exception as e:
+                logger.error(f"❌ Error enviando email al cliente: {e}")
         
-        if sucursal_pedido:
-            emails_admin = obtener_admins_por_sucursal(sucursal_pedido)
-            
-            if emails_admin:
+        # ⭐⭐⭐ FUNCIÓN 2: Email a admins (thread separado)
+        def enviar_a_admins():
+            try:
+                # Determinar la sucursal del pedido
+                sucursal_pedido = None
+                primer_detalle = pedido.detalles.first()
+                if primer_detalle and primer_detalle.producto.sucursal:
+                    sucursal_pedido = primer_detalle.producto.sucursal
+                
+                if not sucursal_pedido:
+                    logger.warning(f"⚠️ Pedido #{pedido.id} sin sucursal, no se notifica a admins")
+                    return
+                
+                emails_admin = obtener_admins_por_sucursal(sucursal_pedido)
+                
+                if not emails_admin:
+                    logger.warning(f"⚠️ No hay admins para notificar del pedido #{pedido.id}")
+                    return
+                
                 asunto_admin = f"🔔 Nuevo Pedido #{pedido.id} - {sucursal_pedido.nombre}"
                 html_admin = template_notificacion_pedido_admin(pedido, URL_ADMIN_PEDIDOS)
                 
@@ -280,6 +299,21 @@ def enviar_confirmacion_pedido(pedido_id):
                 """
                 
                 enviar_email_seguro(asunto_admin, html_admin, text_admin, emails_admin)
+                logger.info(f"✅ Email enviado a admins para pedido #{pedido.id}")
+            except Exception as e:
+                logger.error(f"❌ Error enviando email a admins: {e}")
+        
+        # ⭐⭐⭐ INICIAR AMBOS THREADS EN PARALELO
+        thread_cliente = threading.Thread(target=enviar_a_cliente)
+        thread_admins = threading.Thread(target=enviar_a_admins)
+        
+        thread_cliente.daemon = True
+        thread_admins.daemon = True
+        
+        thread_cliente.start()
+        thread_admins.start()
+        
+        logger.info(f"📧 Emails programados en paralelo para pedido #{pedido.id}")
         
         return True
         
