@@ -718,34 +718,27 @@ class PedidoCreateSerializer(serializers.Serializer):
         print(f"💵 TOTAL: ₡{total}")
         print(f"{'='*60}\n")
         
-        # ⭐⭐⭐ CRÍTICO: Forzar commit a la DB antes de enviar emails
-        from django.db import transaction
-        transaction.on_commit(lambda: self._enviar_emails_pedido(pedido.id))
-        
-        print(f"✅ Email programado para después del commit\n")
+        # ⭐⭐⭐ NUEVO: ENVIAR EMAILS DE CONFIRMACIÓN
+        print(f"📧 Programando envío de correos de confirmación...")
+        try:
+            import threading
+            from .emails import enviar_confirmacion_pedido
+            
+            def enviar_email():
+                try:
+                    enviar_confirmacion_pedido(pedido.id)
+                    print(f"✅ Correos de confirmación enviados para pedido #{pedido.id}\n")
+                except Exception as e:
+                    print(f"❌ Error enviando correos: {e}\n")
+            
+            thread = threading.Thread(target=enviar_email)
+            thread.daemon = True
+            thread.start()
+            print(f"✅ Email programado en background\n")
+        except Exception as e:
+            print(f"❌ Error programando email: {e}\n")
         
         return pedido
-    
-    def _enviar_emails_pedido(self, pedido_id):
-        """
-        ⭐⭐⭐ Método helper para enviar emails en background DESPUÉS del commit
-        """
-        import threading
-        from .emails import enviar_confirmacion_pedido
-        
-        def enviar_email():
-            try:
-                print(f"📧 Enviando correos de confirmación para pedido #{pedido_id}...")
-                enviar_confirmacion_pedido(pedido_id)
-                print(f"✅ Correos enviados exitosamente para pedido #{pedido_id}\n")
-            except Exception as e:
-                print(f"❌ Error enviando correos: {e}\n")
-                import traceback
-                traceback.print_exc()
-        
-        thread = threading.Thread(target=enviar_email)
-        thread.daemon = True
-        thread.start()
     
     # ⭐ NO necesitamos to_representation() porque lo manejamos en views.py
 
