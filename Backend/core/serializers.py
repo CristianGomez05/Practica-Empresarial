@@ -718,17 +718,14 @@ class PedidoCreateSerializer(serializers.Serializer):
         print(f"💵 TOTAL: ₡{total}")
         print(f"{'='*60}\n")
         
-        # ⭐⭐⭐ NUEVO: ENVIAR EMAILS DE CONFIRMACIÓN
+        # ⭐⭐⭐ NUEVO: ENVIAR EMAILS DE CONFIRMACIÓN (sin delay)
         print(f"📧 Programando envío de correos de confirmación...")
         try:
             import threading
-            import time
             from .emails import enviar_confirmacion_pedido
             
             def enviar_email():
                 try:
-                    # ⭐ CRÍTICO: Pequeño delay para asegurar que el pedido esté en DB
-                    time.sleep(0.5)  # 500ms de espera
                     enviar_confirmacion_pedido(pedido.id)
                     print(f"✅ Correos de confirmación enviados para pedido #{pedido.id}\n")
                 except Exception as e:
