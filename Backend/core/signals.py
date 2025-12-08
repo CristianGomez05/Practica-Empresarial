@@ -1,5 +1,5 @@
 # Backend/core/signals.py
-# ⭐⭐⭐ CORREGIDO: Mejor detección de stock bajo y sin stock
+# ⭐⭐⭐ CORREGIDO: Stock bajo = 5 o menos unidades (ajustado al negocio)
 
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
@@ -8,6 +8,9 @@ import threading
 import logging
 
 logger = logging.getLogger(__name__)
+
+# ⭐⭐⭐ CONFIGURACIÓN: Umbral de stock bajo
+UMBRAL_STOCK_BAJO = 5  # Cambiado de 10 a 5
 
 
 def ejecutar_email_background(funcion_email, *args, **kwargs):
@@ -90,15 +93,15 @@ def notificar_pedido_cancelado(sender, instance, created, **kwargs):
 
 
 # ============================================================================
-# DETECCIÓN DE CAMBIOS EN STOCK (⭐⭐⭐ CORREGIDO)
+# DETECCIÓN DE CAMBIOS EN STOCK (⭐⭐⭐ UMBRAL: 5 unidades)
 # ============================================================================
 
 @receiver(pre_save, sender=Producto)
 def detectar_cambio_stock(sender, instance, **kwargs):
     """
-    ⭐⭐⭐ CORREGIDO: Detecta cuando un producto:
+    ⭐⭐⭐ CORREGIDO: Stock bajo = 5 o menos unidades
     1. Se queda sin stock (stock = 0) → SIN alerta previa
-    2. Tiene stock bajo (1-10) → SIN alerta previa
+    2. Tiene stock bajo (1-5) → SIN alerta previa
     """
     if instance.pk:
         try:
@@ -121,18 +124,18 @@ def detectar_cambio_stock(sender, instance, **kwargs):
                 else:
                     print(f"⚠️ Producto agotado pero ya se envió alerta antes")
             
-            # ⭐⭐⭐ CASO 2: STOCK BAJO (1-10) Y NO SE HA ENVIADO ALERTA
-            elif 1 <= instance.stock <= 10:
+            # ⭐⭐⭐ CASO 2: STOCK BAJO (1-5) Y NO SE HA ENVIADO ALERTA
+            elif 1 <= instance.stock <= UMBRAL_STOCK_BAJO:
                 # Solo enviar si NO se ha enviado la alerta antes
                 if not producto_anterior.alerta_stock_bajo_enviada:
-                    print(f"⚠️ ¡STOCK BAJO DETECTADO! ({instance.stock} unidades)")
+                    print(f"⚠️ ¡STOCK BAJO DETECTADO! ({instance.stock} unidades, umbral: {UMBRAL_STOCK_BAJO})")
                     instance._stock_bajo = True
                 else:
-                    print(f"ℹ️ Stock bajo pero ya se envió alerta antes")
+                    print(f"ℹ️ Stock bajo ({instance.stock}) pero ya se envió alerta antes")
             
-            # ⭐⭐⭐ CASO 3: STOCK SE REABASTECE
-            elif producto_anterior.stock <= 10 and instance.stock > 10:
-                print(f"✅ Stock reabastecido por encima de 10")
+            # ⭐⭐⭐ CASO 3: STOCK SE REABASTECE (por encima del umbral)
+            elif producto_anterior.stock <= UMBRAL_STOCK_BAJO and instance.stock > UMBRAL_STOCK_BAJO:
+                print(f"✅ Stock reabastecido por encima del umbral ({UMBRAL_STOCK_BAJO})")
                 # El reseteo se maneja en otro signal
             
             print(f"{'='*60}\n")
@@ -146,7 +149,7 @@ def notificar_cambios_stock(sender, instance, created, **kwargs):
     """
     ⭐⭐⭐ CORREGIDO: Envía alertas cuando:
     1. Producto agotado (stock = 0)
-    2. Stock bajo (1-10 unidades)
+    2. Stock bajo (1-5 unidades)
     """
     # ⭐ Alerta de producto AGOTADO (stock = 0)
     if not created and hasattr(instance, '_sin_stock'):
@@ -177,12 +180,13 @@ def notificar_cambios_stock(sender, instance, created, **kwargs):
         
         delattr(instance, '_sin_stock')
     
-    # ⭐ Alerta de STOCK BAJO (1-10)
+    # ⭐ Alerta de STOCK BAJO (1-5)
     if not created and hasattr(instance, '_stock_bajo'):
         print(f"\n{'='*60}")
         print(f"📧 ENVIANDO ALERTA DE STOCK BAJO")
         print(f"   Producto: {instance.nombre}")
         print(f"   Stock actual: {instance.stock}")
+        print(f"   Umbral: {UMBRAL_STOCK_BAJO}")
         print(f"{'='*60}\n")
         
         from .emails import enviar_alerta_stock_bajo
@@ -224,11 +228,12 @@ def resetear_alertas_al_reabastecer(sender, instance, **kwargs):
             print(f"🔄 VERIFICANDO REABASTECIMIENTO")
             print(f"   Producto: {instance.nombre}")
             print(f"   Stock: {producto_anterior.stock} → {instance.stock}")
+            print(f"   Umbral stock bajo: {UMBRAL_STOCK_BAJO}")
             print(f"{'='*60}")
             
-            # ⭐ Si el stock sube por encima de 10, resetear alerta de stock bajo
-            if producto_anterior.stock <= 10 and instance.stock > 10:
-                print(f"✅ Stock reabastecido por encima de 10 - Reseteando alerta de stock bajo")
+            # ⭐ Si el stock sube por encima del umbral, resetear alerta de stock bajo
+            if producto_anterior.stock <= UMBRAL_STOCK_BAJO and instance.stock > UMBRAL_STOCK_BAJO:
+                print(f"✅ Stock reabastecido por encima del umbral ({UMBRAL_STOCK_BAJO}) - Reseteando alerta de stock bajo")
                 instance.alerta_stock_bajo_enviada = False
             
             # ⭐ Si el stock vuelve a tener unidades, resetear alerta de agotado
@@ -310,15 +315,17 @@ def notificar_cambio_estado_pedido(sender, instance, created, **kwargs):
 """
 ✅ FLUJO COMPLETO DE STOCK Y ALERTAS
 
+⭐ CONFIGURACIÓN ACTUAL: Stock bajo = 5 o menos unidades
+
 ALERTAS DE STOCK:
 
-STOCK BAJO (1-10 unidades):
-1. Signal pre_save detecta: 1 <= stock <= 10
+STOCK BAJO (1-5 unidades):
+1. Signal pre_save detecta: 1 <= stock <= 5
 2. Verifica: alerta_stock_bajo_enviada == False
 3. Si cumple: activa flag _stock_bajo
 4. Signal post_save: envía email en background
 5. Si email exitoso: marca alerta_stock_bajo_enviada = True
-6. NO se vuelve a enviar hasta que stock > 10
+6. NO se vuelve a enviar hasta que stock > 5
 
 SIN STOCK (0 unidades):
 1. Signal pre_save detecta: stock_anterior > 0 y stock_nuevo == 0
@@ -329,7 +336,7 @@ SIN STOCK (0 unidades):
 6. Marca producto.disponible = False
 
 REABASTECIMIENTO:
-- Si stock pasa de <=10 a >10: resetea alerta_stock_bajo_enviada
+- Si stock pasa de <=5 a >5: resetea alerta_stock_bajo_enviada
 - Si stock pasa de 0 a >0: resetea alerta_stock_enviada y activa disponible
 
 CREACIÓN DE PEDIDO:
@@ -347,6 +354,7 @@ CANCELACIÓN DE PEDIDO:
 
 VENTAJAS:
 ✅ Alertas solo se envían una vez hasta reabastecer
+✅ Umbral ajustado a necesidades del negocio (5 unidades)
 ✅ Stock se reduce/restaura correctamente
 ✅ Productos agotados se reactivan automáticamente
 ✅ Todo en background sin bloquear requests
