@@ -10,7 +10,7 @@ import BranchSelector from './BranchSelector';
 
 export default function AdminGeneralLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // ⭐ Nuevo estado para móvil
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const navigate = useNavigate();
@@ -21,13 +21,20 @@ export default function AdminGeneralLayout() {
     setUser(userData);
   }, []);
 
+  // ⭐ ACTUALIZADO: handleLogout igual que en DashboardLayout (sin confirmación, sin mensaje de Vercel)
   const handleLogout = () => {
-    if (window.confirm('¿Estás seguro de que deseas cerrar sesión?')) {
+    console.log('🚪 Admin General: Cerrando sesión...');
+    
+    // Primero navega al landing
+    navigate("/", { replace: true });
+    
+    // Luego limpia el localStorage (después de un pequeño delay para asegurar navegación)
+    setTimeout(() => {
       localStorage.removeItem('access');
       localStorage.removeItem('refresh');
       localStorage.removeItem('user');
-      navigate('/login');
-    }
+      console.log('✅ Admin General: Sesión cerrada y redirigido a landing');
+    }, 100);
   };
 
   const menuItems = [
@@ -38,7 +45,7 @@ export default function AdminGeneralLayout() {
     { path: '/admin-general/pedidos', icon: FaShoppingCart, label: 'Pedidos' },
     { path: '/admin-general/usuarios', icon: FaUsers, label: 'Usuarios' },
     { path: '/admin-general/reportes', icon: FaChartBar, label: 'Reportes' },
-    { path: '/admin-general/perfil', icon: FaUser, label: 'Mi Perfil' }, // ⭐⭐⭐ NUEVO
+    { path: '/admin-general/perfil', icon: FaUser, label: 'Mi Perfil' },
   ];
 
   const isActive = (path, exact = false) => {
@@ -148,10 +155,11 @@ export default function AdminGeneralLayout() {
                           key={item.path}
                           to={item.path}
                           onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
+                          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                            active
                               ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg'
                               : 'hover:bg-white/10'
-                            }`}
+                          }`}
                         >
                           <Icon className="text-xl" />
                           <div className="flex items-center justify-between flex-1">
@@ -188,19 +196,14 @@ export default function AdminGeneralLayout() {
       <motion.aside
         initial={false}
         animate={{ width: sidebarOpen ? '280px' : '80px' }}
-        className="hidden lg:flex fixed left-0 top-0 h-screen bg-gradient-to-b from-purple-700 to-purple-900 text-white shadow-2xl z-50 flex-col"
+        className="hidden lg:flex flex-col fixed left-0 top-0 bottom-0 bg-gradient-to-b from-purple-700 to-purple-900 text-white shadow-2xl z-30 overflow-hidden"
       >
-        {/* Container con scroll */}
         <div className="flex flex-col h-full overflow-hidden">
           {/* Header - FIJO */}
-          <div className="flex-shrink-0 p-6">
-            <div className="flex items-center justify-between mb-8">
+          <div className="flex-shrink-0 p-6 border-b border-white/20">
+            <div className="flex items-center justify-between mb-4">
               {sidebarOpen && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-3"
-                >
+                <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-lg">
                     <span className="text-xl">🥐</span>
                   </div>
@@ -208,23 +211,19 @@ export default function AdminGeneralLayout() {
                     <h1 className="text-lg font-bold">Admin General</h1>
                     <p className="text-xs text-purple-200">Santa Clara</p>
                   </div>
-                </motion.div>
+                </div>
               )}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors ml-auto"
               >
-                {sidebarOpen ? <FaTimes /> : <FaBars />}
+                {sidebarOpen ? <FaTimes className="text-xl" /> : <FaBars className="text-xl" />}
               </button>
             </div>
 
             {/* User Info - FIJO */}
             {sidebarOpen && user && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white/10 rounded-xl p-4 backdrop-blur-sm"
-              >
+              <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center text-xl font-bold shadow-lg">
                     {user.first_name?.charAt(0) || user.username?.charAt(0) || 'A'}
@@ -237,12 +236,12 @@ export default function AdminGeneralLayout() {
                 <div className="flex items-center gap-2 text-xs text-purple-200 mt-2 pt-2 border-t border-white/20">
                   <span className="px-2 py-1 bg-purple-500 rounded-full">🌟 Acceso Total</span>
                 </div>
-              </motion.div>
+              </div>
             )}
           </div>
 
           {/* Navigation - CON SCROLL */}
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="flex-1 overflow-y-auto p-6">
             <nav className="space-y-2">
               {menuItems.map((item) => {
                 const Icon = item.icon;
@@ -252,10 +251,11 @@ export default function AdminGeneralLayout() {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${active
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                      active
                         ? 'bg-gradient-to-r from-purple-500 to-purple-600 shadow-lg'
                         : 'hover:bg-white/10'
-                      }`}
+                    }`}
                   >
                     <Icon className={`text-xl ${!sidebarOpen && 'mx-auto'}`} />
                     {sidebarOpen && (
@@ -289,9 +289,9 @@ export default function AdminGeneralLayout() {
 
       {/* Main Content */}
       <div
-        className="min-h-screen pt-14 lg:pt-0" // ⭐ Padding top para móvil
+        className="min-h-screen pt-14 lg:pt-0"
         style={{
-          marginLeft: window.innerWidth >= 1024 ? (sidebarOpen ? '280px' : '80px') : '0', // ⭐ Sin margin en móvil
+          marginLeft: window.innerWidth >= 1024 ? (sidebarOpen ? '280px' : '80px') : '0',
           transition: 'margin-left 0.3s ease',
         }}
       >
