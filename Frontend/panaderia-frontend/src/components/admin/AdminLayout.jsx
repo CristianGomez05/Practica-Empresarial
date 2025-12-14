@@ -304,13 +304,17 @@ export default function AdminLayout() {
                 {menuItems.find(item => isActive(item.path, item.exact))?.label || 'Panel Administrativo'}
               </h2>
               <p className="text-xs sm:text-sm text-gray-600">
-                {user?.sucursal_nombre ? `Sucursal: ${user.sucursal_nombre}` : 'Gestión de sucursal'}
+                {user?.sucursal_nombre
+                  ? `Gestionando: ${user.sucursal_nombre}`
+                  : 'Gestiona tu sucursal de forma eficiente'
+                }
               </p>
             </div>
 
+            {/* Badge de Rol */}
             <div className="flex items-center gap-3">
               <div className="px-3 sm:px-4 py-2 bg-amber-50 text-amber-700 rounded-lg border border-amber-200">
-                <span className="font-semibold text-sm">👑 Administrador</span>
+                <span className="font-semibold text-sm">👤 Administrador</span>
               </div>
             </div>
           </div>
@@ -318,7 +322,11 @@ export default function AdminLayout() {
 
         {/* Content Area */}
         <div className="p-4 sm:p-6 lg:p-8">
-          <Outlet />
+          {/* ⭐ Pasar la sucursal del admin automáticamente */}
+          <Outlet context={{
+            selectedBranch: user?.sucursal_id || null,
+            branchName: user?.sucursal_nombre || null
+          }} />
         </div>
       </div>
     </div>
